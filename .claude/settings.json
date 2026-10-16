@@ -13,6 +13,7 @@
       "Read(./**/*.pem)",
       "Read(./**/*.key)",
       "Read(./venv/**)",
+      "Read(./.venv/**)",
       "Read(./**/__pycache__/**)",
       "Read(./dist/**)",
       "Read(./build/**)",
