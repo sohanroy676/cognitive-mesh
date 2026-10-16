@@ -4,9 +4,9 @@ Project instructions are shared with other agents via `AGENTS.md`; this file add
 
 @AGENTS.md
 
-## Status: pre-implementation
+## Status: v0.1.0 foundation in place
 
-The repo currently contains only planning/config files — no `src/`, `tests/`, `pyproject.toml`, or `requirements.txt` exist yet. Setup, run, test, and lint commands are **TBD**. Do not invent or document unverified commands; once tooling is chosen (v0.1.0), record the real commands in `memory-bank/tech-stack.md` and here.
+Tooling (uv, ruff, mypy, pytest), config loading, and a minimal CLI exist; no product features yet. Commands are in `AGENTS.md` and `memory-bank/tech-stack.md` ("Verified commands"). Only document commands you have actually run; unrun ones (e.g. packaging) stay TBD.
 
 ## Project context (imported)
 
@@ -36,4 +36,4 @@ Read on demand: `memory-bank/progress.md`, `memory-bank/systemPatterns.md` (fill
 ## Known inconsistencies to resolve
 
 - `CHANGELOG.md` is meant to be generated from Conventional Commits, but no generator is configured.
-- `.github/dependabot.yml` assumes `pip`; adjust if `pyproject.toml`-based tooling is chosen.
+- GitHub Actions CI (`.github/workflows/ci.yml`) has been updated to uv but not yet run; confirm it is green after the first push.

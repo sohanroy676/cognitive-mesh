@@ -7,8 +7,8 @@
 
 ## Done
 
-- (feature/fix name) — brief note, date
+- v0.1.0 Project Foundation (branch `feature/v0.1.0-project-foundation`) — 2026-10-16. uv + ruff/mypy/pytest, pydantic-settings config, minimal CLI, 20 passing tests, CI rewritten, ADRs 0002-0004. All DETAILED_ROADMAP v0.1.0 Test/Expected items verified locally and from a fresh clone. NOT yet pushed/merged; GitHub Actions run unverified.
 
 ## In progress
 
-- (feature/fix name) — status
+- Awaiting user review/approval to push and merge v0.1.0.
