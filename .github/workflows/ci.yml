@@ -61,4 +61,4 @@ jobs:
       # Enable by setting the RUN_SECRET_SCAN repository variable to "true".
       - name: Secret scan
         if: ${{ vars.RUN_SECRET_SCAN == 'true' }}
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
