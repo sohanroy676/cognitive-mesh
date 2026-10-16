@@ -9,22 +9,24 @@ Completed 2026-10-16. Merged to main (`fa92220`), tagged `v0.1.0`; GitHub Action
 - Configuration and secret handling via pydantic-settings (ADR-0004).
 - Minimal CLI entry point; setup, run and test commands documented in `memory-bank/tech-stack.md`.
 
-## Now — v0.2.0: Application Ingestion
+### v0.2.0 — Application Ingestion
+Completed 2026-10-16. Merged to main (`a254714`); GitHub Actions CI run 38947231207 on main passed.
+Not tagged yet. See ADR-0005.
 
-Status: implemented, verified locally on 2026-10-16, merged to main and pushed. Move to Done
-once GitHub Actions CI on main is confirmed green. See ADR-0005.
+- `cognitive_mesh.ingestion` and `cognitive-mesh ingest PATH [--json] [--include-content]`.
+- Source references (path + sha256), explicit diagnostics, name-based exclusions, content secret redaction.
+- Known limitations: pattern-based secret detection is not exhaustive, YAML is not syntax-checked,
+  lockfiles are excluded, results are in-memory only, local directories only.
 
-- Define the supported application inputs.
-- Ingest source code, configuration, dependency manifests, and documentation.
-- Preserve file-level source references for later analysis.
-- Test missing, unsupported, and malformed inputs.
+## Now — v0.3.0: Dependency Graph
 
-## Next — Planned, Not Started
+Status: not started.
 
-### v0.3.0 — Dependency Graph
 - Represent application components and their dependencies.
 - Establish graph construction and traversal behavior.
 - Test dependency links against known sample applications.
+
+## Next — Planned, Not Started
 
 ### v0.4.0 — Agent Architecture
 - Define agent interfaces, responsibilities, and capability descriptions.
