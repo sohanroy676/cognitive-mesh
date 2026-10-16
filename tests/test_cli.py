@@ -7,6 +7,7 @@ import pytest
 
 from cognitive_mesh.cli import (
     EXIT_CONFIG_ERROR,
+    EXIT_GRAPH_ERROR,
     EXIT_INGESTION_ERROR,
     EXIT_OK,
     _printable,
@@ -15,6 +16,7 @@ from cognitive_mesh.cli import (
 
 SECRET = "gsk_test_secret_value_123"  # noqa: S105 - fake value for tests
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_app"
+DEP_FIXTURE = Path(__file__).parent / "fixtures" / "dep_app"
 
 
 def test_main_succeeds_with_valid_config(
@@ -114,3 +116,46 @@ def test_ingest_text_escapes_control_characters_in_diagnostics(
 def test_printable_escapes_control_characters() -> None:
     assert _printable("a\x1b[31mb\nc") == r"a\x1b[31mb\nc"
     assert _printable("plain/path.py") == "plain/path.py"
+
+
+def test_graph_summary(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["graph", str(DEP_FIXTURE)]) == EXIT_OK
+    out = capsys.readouterr().out
+    assert "unresolved: unresolved:import:yaml" in out
+    assert (
+        "cycle: module:src/dep_app/a.py -> module:src/dep_app/b.py -> module:src/dep_app/a.py"
+        in out
+    )
+    assert "transitive_unknown" in out
+
+
+def test_graph_json_has_evidence_on_every_edge(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["graph", str(DEP_FIXTURE), "--json"]) == EXIT_OK
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["edges"] and all(e["evidence"] for e in payload["edges"])
+    assert payload["summary"]["cycles"] == 1
+
+
+def test_graph_deps_of_direct_and_transitive(capsys: pytest.CaptureFixture[str]) -> None:
+    node = "module:src/dep_app/a.py"
+    assert main(["graph", str(DEP_FIXTURE), "--deps-of", node]) == EXIT_OK
+    direct = capsys.readouterr().out
+    assert "stdlib:os" in direct and "stdlib:json" not in direct
+    assert main(["graph", str(DEP_FIXTURE), "--deps-of", node, "--transitive"]) == EXIT_OK
+    assert "stdlib:json" in capsys.readouterr().out
+
+
+def test_graph_unknown_node_exits_4(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["graph", str(DEP_FIXTURE), "--deps-of", "nope"]) == EXIT_GRAPH_ERROR
+    out = capsys.readouterr()
+    assert out.out == "" and "unknown node" in out.err
+
+
+def test_graph_missing_root_exits_3(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["graph", str(tmp_path / "missing")]) == EXIT_INGESTION_ERROR
+    assert "does not exist" in capsys.readouterr().err
+
+
+def test_graph_needs_no_provider_config(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["graph", str(FIXTURE)]) == EXIT_OK
+    assert "no_manifest" not in capsys.readouterr().out  # sample_app has manifests

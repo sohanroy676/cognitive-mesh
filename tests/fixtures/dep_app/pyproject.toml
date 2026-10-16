@@ -1,0 +1,10 @@
+[project]
+name = "dep-app"
+version = "0.0.1"
+dependencies = ["requests>=2", "PyYAML==6.0"]
+
+[project.optional-dependencies]
+web = ["flask>=3"]
+
+[dependency-groups]
+dev = ["pytest>=8"]

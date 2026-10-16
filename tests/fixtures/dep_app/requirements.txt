@@ -1,0 +1,3 @@
+requests>=2
+-r other.txt
+git+https://example.invalid/x.git
