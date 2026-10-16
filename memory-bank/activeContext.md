@@ -3,19 +3,19 @@
 <!-- Update this at the end of every session. This is the first thing to read when resuming. -->
 
 ## Current focus
-v0.1.0 Project Foundation is implemented on `feature/v0.1.0-project-foundation` (local only), awaiting review.
+v0.2.0 Application Ingestion is implemented and verified locally on `feature/v0.2.0-ingestion` (local only, branched from main, two v0.1.0 closeout docs commits cherry-picked), awaiting review.
 
 ## Recent decisions
-- uv + pyproject, hatchling, src layout `cognitive_mesh` (ADR-0002).
-- ruff (lint+format, no black) + mypy strict + pytest (ADR-0003).
-- pydantic-settings, `COGMESH_` prefix, `SecretStr`, ignored `.env`, exit code 2 on config error (ADR-0004).
-- CI secret-scan toggle moved from a workflow `env` var to the `RUN_SECRET_SCAN` repository variable. Dependabot switched to the `uv` ecosystem.
+- ADR-0005: local directories only; classification by name/extension; never executed (parse-only stdlib checks); sensitive names never opened; content secret scan with redaction; symlinks not followed.
+- Redo chosen over restoring `ed71a4f`: adds content-based redaction and common-language source files.
+- No new dependencies (YAML is `unvalidated`, not parsed).
 - CHANGELOG generation deliberately not set up (not requested).
 
 ## Blockers / open questions
-- Push/merge needs user approval. CI has never run on GitHub; confirm it is green after the first push.
+- Push/merge needs user approval. CI has not run on this branch.
+- Old branch `feature/v0.2.0-application-ingestion` (commit `ed71a4f`) and `git stash@{0}` (its uncommitted deletions of the ingestion code, origin unknown) are kept for the user to decide on.
+- Local branch `feature/v0.1.0-project-foundation` is merged; user chose to keep it.
 - Build/packaging command is untested (TBD).
-- Whether to configure CHANGELOG generation (only if the user asks).
 
 ## Next step
-Get approval to push the branch and open a PR; then start v0.2.0 Application Ingestion via `/new-feature`.
+Get approval to push `feature/v0.2.0-ingestion` and open a PR; then v0.3.0 Dependency Graph via `/new-feature`.

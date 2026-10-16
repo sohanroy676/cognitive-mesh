@@ -11,7 +11,8 @@ Completed 2026-10-16. Merged to main (`fa92220`), tagged `v0.1.0`; GitHub Action
 
 ## Now — v0.2.0: Application Ingestion
 
-Status: in progress on `feature/v0.2.0-application-ingestion`; not implemented yet.
+Status: implemented and verified locally on 2026-10-16 on `feature/v0.2.0-ingestion` (not pushed,
+CI not yet run on the branch); pending review and merge. See ADR-0005.
 
 - Define the supported application inputs.
 - Ingest source code, configuration, dependency manifests, and documentation.

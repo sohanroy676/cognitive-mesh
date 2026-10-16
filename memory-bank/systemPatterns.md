@@ -15,6 +15,10 @@
 - Config failures raise `ConfigError`; the CLI maps them to exit code 2 (0 = ok).
 - Tests run via an autouse fixture (`tests/conftest.py`) that clears config env vars and uses an empty temp cwd, so a real `.env` never leaks in.
 
+- Ingestion (`cognitive_mesh.ingestion`, ADR-0005): per-file problems are `Diagnostic`s, never exceptions; only a bad root raises `IngestionError` (CLI exit 3). Ingested content is data: never imported, executed or put in diagnostics (not even parser error text). All file reads go through `ingest._read_bytes`; tests spy on it to prove sensitive files are never opened.
+- Every ingested record carries a `SourceRef` (relative POSIX path + sha256 of the original bytes) and the rule that classified it. Secrets found in content are replaced by `[REDACTED:<rule>]`; the sha256 still refers to the original bytes.
+- Test fixtures: benign app committed in `tests/fixtures/sample_app/`; hostile files (secrets, binaries, malformed) are created in `tmp_path` at test time, and fake secrets are assembled at runtime. Keep parametrize ids short (huge inputs in ids break pytest on Windows).
+
 ## Things to avoid
 - Hardcoding credentials or committing `.env` files (only `.env.example`, placeholders only).
 - Documenting commands that have not been run successfully.

@@ -77,8 +77,12 @@ uv run ruff format --check .
 uv run mypy
 COGMESH_PROVIDER=ollama uv run cognitive-mesh   # exit 0, "config OK (provider=ollama)"
 uv run cognitive-mesh                           # no config: exit 2, names COGMESH_PROVIDER
+uv run cognitive-mesh ingest tests/fixtures/sample_app          # exit 0, lists 9 files
+uv run cognitive-mesh ingest tests/fixtures/sample_app --json   # exit 0 (--include-content adds file text)
+uv run cognitive-mesh ingest does-not-exist                     # exit 3, "ingestion root does not exist"
 ```
-All of the above also passed in a fresh `git clone` of the feature branch.
+The v0.1.0 commands also passed in a fresh `git clone` of its feature branch; the `ingest` commands were run only in the working tree (not yet in a fresh clone or CI).
+Note: the "no config: exit 2" check needs a working directory without a local `.env`.
 
 Do not document unverified commands as working commands.
 
