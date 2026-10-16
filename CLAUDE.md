@@ -36,4 +36,3 @@ Read on demand: `memory-bank/progress.md`, `memory-bank/systemPatterns.md` (fill
 ## Known inconsistencies to resolve
 
 - `CHANGELOG.md` is meant to be generated from Conventional Commits, but no generator is configured.
-- GitHub Actions CI (`.github/workflows/ci.yml`) has been updated to uv but not yet run; confirm it is green after the first push.
