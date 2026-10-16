@@ -11,7 +11,7 @@ Completed 2026-10-16. Merged to main (`fa92220`), tagged `v0.1.0`; GitHub Action
 
 ### v0.2.0 — Application Ingestion
 Completed 2026-10-16. Merged to main (`a254714`); GitHub Actions CI run 38947231207 on main passed.
-Not tagged yet. See ADR-0005.
+Tagged `v0.2.0` (2026-10-17). See ADR-0005.
 
 - `cognitive_mesh.ingestion` and `cognitive-mesh ingest PATH [--json] [--include-content]`.
 - Source references (path + sha256), explicit diagnostics, name-based exclusions, content secret redaction.
@@ -20,11 +20,12 @@ Not tagged yet. See ADR-0005.
 
 ## Now — v0.3.0: Dependency Graph
 
-Status: not started.
+Status: implemented and verified locally on `feature/v0.3.0-dependency-graph` (2026-10-17); not merged, CI not yet run on it, so not marked done. See ADR-0006.
 
-- Represent application components and their dependencies.
+- Represent application components and their dependencies (`cognitive_mesh.graph`, `cognitive-mesh graph`).
 - Establish graph construction and traversal behavior.
-- Test dependency links against known sample applications.
+- Test dependency links against known sample applications (`tests/fixtures/dep_app`).
+- Known limitations: declared direct dependencies and Python imports only; lockfiles excluded so transitive external dependencies are unknown; JS/TS imports and dynamic imports not analysed; in-memory only.
 
 ## Next — Planned, Not Started
 

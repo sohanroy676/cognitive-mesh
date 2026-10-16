@@ -7,7 +7,7 @@
 
 ## Folder structure logic
 - `src/` layout: all product code in `src/cognitive_mesh/`; tests in `tests/`.
-- Significant decisions go in `docs/adr/` (0002-0004 cover tooling and config).
+- Significant decisions go in `docs/adr/` (0002-0004 cover tooling and config, 0005 ingestion, 0006 dependency graph).
 
 ## Common patterns used in this project
 - Configuration is read only through `cognitive_mesh.config.load_settings()`; never `os.environ` directly elsewhere.
@@ -23,3 +23,5 @@
 - Hardcoding credentials or committing `.env` files (only `.env.example`, placeholders only).
 - Documenting commands that have not been run successfully.
 - Marking a roadmap version done before its verification criteria pass.
+- Dependency graph (`cognitive_mesh.graph`, ADR-0006): `A -> B` always means "A depends on / imports B". Every `Edge` has >=1 `Evidence` (SourceRef + line + rule + cited text); the model rejects none. Anything not resolvable becomes an `unresolved` node plus a diagnostic, never a guessed edge; imports are never linked to packages by name. Builders (`graph/builders.py`) are pure over `IngestionResult` and never touch the disk. NetworkX stays private to `graph/graph.py`; public API returns frozen pydantic models; outputs are sorted for determinism. Only `GraphError` (unknown node id) is raised (CLI exit 4).
+- Test fixtures: `tests/fixtures/dep_app/` is the graph fixture (cycle a<->b, undeclared and declared imports, `-r`/URL requirement lines); `tests/fixtures/` is excluded from mypy.
