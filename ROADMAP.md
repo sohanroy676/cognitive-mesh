@@ -1,28 +1,24 @@
 # Roadmap
 
-## Now — v0.1.0: Project Foundation
+## Done
 
-Status: implemented and verified locally (including a fresh clone) on 2026-10-16; pending review, merge, and a green first GitHub Actions run.
+### v0.1.0 — Project Foundation
+Completed 2026-10-16. Merged to main (`fa92220`), tagged `v0.1.0`; GitHub Actions CI run 38942568274 on main passed.
 
-- Establish the Python 3.12 project configuration and development environment.
-- Define the initial repository structure and dependency management.
-- Establish configuration and secret-handling conventions.
-- Select and configure testing, linting, and formatting tools.
-- Document verified setup, run, and test commands.
+- Python 3.12 project with uv, ruff, mypy (strict) and pytest (ADRs 0002-0003).
+- Configuration and secret handling via pydantic-settings (ADR-0004).
+- Minimal CLI entry point; setup, run and test commands documented in `memory-bank/tech-stack.md`.
 
-Completion evidence:
-- The environment can be set up from documented instructions.
-- The project imports and runs its minimal entry point.
-- A basic automated test passes.
-- Configuration and secret-handling conventions are documented.
+## Now — v0.2.0: Application Ingestion
 
-## Next — Planned, Not Started
+Status: in progress on `feature/v0.2.0-application-ingestion`; not implemented yet.
 
-### v0.2.0 — Application Ingestion
 - Define the supported application inputs.
 - Ingest source code, configuration, dependency manifests, and documentation.
 - Preserve file-level source references for later analysis.
 - Test missing, unsupported, and malformed inputs.
+
+## Next — Planned, Not Started
 
 ### v0.3.0 — Dependency Graph
 - Represent application components and their dependencies.
