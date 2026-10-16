@@ -18,6 +18,7 @@ while tracking their source, validity, confidence, and conflicts.
 
 - Application Ingestion
   Collect source code, configuration, dependency manifests, and documentation.
+  Implemented in v0.2.0 as `src/cognitive_mesh/ingestion/` (see ADR-0005); in-memory results only.
 - Application Analysis
   Build a structured understanding of the application and distinguish observed facts
   from assumptions and unresolved questions.

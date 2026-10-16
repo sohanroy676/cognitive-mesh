@@ -4,7 +4,7 @@
 v0.1.0 foundation is implemented: tooling, config loading, and a minimal CLI. The commands
 in "Verified commands" below were run successfully on 2026-10-16 (Windows 11, Git Bash,
 uv 0.13.1, CPython 3.12.3). Everything else here (providers, memory stores, agents) is still
-planned and unimplemented. GitHub Actions CI has not been run yet (needs a push).
+planned and unimplemented. GitHub Actions CI passed on main (run 38942568274, 2026-10-16).
 
 ## Language and Runtime
 - Language: Python
@@ -77,8 +77,12 @@ uv run ruff format --check .
 uv run mypy
 COGMESH_PROVIDER=ollama uv run cognitive-mesh   # exit 0, "config OK (provider=ollama)"
 uv run cognitive-mesh                           # no config: exit 2, names COGMESH_PROVIDER
+uv run cognitive-mesh ingest tests/fixtures/sample_app          # exit 0, lists 9 files
+uv run cognitive-mesh ingest tests/fixtures/sample_app --json   # exit 0 (--include-content adds file text)
+uv run cognitive-mesh ingest does-not-exist                     # exit 3, "ingestion root does not exist"
 ```
-All of the above also passed in a fresh `git clone` of the feature branch.
+The v0.1.0 commands also passed in a fresh `git clone` of its feature branch; the `ingest` commands were run only in the working tree (not yet in a fresh clone or CI).
+Note: the "no config: exit 2" check needs a working directory without a local `.env`.
 
 Do not document unverified commands as working commands.
 
