@@ -1,14 +1,17 @@
 # Tech Stack
 
 ## Status
-This file describes the intended technology stack for a new project.
-No implementation, dependency versions, or repository commands have been verified yet.
+v0.1.0 foundation is implemented: tooling, config loading, and a minimal CLI. The commands
+in "Verified commands" below were run successfully on 2026-10-16 (Windows 11, Git Bash,
+uv 0.13.1, CPython 3.12.3). Everything else here (providers, memory stores, agents) is still
+planned and unimplemented. GitHub Actions CI has not been run yet (needs a push).
 
 ## Language and Runtime
 - Language: Python
 - Python version: 3.12
-- Dependency manager: TBD
-- Virtual environment approach: TBD
+- Dependency manager: uv (ADR-0002); `pyproject.toml` + committed `uv.lock`, `.python-version` = 3.12
+- Virtual environment approach: uv-managed `.venv/` in the repo root (git-ignored)
+- Layout: `src/cognitive_mesh/` (hatchling build backend), `tests/`
 
 ## AI Models and Providers
 - Primary planned external API provider: Groq
@@ -42,39 +45,56 @@ must be implemented explicitly; NetworkX alone is not the persistent database.
 - Memory approach: Episodic traces, evidence-aware knowledge, and context retrieval
 
 ## Testing
-- Test framework: TBD
-- Test directory: TBD
-- Test file naming convention: TBD
-- Test command: TBD
+- Test framework: pytest 9.1.1 (ADR-0003)
+- Test directory: `tests/`
+- Test file naming convention: `test_*.py`
+- Test command: `uv run pytest`
 
-Choose and document a test framework during project foundation work.
+`tests/conftest.py` has an autouse fixture that clears `COGMESH_*`/`GROQ_API_KEY` and
+runs each test in an empty temp cwd so a developer's real `.env` cannot leak in.
 Tests should cover unit behavior, integration boundaries, and end-to-end workflows.
 Tests requiring external APIs must support controlled mocking or explicitly configured
 integration credentials.
 
 ## Linting and Formatting
-- Linter: TBD
-- Formatter: TBD
-- Static type checker: TBD
-- Commands: TBD
-
-Select tools and record their versions and commands when the project configuration
-is established.
+- Linter: ruff 0.17.1 (rules E, F, W, I, B, UP, SIM, S)
+- Formatter: ruff format (black is not used)
+- Static type checker: mypy 2.4.0, strict, pydantic plugin; checks `src` and `tests`
+- Commands: `uv run ruff check .`, `uv run ruff format --check .` (drop `--check` to apply), `uv run mypy`
 
 ## Build, Run, and Development
-- Installation command: TBD
-- Environment setup command: TBD
-- Application startup command: TBD
-- Development command: TBD
-- Build or packaging command: TBD
+- Install uv (one-time, Windows): `winget install --id=astral-sh.uv -e`
+- Environment setup / install: `uv sync` (CI uses `uv sync --locked`)
+- Application startup: `uv run cognitive-mesh` (also `uv run python -m cognitive_mesh`, exercised by a test)
+- Build or packaging command: TBD (not run)
+
+### Verified commands
+```
+uv sync --locked
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy
+COGMESH_PROVIDER=ollama uv run cognitive-mesh   # exit 0, "config OK (provider=ollama)"
+uv run cognitive-mesh                           # no config: exit 2, names COGMESH_PROVIDER
+```
+All of the above also passed in a fresh `git clone` of the feature branch.
 
 Do not document unverified commands as working commands.
+
+## Configuration (ADR-0004)
+Settings load via `cognitive_mesh.config.load_settings()` from the environment, then an
+ignored `.env` in the working directory. Copy `.env.example` to `.env` to start.
+- `COGMESH_PROVIDER` (required): `groq` or `ollama`
+- `GROQ_API_KEY`: required when provider is `groq`; held as `SecretStr`
+- `COGMESH_OLLAMA_BASE_URL`, `COGMESH_LOG_LEVEL`: optional, have defaults
+Missing/invalid values raise `ConfigError`; the CLI prints it to stderr and exits 2.
 
 ## External Services
 - Groq API: Planned primary external model provider
 - Ollama: Planned local model runtime
 - Other model APIs: Optional future integrations
-- API credentials and endpoint configuration: TBD
+- API credentials and endpoint configuration: see Configuration above (no provider calls implemented yet)
 
 The core application should separate provider configuration from orchestration,
 memory, and agent logic.

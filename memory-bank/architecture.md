@@ -55,7 +55,7 @@ project-root/
 ├── VERSION_TEST_GUIDE.md
 ├── .env.example
 ├── .gitignore
-├── pyproject.toml                 # Proposed; not yet created
+├── pyproject.toml                 # Created in v0.1.0 (uv)
 ├── src/
 │   └── TBD                        # Final Python package layout TBD
 ├── tests/

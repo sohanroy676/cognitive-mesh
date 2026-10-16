@@ -2,6 +2,8 @@
 
 ## Now — v0.1.0: Project Foundation
 
+Status: implemented and verified locally (including a fresh clone) on 2026-10-16; pending review, merge, and a green first GitHub Actions run.
+
 - Establish the Python 3.12 project configuration and development environment.
 - Define the initial repository structure and dependency management.
 - Establish configuration and secret-handling conventions.
