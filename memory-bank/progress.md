@@ -7,11 +7,11 @@
 
 ## Done
 
-- v0.2.0 Application Ingestion (branch `feature/v0.2.0-ingestion`) — 2026-10-16. `cognitive_mesh.ingestion` + `cognitive-mesh ingest` CLI, ADR-0005, 129 tests passing (1 skipped on Windows: control-character filename), ruff/mypy clean. Redo of an earlier attempt (`ed71a4f` on `feature/v0.2.0-application-ingestion`, kept untouched) that adds content-based secret redaction and non-Python source files. DETAILED_ROADMAP v0.2.0 Test/Expected items verified locally. NOT pushed/merged; CI not yet run on the branch. Known limitations: pattern-based secret detection is not exhaustive, YAML not syntax-checked, lockfiles excluded, in-memory only, local directories only.
+- v0.2.0 Application Ingestion (branch `feature/v0.2.0-ingestion`) — 2026-10-16. `cognitive_mesh.ingestion` + `cognitive-mesh ingest` CLI, ADR-0005, 129 tests passing (1 skipped on Windows: control-character filename), ruff/mypy clean. Redo of an earlier attempt (`ed71a4f` on `feature/v0.2.0-application-ingestion`, kept untouched) that adds content-based secret redaction and non-Python source files. DETAILED_ROADMAP v0.2.0 Test/Expected items verified locally. Merged to main and pushed 2026-10-16; CI on main result to be confirmed (not yet tagged v0.2.0). Known limitations: pattern-based secret detection is not exhaustive, YAML not syntax-checked, lockfiles excluded, in-memory only, local directories only.
 - v0.1.0 closeout — 2026-10-16. Merged to main, pushed, tagged `v0.1.0`; GitHub Actions CI on main (run 38942568274) passed. ROADMAP.md updated.
 - v0.1.0 Project Foundation (branch `feature/v0.1.0-project-foundation`) — 2026-10-16. uv + ruff/mypy/pytest, pydantic-settings config, minimal CLI, 20 passing tests, CI rewritten, ADRs 0002-0004. All DETAILED_ROADMAP v0.1.0 Test/Expected items verified locally and from a fresh clone. Later merged and pushed (see closeout above).
 
 ## In progress
 
-- Awaiting user review/approval to push `feature/v0.2.0-ingestion` and open a PR.
+- Confirm GitHub Actions CI on main is green for the v0.2.0 merge; then move v0.2.0 to Done in ROADMAP.md and tag `v0.2.0` (ask first).
 - The old branch `feature/v0.2.0-application-ingestion` had uncommitted deletions of the whole ingestion code when this session started (cause unknown); they are saved in `git stash@{0}`. Decide whether to drop the stash and old branch.
