@@ -17,6 +17,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record CI run 39022644447 for changelog merge
 - **adr:** Add ADR-0009 agent architecture
 - Record v0.4.0 agent architecture
+- Hand off after v0.4.0 agent architecture
 
 ### Maintenance
 - Fetch full history for gitleaks
