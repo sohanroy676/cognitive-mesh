@@ -1,4 +1,4 @@
-# Generic CI pipeline. Runs on every push and PR to main, and can be triggered
+# Generic CI pipeline. Runs on every push and PR to main and on v* tag pushes, and can be triggered
 # manually from the Actions tab (workflow_dispatch).
 #
 # HOW TO CONFIGURE FOR YOUR PROJECT
@@ -19,6 +19,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -64,6 +65,15 @@ jobs:
           uv run git-cliff -o CHANGELOG.md
           git diff --exit-code CHANGELOG.md || {
             echo "CHANGELOG.md is stale. Run 'uv run git-cliff -o CHANGELOG.md' and commit it as 'chore(changelog): regenerate'."
+            exit 1
+          }
+
+      - name: Changelog has the release section
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          grep -qF "## [${version}] - " CHANGELOG.md || {
+            echo "CHANGELOG.md has no section for ${version}. Regenerate it with 'uv run git-cliff --tag v${version} -o CHANGELOG.md' before tagging."
             exit 1
           }
 
