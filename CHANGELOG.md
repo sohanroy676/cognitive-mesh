@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [0.7.0] - 2026-10-17
 
 ### Added
 - **traces:** Add versioned schema migrations to the trace store
@@ -25,6 +25,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Document v0.7.0 semantic memory retrieval
 - Hand off after v0.7.0 semantic memory retrieval
 - Record CI run 39043661141 for v0.7.0
+- Record CI run 39043771776 and prepare v0.7.0 release
 
 ### Maintenance
 - Run on release tags and check the changelog section

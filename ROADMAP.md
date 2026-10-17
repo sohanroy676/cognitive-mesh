@@ -97,7 +97,7 @@ Implemented 2026-10-17 on `feature/v0.6.2-groq-client` (ADR-0013). Unit, CLI and
 - Generate embeddings for eligible stored experiences.
 - Use ChromaDB for semantic retrieval.
 - Test retrieval relevance and behavior when no useful memory exists.
-- Status 2026-10-17: implemented, merged to main and pushed (`memory index`, `memory search`, ADR-0014); criteria pass locally; CI run 39043661141 passed; not tagged, not marked done.
+- Status 2026-10-17: implemented, merged to main and pushed (`memory index`, `memory search`, ADR-0014); criteria pass locally; CI runs 39043661141 and 39043771776 passed; tagged `v0.7.0`.
 
 ### v0.8.0 — Experience Graph
 - Represent reusable experiences and relationships using NetworkX.

@@ -24,7 +24,7 @@ specialized agents, and keeps traceable memory of what it did and why.
 | v0.6.0 | Episodic trace store: SQLite persistence of orchestrator runs (steps, attempts, ids, model info, timestamps), redaction before storing, success/failed/incomplete/interrupted states, `run --trace-db`, `traces list/show` | Done, tagged `v0.6.0`; CI runs 39026432280 and 39028485876 passed |
 | v0.6.1 | Real Ollama client (stdlib HTTP, hard total deadline, every failure mapped to a provider error kind), `COGMESH_OLLAMA_MODEL` / `COGMESH_MODEL_TIMEOUT_S`, `run` uses it only for plans with a model step | Criteria pass locally (including a real `llama3.2` run); merged to main and pushed; CI run 39029734411 on the merge passed; tagged `v0.6.1` (no tag-triggered CI; the tagged merge is covered by run 39031027771) |
 | v0.6.2 | Real Groq client (`qwen/qwen3.8-27b` by default, preview model; reasoning off; shared error mapping with the Ollama client; key never in errors/traces/output), `COGMESH_GROQ_MODEL` / `COGMESH_GROQ_REASONING_EFFORT` | Criteria pass locally, including a real Groq run (`explain_file` succeeded, `model_unverified`) and the opt-in live test; merged to main and pushed; CI run 39031027771 on the merge passed; not tagged |
-| v0.7.0 | Semantic memory retrieval: final attempts of finished runs are embedded (`all-MiniLM-L6-v2`, pinned revision) into a ChromaDB index; `memory index` / `memory search`; every hit is re-checked against its trace row; an index from another model is refused | Criteria pass locally, including a real-model run; merged to main and pushed; CI run 39043661141 passed; not tagged |
+| v0.7.0 | Semantic memory retrieval: final attempts of finished runs are embedded (`all-MiniLM-L6-v2`, pinned revision) into a ChromaDB index; `memory index` / `memory search`; every hit is re-checked against its trace row; an index from another model is refused | Criteria pass locally, including a real-model run; merged to main and pushed; CI runs 39043661141 and 39043771776 passed; tagged `v0.7.0` |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
@@ -133,7 +133,7 @@ secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and
 
 ## Roadmap (summary)
 
-v0.7.0 semantic retrieval is merged to main (CI run 39043661141 passed). Next: v0.8.0 experience graph, v0.9.0
+v0.7.0 semantic retrieval is merged to main and tagged `v0.7.0` (CI run 39043661141 passed). Next: v0.8.0 experience graph, v0.9.0
 evidence-aware retrieval, v1.0.0 end-to-end prototype. See `ROADMAP.md`.
 
 ## Principles
