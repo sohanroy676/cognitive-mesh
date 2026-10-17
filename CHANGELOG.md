@@ -9,14 +9,15 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record CI runs and handoff for v1.0.0
 - Record the v1.0.0 verification pass
 - Record the remaining v1.0.0 verification items
-
-### Maintenance
-- **e2e:** Pin that same-named applications share context
+- Hand off after the v1.0.0 verification pass
 
 ### Fixed
 - **traces:** Tolerate parallel creation of a new trace database
 - **memory:** Retry opening the index while another process creates it
 - **experience:** Create graph and reviews files atomically
+
+### Maintenance
+- **e2e:** Pin that same-named applications share context
 
 ## [1.0.0] - 2026-10-17
 
