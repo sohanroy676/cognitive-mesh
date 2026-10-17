@@ -8,15 +8,15 @@ specialized agents, and keeps traceable memory of what it did and why.
 > graph exist. There are no model-provider calls, agents, orchestrator or persistent memory yet.
 > This README is updated with every version; the roadmap is not evidence that a feature exists.
 
-## What works today (v0.3.2 on a branch, not yet merged)
+## What works today (v0.3.2)
 
 | Version | Capability | Status |
 |---|---|---|
 | v0.1.0 | Project foundation: uv, ruff, mypy (strict), pytest, config loading, minimal CLI | Done, tagged |
 | v0.2.0 | Read-only application ingestion with source references, diagnostics and secret redaction | Done, tagged |
 | v0.3.0 | Dependency graph with evidence on every edge, unresolved items kept visible | Done, tagged; CI run 39010744225 passed |
-| v0.3.1 | JS/TS imports and literal dynamic imports in the graph; computed ones stay unresolved | Done, tagged; CI run 39012713238 passed |
-| v0.3.2 | Graph visualization: Mermaid text or self-contained HTML/SVG, with evidence and visible truncation | Implemented on `feature/v0.3.2-graph-visualization` (commit `c6d49b8`); not merged, CI on main not yet run |
+| v0.3.1 | JS/TS imports and literal dynamic imports in the graph; computed ones stay unresolved | Done, tagged `v0.3.1`; CI run 39012713238 passed |
+| v0.3.2 | Graph visualization: Mermaid text or self-contained HTML/SVG, with evidence and visible truncation | Done; merged to main, CI run 39021177652 passed |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
@@ -73,7 +73,7 @@ secrets. Packaging/build commands have not been run and are TBD.
 
 ## Roadmap (summary)
 
-Next: merge v0.3.2 (awaiting review), then v0.4.0 agent architecture (planned only), v0.5.0
+Next: v0.4.0 agent architecture (planned only, not started), v0.5.0
 orchestrator, v0.6.0 trace store, v0.7.0 semantic retrieval, v0.8.0 experience graph, v0.9.0
 evidence-aware retrieval, v1.0.0 end-to-end prototype. See `ROADMAP.md`.
 

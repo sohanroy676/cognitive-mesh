@@ -34,9 +34,9 @@ Completed 2026-10-17. Merged to main (`0d16c4a`); GitHub Actions CI run 39012713
 - Python `importlib.import_module` / `__import__` with a literal argument become edges; computed ones become `unresolved` nodes plus a `computed_import` diagnostic.
 - Known limitations: bundler aliases, tsconfig `paths`, package.json `exports`, `.js` to `.ts` remapping and `.mjs`/`.cjs` files are not modelled; bare specifiers stay unresolved; in-memory only.
 
-## Now — v0.3.2: Dependency Graph Visualization (implemented on a branch, awaiting review and merge)
+### v0.3.2 — Dependency Graph Visualization
 
-Status: implemented 2026-10-17 on `feature/v0.3.2-graph-visualization` (`c6d49b8`); local verification passed (253 tests, ruff, mypy). Not merged; not done until merged and CI on main is green. See ADR-0008.
+Completed 2026-10-17. Merged to main (`e19d5e1`); the first CI run on that merge failed only at the new gitleaks step (shallow checkout), fixed by `fetch-depth: 0` (`4ad8fa7`); GitHub Actions CI run 39021177652 on main passed, including a full-history gitleaks scan with no leaks. Not tagged. See ADR-0008.
 
 - `cognitive-mesh graph PATH --format mermaid|html [--output FILE] [--max-nodes N] [--max-edges N]` renders the existing `DependencyGraph`; no new dependency, no script, no network loads.
 - Unresolved nodes, computed dynamic imports and cycles are visually distinct; evidence is reachable per edge (tooltip + table in HTML, comments in Mermaid); truncation shows a visible notice.
