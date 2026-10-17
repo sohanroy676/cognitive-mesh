@@ -5,6 +5,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **agents:** Add agent interface, roles and registry
+
 ### Documentation
 - Mark v0.3.2 done after green CI
 - Document changelog workflow
@@ -12,6 +15,8 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record git versioning and Mermaid renderer check
 - Hand off after changelog and versioning work
 - Record CI run 39022644447 for changelog merge
+- **adr:** Add ADR-0009 agent architecture
+- Record v0.4.0 agent architecture
 
 ### Maintenance
 - Fetch full history for gitleaks
