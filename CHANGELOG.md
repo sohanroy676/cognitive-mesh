@@ -5,8 +5,26 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **agents:** Add recalled-context pack model
+- **retrieval:** Build the gated context pack from recall
+- **agents:** Let agents read the recalled-context pack
+- **traces:** Record the context a run was offered (schema 2)
+- **cli:** Add task command that supplies recalled context
+
+### Changed
+- **graph:** Share claim re-derivation as rederive
+
 ### Documentation
 - Record CI runs and handoff for v0.9.0
+- **adr:** Accept ADR-0017 context supply
+- Record v1.0.0 end-to-end prototype
+
+### Maintenance
+- **e2e:** Run the context workflow across separate processes
+- **agents:** Require no diagnostics for compare_with_recalled
+- **live:** Check the default cut-off end to end with the real model
+- **fixtures:** Add the e2e_app demo application and plans
 
 ## [0.9.0] - 2026-10-17
 
