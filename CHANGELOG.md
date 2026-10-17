@@ -8,6 +8,11 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 ### Documentation
 - Record CI runs and handoff for v1.0.0
 
+### Fixed
+- **traces:** Tolerate parallel creation of a new trace database
+- **memory:** Retry opening the index while another process creates it
+- **experience:** Create graph and reviews files atomically
+
 ## [1.0.0] - 2026-10-17
 
 ### Added

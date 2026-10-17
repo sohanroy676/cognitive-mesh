@@ -83,6 +83,33 @@ def _pragma_int(conn: sqlite3.Connection, name: str) -> int:
     return int(conn.execute(f"PRAGMA {name}").fetchone()[0])
 
 
+def _is_fresh(conn: sqlite3.Connection) -> bool:
+    """True for a new, empty file: no application id and no tables."""
+    return (
+        _pragma_int(conn, "application_id") == 0
+        and not conn.execute("SELECT count(*) FROM sqlite_master").fetchone()[0]
+    )
+
+
+def _create_schema(conn: sqlite3.Connection) -> None:
+    """Create the schema in one transaction, so no process ever sees a half-made file.
+
+    If this fails but the file is by now a valid graph file, another process created it first
+    (several `experience build` calls at once on a new path): that file is used. Anything else
+    is raised as it was.
+    """
+    try:
+        conn.executescript(f"BEGIN IMMEDIATE; {_SCHEMA} COMMIT;")
+    except sqlite3.Error:
+        with contextlib.suppress(sqlite3.Error):
+            conn.execute("ROLLBACK")
+        try:
+            _check_header(conn)
+        except (ExperienceGraphError, sqlite3.Error):
+            raise sqlite3.Error("schema") from None
+        return
+
+
 def _check_header(conn: sqlite3.Connection) -> None:
     if _pragma_int(conn, "application_id") != APPLICATION_ID:
         raise ExperienceGraphError("the file is not an experience graph file")
@@ -102,12 +129,8 @@ def save(path: Path, snapshot: Snapshot, *, built_at: datetime | None = None) ->
     digest = content_sha256(snapshot.nodes, snapshot.edges, snapshot.diagnostics)
     conn = _connect(path)
     try:
-        fresh = (
-            _pragma_int(conn, "application_id") == 0
-            and not conn.execute("SELECT count(*) FROM sqlite_master").fetchone()[0]
-        )
-        if fresh:
-            conn.executescript(_SCHEMA)
+        if _is_fresh(conn):
+            _create_schema(conn)
         else:
             _check_header(conn)
         conn.execute("PRAGMA foreign_keys = ON")

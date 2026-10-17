@@ -127,10 +127,7 @@ class TraceStore:
         try:
             version = _user_version(conn)
             if version == 0:
-                if conn.execute("SELECT count(*) FROM sqlite_master").fetchone()[0]:
-                    raise TraceStoreError("the file is a database but not a trace database")
-                conn.executescript(_SCHEMA)
-                version = _BASELINE_VERSION
+                version = _create_baseline(conn)
             if version > _target_version():
                 raise TraceStoreError(
                     f"the trace database has version {version}, newer than this program supports"
@@ -367,8 +364,44 @@ def _migrate(conn: sqlite3.Connection, version: int) -> None:
             )
         except sqlite3.Error:
             _rollback(conn)
-            raise TraceStoreError("cannot upgrade the trace database (sqlite error)") from None
+            # Another process may have applied this step between our version read and our write.
+            current = _current_version(conn)
+            if current <= version:
+                raise TraceStoreError("cannot upgrade the trace database (sqlite error)") from None
+            version = current
+            continue
         version += 1
+
+
+def _create_baseline(conn: sqlite3.Connection) -> int:
+    """Create the baseline schema in an empty file; return the version the file now has.
+
+    Another process can create (and migrate) the same new file between our version read and our
+    write, so a failure, or tables that appeared meanwhile, is settled by reading the version again.
+    A file that holds tables but still has no version is not ours and is refused untouched.
+    """
+    try:
+        if not conn.execute("SELECT count(*) FROM sqlite_master").fetchone()[0]:
+            conn.executescript(_SCHEMA)
+            return _BASELINE_VERSION
+    except sqlite3.Error:
+        _rollback(conn)
+        current = _current_version(conn)
+        if current == 0:
+            raise  # a real failure, not a lost race
+        return current
+    current = _current_version(conn)
+    if current == 0:
+        raise TraceStoreError("the file is a database but not a trace database")
+    return current
+
+
+def _current_version(conn: sqlite3.Connection) -> int:
+    """The version now on disk, or 0 when it cannot be read."""
+    try:
+        return _user_version(conn)
+    except sqlite3.Error:
+        return 0
 
 
 def _user_version(conn: sqlite3.Connection) -> int:
