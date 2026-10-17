@@ -79,6 +79,7 @@ class Withheld(_Frozen):
 
     unconfirmed: int = 0  # source missing, changed, unreadable or not in the graph
     not_applicable: int = 0  # failed the relevance gate for the current application
+    over_limit: int = 0  # passed the gate but did not fit the size bound of the pack
 
 
 class RecalledContext(_Frozen):

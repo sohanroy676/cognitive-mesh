@@ -1,5 +1,6 @@
 """Evidence-aware retrieval over the vector index and the experience graph (v0.9.0, ADR-0016)."""
 
+from cognitive_mesh.retrieval.context import build_context, root_name
 from cognitive_mesh.retrieval.models import (
     RAW_LABEL,
     RETRIEVAL_NOTES,
@@ -23,5 +24,7 @@ __all__ = [
     "RetrievedVia",
     "Searcher",
     "Unconfirmed",
+    "build_context",
     "recall",
+    "root_name",
 ]

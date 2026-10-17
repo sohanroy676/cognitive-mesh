@@ -102,7 +102,7 @@ class ClaimAssessment(_Frozen):
     differs_across_versions: bool
 
 
-def _claim_parts(graph: ExperienceGraph, claim: ExpNode) -> tuple[str | None, str | None]:
+def claim_parts(graph: ExperienceGraph, claim: ExpNode) -> tuple[str | None, str | None]:
     """Subject and object node ids (the dependency-graph ids), or None where absent."""
 
     def target(kind: EdgeKind) -> str | None:
@@ -137,7 +137,7 @@ def assess_claim(
     reviews: list[Review],
     current: CurrentSource | None,
 ) -> ClaimAssessment:
-    subject, obj = _claim_parts(graph, claim)
+    subject, obj = claim_parts(graph, claim)
     here = current.fingerprint if current else None
 
     evidence_ids = [e.target for e in graph.evidence(claim.id)]
