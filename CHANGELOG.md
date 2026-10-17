@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [0.8.0] - 2026-10-17
 
 ### Added
 - **experience:** Build the experience graph from traces
@@ -18,6 +18,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Propose ADR-0015 experience graph
 - **adr:** Accept ADR-0015
 - Record v0.8.0 experience graph
+- Mark v0.8.0 released and hand off
 
 ### Maintenance
 - Regenerate changelog as the release for untagged versions
