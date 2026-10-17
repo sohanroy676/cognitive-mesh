@@ -7,7 +7,7 @@
 
 ## Folder structure logic
 - `src/` layout: all product code in `src/cognitive_mesh/`; tests in `tests/`.
-- Significant decisions go in `docs/adr/` (0002-0004 cover tooling and config, 0005 ingestion, 0006 dependency graph, 0007 JS/TS, 0008 visualization).
+- Significant decisions go in `docs/adr/` (0002-0004 cover tooling and config, 0005 ingestion, 0006 dependency graph, 0007 JS/TS, 0008 visualization, 0009 agents).
 
 ## Common patterns used in this project
 - Configuration is read only through `cognitive_mesh.config.load_settings()`; never `os.environ` directly elsewhere.
@@ -32,3 +32,4 @@
 - Visualization (`graph/view.py`, `render_mermaid.py`, `render_html.py`, ADR-0008): renderers are pure functions of a `GraphView` made by `build_view`, which only selects from the graph (never adds or rewrites). Graph text is untrusted: HTML uses `esc()` (visible escapes, HTML escape, `&#N;`) in text nodes only; ids/classes are generated and CSS is constant; Mermaid never uses graph text as an identifier and entity-encodes everything outside a safe set. Output is ASCII/LF with no absolute paths or timestamps. Truncation is always announced. Any new renderer needs hostile-name tests (see `tests/test_graph_render.py`) and must leave text/`--json` output unchanged. In `graph/__init__.py` the names `render_html`/`render_mermaid` are the functions, not the modules (patch via `sys.modules` in tests).
 - Test fixtures: `tests/fixtures/expected/` holds golden outputs (`dep_app.mmd`, `js_app.mmd`, `dep_app.txt`); regenerate only after reviewing the diff.
 - Test fixtures: `tests/fixtures/dep_app/` is the graph fixture (cycle a<->b, undeclared and declared imports, `-r`/URL requirement lines); `tests/fixtures/` is excluded from mypy.
+- Agents (`cognitive_mesh.agents`, ADR-0009): every agent is a table of `Capability` (input model, output model, handler); `spec()` is derived from the table. `Agent.run` never raises; expected problems are `AgentFault(kind, message)` raised in handlers, anything else is `internal_error` naming only the exception type. Messages never contain input values, file content, model text or exception text; unknown input keys are shown as `<input>`. `AgentTask` ids are pattern-restricted so they are safe to echo. Inputs validate with `strict=True`, `extra="forbid"`. All provider handling is `agents.base.call_model` (never in a role); agents import only `providers.ModelClient`. Model output is parsed as strict JSON into the output model; a model-backed success is `model_unverified`. File content goes to a model only as a JSON-encoded string with an "untrusted data" system note. Tests use fake clients; no test touches the network.

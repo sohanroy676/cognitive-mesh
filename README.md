@@ -4,11 +4,12 @@ An application-aware, evidence-aware AI agent system with persistent cross-sessi
 The goal is a system that reads an application's code and configuration, coordinates
 specialized agents, and keeps traceable memory of what it did and why.
 
-> **Status: early development.** Only the foundation, application ingestion and a dependency
-> graph exist. There are no model-provider calls, agents, orchestrator or persistent memory yet.
+> **Status: early development.** Only the foundation, application ingestion, a dependency
+> graph and (v0.4.0, on a branch) the agent interfaces exist. There are no real model-provider
+> clients, orchestrator or persistent memory yet.
 > This README is updated with every version; the roadmap is not evidence that a feature exists.
 
-## What works today (v0.3.2)
+## What works today (v0.3.2 on main; v0.4.0 on its branch)
 
 | Version | Capability | Status |
 |---|---|---|
@@ -17,10 +18,11 @@ specialized agents, and keeps traceable memory of what it did and why.
 | v0.3.0 | Dependency graph with evidence on every edge, unresolved items kept visible | Done, tagged; CI run 39010744225 passed |
 | v0.3.1 | JS/TS imports and literal dynamic imports in the graph; computed ones stay unresolved | Done, tagged `v0.3.1`; CI run 39012713238 passed |
 | v0.3.2 | Graph visualization: Mermaid text or self-contained HTML/SVG, with evidence and visible truncation | Done; merged to main, CI run 39021177652 passed |
+| v0.4.0 | Agent architecture: common interface, two roles, capability declarations, explicit failure results, provider protocol (fake clients only) | Criteria pass locally on branch `feature/v0.4.0-agent-architecture`; not merged, CI not run |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
-`docs/adr/0008-dependency-graph-visualization.md`.
+`docs/adr/0008-dependency-graph-visualization.md`, `docs/adr/0009-agent-architecture.md`.
 
 ### Known limitations
 - Local directories only; results are in memory (nothing is persisted yet).
@@ -35,6 +37,10 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
   graphs are truncated with a visible notice (defaults: HTML 300 nodes / 1000 edges, Mermaid 100 / 200),
   and cycle members are kept before unresolved items. Mermaid output rendered correctly in mermaid-cli 12.0.0 (one-off manual check, not part of the test
   suite or CI; other renderers unchecked); the HTML was viewed only in headless Edge.
+- Agents (v0.4.0): no real provider client exists (no Groq or Ollama calls); the provider path is
+  tested with fake clients only. Timeouts are enforced by the client, not by a watchdog, so a client
+  that hangs is not interrupted. `code_explainer` output is unverified model text. Nothing is
+  persisted, and there is no orchestrator to choose agents yet (v0.5.0).
 - Ingested files are treated as data and are never executed.
 
 ## Setup and usage
@@ -57,6 +63,7 @@ COGMESH_PROVIDER=ollama uv run cognitive-mesh           # validates configuratio
 uv run cognitive-mesh ingest PATH [--json] [--include-content]
 uv run cognitive-mesh graph PATH [--json] [--deps-of NODE_ID [--transitive]]
 uv run cognitive-mesh graph PATH --format mermaid|html [--output FILE] [--max-nodes N] [--max-edges N]
+uv run cognitive-mesh agents [--json]                  # lists roles and capabilities, no config needed
 ```
 
 Exit codes: 0 ok, 2 configuration or usage error, 3 unusable ingestion root, 4 unknown graph node,
@@ -66,7 +73,7 @@ secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and
 
 ## Project layout
 
-- `src/cognitive_mesh/` - `config`, `cli`, `ingestion/`, `graph/` (JS/TS parsing isolated in `graph/js_parse.py`; visualization in `graph/view.py`, `render_mermaid.py`, `render_html.py`)
+- `src/cognitive_mesh/` - `config`, `cli`, `ingestion/`, `agents/` (interface, contracts, roles, registry), `providers/` (model client protocol), `graph/` (JS/TS parsing isolated in `graph/js_parse.py`; visualization in `graph/view.py`, `render_mermaid.py`, `render_html.py`)
 - `tests/` - pytest suite; fixtures in `tests/fixtures/` (`sample_app`, `dep_app`, `js_app`)
 - `docs/adr/` - architecture decision records; `docs/DETAILED_ROADMAP.md` - per-version criteria
 - `memory-bank/` - agent-facing project record (brief, architecture, progress, active context)
@@ -74,8 +81,7 @@ secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and
 
 ## Roadmap (summary)
 
-Next: v0.4.0 agent architecture (planned only, not started), v0.5.0
-orchestrator, v0.6.0 trace store, v0.7.0 semantic retrieval, v0.8.0 experience graph, v0.9.0
+Next: v0.5.0 orchestrator (v0.4.0 agent architecture is implemented on its branch), v0.6.0 trace store, v0.7.0 semantic retrieval, v0.8.0 experience graph, v0.9.0
 evidence-aware retrieval, v1.0.0 end-to-end prototype. See `ROADMAP.md`.
 
 ## Principles
