@@ -22,6 +22,6 @@ v0.1.0 to v0.3.2 are done and tagged (`v0.3.2` on `e19d5e1`, pushed). Tooling wo
 - `uv build` verified locally. Version now derives from git tags (hatch-vcs); the branch awaits approval and a CI run. Mermaid output was checked once with mermaid-cli 12.0.0 (manual).
 
 ## Next step
-1. Check CI on main for the merge of `chore/changelog-git-cliff` (first run of the changelog step and git-derived version). If it failed, fix on a `fix/` branch.
+1. Done: CI run 39022644447 on main passed (changelog check + gitleaks); recorded on branch `docs/record-ci-39022644447`, awaiting the user's approval to merge/push.
 2. Optionally tag nothing: no version bump is pending (v0.3.2 is the latest tag; main is ahead by tooling commits only).
 3. Plan v0.4.0 Agent Architecture (see docs/DETAILED_ROADMAP.md). Lockfile ingestion (for transitive dependencies) was deliberately deferred in ADR-0006.
