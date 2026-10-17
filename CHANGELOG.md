@@ -9,11 +9,13 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Mark v0.3.2 done after green CI
 - Document changelog workflow
 - Record verified build and version gap
+- Record git versioning and Mermaid renderer check
 
 ### Maintenance
 - Fetch full history for gitleaks
 - Add git-cliff changelog generator
 - Check CHANGELOG.md is up to date
+- Derive package version from git tags
 
 ## [0.3.2] - 2026-10-17
 
