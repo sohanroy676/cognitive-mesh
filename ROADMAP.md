@@ -65,7 +65,7 @@ Implemented 2026-10-17 on `feature/v0.5.0-orchestrator`; its DETAILED_ROADMAP Te
 
 ### v0.6.0 — Episodic Trace Store
 
-Implemented 2026-10-17 on `feature/v0.6.0-trace-store`; its DETAILED_ROADMAP Test/Expected items pass locally. Merged to main and pushed with user approval; CI run 39026432280 on the merge passed; not tagged. See ADR-0011.
+Implemented 2026-10-17 on `feature/v0.6.0-trace-store`; its DETAILED_ROADMAP Test/Expected items pass locally. Merged to main and pushed with user approval; CI run 39026432280 on the merge passed; tagged `v0.6.0` (CI run 39028485876 passed). See ADR-0011.
 
 - `cognitive_mesh.traces`: SQLite (stdlib `sqlite3`, no new dependency) tables `runs`, `steps`, `attempts`; stable run ids; every attempt keeps its agent task id, agent id, result and model/provider info.
 - A run is committed as `running` before it starts and finished in one transaction, so a crash or a rolled-back write reads back as `interrupted`; `succeeded | failed | incomplete` are recomputed from the steps on read and a disagreeing or malformed record raises instead of being trusted.
@@ -75,7 +75,7 @@ Implemented 2026-10-17 on `feature/v0.6.0-trace-store`; its DETAILED_ROADMAP Tes
 
 ### v0.6.1 — Real Ollama Client
 
-Implemented 2026-10-17 on `feature/v0.6.1-ollama-client`; its DETAILED_ROADMAP Test/Expected items pass locally, including a real `llama3.2` run and the opt-in live test. Merged to main and pushed; CI run 39029734411 on the merge passed; not tagged. See ADR-0012.
+Implemented 2026-10-17 on `feature/v0.6.1-ollama-client`; its DETAILED_ROADMAP Test/Expected items pass locally, including a real `llama3.2` run and the opt-in live test. Merged to main and pushed; CI run 39029734411 on the merge passed; tagged `v0.6.1` (no tag-triggered CI; covered by run 39031027771). See ADR-0012.
 - `ModelClient` for a local Ollama (`providers/ollama.py`) on a private stdlib transport (`providers/http.py`): one total deadline per call, no new dependency.
 - Settings `COGMESH_OLLAMA_MODEL` (default `llama3.2`) and `COGMESH_MODEL_TIMEOUT_S` (default 30, max 600); `COGMESH_OLLAMA_BASE_URL` is validated.
 - `providers/factory.py`; `run` reads config only for plans with a model step; no provider set keeps the old `provider_unavailable` behavior; bad config exits 2.
@@ -85,7 +85,7 @@ Implemented 2026-10-17 on `feature/v0.6.1-ollama-client`; its DETAILED_ROADMAP T
 
 ### v0.6.2 — Real Groq Client
 
-Implemented 2026-10-17 on `feature/v0.6.2-groq-client` (ADR-0013). Unit, CLI and parity tests pass locally. Against the real API: a fake key got a 401 (`auth`), an unknown model gave `other`, and with the user's key `run needs_model.json` succeeded (`explain_file`, `model_unverified`, provider groq, model `qwen/qwen3.8-27b`) and the live test passed. Rate limiting (429) and outages were tested with fakes only. Not merged, not tagged.
+Implemented 2026-10-17 on `feature/v0.6.2-groq-client` (ADR-0013). Unit, CLI and parity tests pass locally. Against the real API: a fake key got a 401 (`auth`), an unknown model gave `other`, and with the user's key `run needs_model.json` succeeded (`explain_file`, `model_unverified`, provider groq, model `qwen/qwen3.8-27b`) and the live test passed. Rate limiting (429) and outages were tested with fakes only. Merged to main and pushed; CI run 39031027771 on the merge passed; not tagged.
 - Implement `ModelClient` for the Groq API (`providers/groq.py`); key from `GROQ_API_KEY` (`SecretStr`), same model setting as v0.6.1.
 - Map 401/403 to `auth`, 429 to `rate_limited`, timeouts, 5xx and malformed replies to the existing `ProviderError` kinds; the key never appears in logs, errors, traces or output.
 - The provider factory selects Groq or Ollama from `COGMESH_PROVIDER`; a missing key stays a `ConfigError` (exit 2).

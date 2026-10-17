@@ -13,6 +13,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record real-API Groq verification
 - Hand off after v0.6.2
 - Fix a mis-encoded dash in progress.md
+- Record CI for v0.6.2 and fix stale status
 
 ## [0.6.1] - 2026-10-17
 
