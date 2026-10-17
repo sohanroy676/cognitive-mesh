@@ -7,6 +7,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - **adr:** Propose ADR-0011 episodic trace store
+- **adr:** Accept ADR-0011 episodic trace store
 
 ## [0.5.0] - 2026-10-17
 
