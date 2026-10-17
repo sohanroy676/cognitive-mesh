@@ -100,7 +100,7 @@ Implemented 2026-10-17 on `feature/v0.6.2-groq-client` (ADR-0013). Unit, CLI and
 - Status 2026-10-17: implemented, merged to main and pushed (`memory index`, `memory search`, ADR-0014); criteria pass locally; CI runs 39043661141 and 39043771776 passed; tagged `v0.7.0`.
 
 ### v0.8.0 — Experience Graph
-- Status 2026-10-17: implemented, merged to main and pushed (`experience build|show|claims|check`, ADR-0015); criteria pass locally; CI run 39053270212 passed; tagged `v0.8.0`.
+- Status 2026-10-17: implemented, merged to main and pushed (`experience build|show|claims|check`, ADR-0015); criteria pass locally; CI runs 39053270212 and 39053504333 passed; tagged `v0.8.0` (tag run 39053616562 passed).
 - Represent reusable experiences and relationships using NetworkX.
 - Define graph serialization or reconstruction across sessions.
 - Test relationship traversal and persistence behavior.

@@ -3,7 +3,7 @@
 <!-- Update this at the end of every session. This is the first thing to read when resuming. -->
 
 ## Current focus
-Handoff 2026-10-17 (end of session). v0.1.0 to v0.8.0 are done. v0.8.0 Experience Graph (ADR-0015) is merged into main (`75b3c62`) and pushed; CI run 39053270212 passed. It is being released on `chore/release-v0.8.0`; once that is merged, CI is green and the tag `v0.8.0` is pushed, check `git tag` and `gh run list` to see whether the release finished. Suite 884 passed, 4 skipped; ruff/format/mypy clean. Nothing else is in flight.
+Handoff 2026-10-17 (end of session). v0.1.0 to v0.8.0 are done, merged, pushed and tagged (`v0.8.0` latest tag, on merge `b1b386b`). CI passed for the feature merge (run 39053270212), the release merge on main (39053504333, before the tag existed, which proves the changelog-check fix) and the tag (39053616562). Suite 884 passed, 4 skipped; ruff/format/mypy clean. Nothing is in flight. Next is v0.9.0 Evidence-Aware Retrieval, which needs a plan-mode design session first.
 
 ## Recent decisions
 - ADR-0015 (accepted by the user): experience graph in `experience/`. Nodes: run, step, final attempt (shares the v0.7.0 `doc_id` and text hash), capability, agent, target, claim. Claims only from successful `deterministic` `dependencies_of` (depth 1) and `unresolved_report` outputs, always `unvalidated`; the same claim from several runs is one node with several `evidenced_by` edges, each with the run's source fingerprint. Separate SQLite file (`--graph FILE`, `application_id`, own schema version; trace db untouched, `MIGRATIONS` unchanged). Load refuses a foreign file, a newer version, malformed records, dangling edges and a hash mismatch (the hash also covers build diagnostics). Dangling sources are kept, marked `source_missing|changed|unreadable`, and hidden unless `--include-unverified`.
@@ -28,7 +28,7 @@ Handoff 2026-10-17 (end of session). v0.1.0 to v0.8.0 are done. v0.8.0 Experienc
 - `uv build` verified locally. Version now derives from git tags (hatch-vcs); the branch awaits approval and a CI run. Mermaid output was checked once with mermaid-cli 12.0.0 (manual).
 
 ## Next step
-1. Start: `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3`, `gh run list --limit 5`. Confirm `v0.8.0` exists and its tag-triggered run passed. The first release merge to main after the CI fix (`chore/ci-changelog-untagged-release`) exercises the untagged-release path of the changelog check; record whether that main run was green (it should be) in `progress.md`. If the release did not finish, finish it (merge `chore/release-v0.8.0` with approval, push, CI, tag, push tag).
+1. Start: `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3` (expect `v0.8.0`), `gh run list --limit 5`. Confirm main is clean and CI is green; the last push is a docs-only record of the v0.8.0 CI runs, so look at its run too.
 2. Unverified v0.8.0 items: very large trace databases (the whole graph is built in memory, no limit set); concurrent builders; a fresh clone; `show --incoming` and `--include-unverified` outside the tests; claims for new deterministic capabilities need an explicit mapping in `experience/build.py`.
 3. Unverified v0.7.0 items: the default cut-off 0.2 (calibrate on more real traces); an index opened with a different real model; very large traces; concurrent indexers.
 4. Older unverified items: a real Groq run with the opt-in on; `input_refs` in a real CLI plan; HTML layout in non-Chromium browsers; plan command quality with a small model.
