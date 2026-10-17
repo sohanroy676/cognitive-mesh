@@ -1,6 +1,6 @@
 [project]
 name = "cognitive-mesh"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Application-aware, evidence-aware AI agent system with persistent cross-session memory."
 readme = "AGENTS.md"
 requires-python = ">=3.12,<3.13"
@@ -16,8 +16,14 @@ dependencies = [
 cognitive-mesh = "cognitive_mesh.cli:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs>=0.5.0"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+local_scheme = "no-local-version"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cognitive_mesh"]
