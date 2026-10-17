@@ -9,6 +9,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **traces:** Add versioned schema migrations to the trace store
 - **providers:** Require opt-in before sending content to Groq
 - **ingestion:** Add secret formats and an entropy check
+- **orchestrator:** Draft a plan from a request with a model
 
 ### Documentation
 - Record CI-on-tags and trace-store migrations
