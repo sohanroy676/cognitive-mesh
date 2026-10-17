@@ -86,6 +86,32 @@ def _pragma_int(conn: sqlite3.Connection, name: str) -> int:
     return int(conn.execute(f"PRAGMA {name}").fetchone()[0])
 
 
+def _is_fresh(conn: sqlite3.Connection) -> bool:
+    """True for a new, empty file: no application id and no tables."""
+    return (
+        _pragma_int(conn, "application_id") == 0
+        and not conn.execute("SELECT count(*) FROM sqlite_master").fetchone()[0]
+    )
+
+
+def _create_schema(conn: sqlite3.Connection) -> None:
+    """Create the schema in one transaction, so no process ever sees a half-made file.
+
+    If this fails but the file is by now a valid reviews file, another process created it first
+    (several first reviews at once on a new path): that file is used. Anything else is raised as
+    it was.
+    """
+    try:
+        conn.executescript(f"BEGIN IMMEDIATE; {_SCHEMA} COMMIT;")
+    except sqlite3.Error:
+        with contextlib.suppress(sqlite3.Error):
+            conn.execute("ROLLBACK")
+        try:
+            ReviewStore._check_header(conn)
+        except (ReviewStoreError, sqlite3.Error):
+            raise sqlite3.Error("schema") from None
+
+
 class ReviewStore:
     def __init__(self, conn: sqlite3.Connection, *, writable: bool) -> None:
         self._conn = conn
@@ -99,12 +125,8 @@ class ReviewStore:
         except sqlite3.Error:
             raise ReviewStoreError("cannot open the reviews file (sqlite error)") from None
         try:
-            fresh = (
-                _pragma_int(conn, "application_id") == 0
-                and not conn.execute("SELECT count(*) FROM sqlite_master").fetchone()[0]
-            )
-            if fresh:
-                conn.executescript(_SCHEMA)
+            if _is_fresh(conn):
+                _create_schema(conn)
             else:
                 cls._check_header(conn)
         except sqlite3.Error:
