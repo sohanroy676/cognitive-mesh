@@ -64,6 +64,13 @@ no provider is configured; the model timeout is configurable.
   refused connections, oversized and early-closed bodies. A live test against a real Ollama needs the
   `live` marker and `RUN_LIVE_OLLAMA=1`; it is skipped by default and in CI.
 
+## Implementation notes (2026-10-17)
+Found while testing, fixed in the same change:
+- `http.client`'s `read(amt)` does not raise when a body is shorter than its `Content-Length`; the transport checks `response.length` after reading, so a truncated body is `unavailable`, not a short reply.
+- After a `Connection: close` body is fully read the socket is already closed, so the per-chunk `settimeout` is skipped once `response.isclosed()`.
+- On Windows a refused connection to a closed local port takes about 2 s to be reported.
+- The total deadline is a timer that shuts the socket down, which also stops slow-drip response headers, not only a slow body (both covered by tests).
+
 ## Alternatives considered
 - **httpx** (new runtime dependency, BSD-3, several transitive packages): has `MockTransport`, but its
   timeouts are also per phase, so a total deadline still needs our own code.

@@ -5,11 +5,12 @@ The goal is a system that reads an application's code and configuration, coordin
 specialized agents, and keeps traceable memory of what it did and why.
 
 > **Status: early development.** Only the foundation, application ingestion, a dependency
-> graph, the agent interfaces, (v0.5.0) a basic orchestrator and (v0.6.0) a SQLite store for run
-> traces exist. There are no real model-provider clients and no retrieval of past experience yet.
+> graph, the agent interfaces, (v0.5.0) a basic orchestrator, (v0.6.0) a SQLite store for run
+> traces and (v0.6.1) a real Ollama client exist. There is no Groq client and no retrieval of past
+> experience yet.
 > This README is updated with every version; the roadmap is not evidence that a feature exists.
 
-## What works today (v0.6.0)
+## What works today (v0.6.1)
 
 | Version | Capability | Status |
 |---|---|---|
@@ -20,11 +21,12 @@ specialized agents, and keeps traceable memory of what it did and why.
 | v0.3.2 | Graph visualization: Mermaid text or self-contained HTML/SVG, with evidence and visible truncation | Done; merged to main, CI run 39021177652 passed |
 | v0.4.0 | Agent architecture: common interface, two roles, capability declarations, explicit failure results, provider protocol (fake clients only) | Criteria pass locally; merged to main; Done, tagged `v0.4.0`; CI runs 39023604187 and 39024302873 passed |
 | v0.5.0 | Orchestrator: validated task plans, dependency ordering, capability-based assignment, explicit failed/blocked/incomplete results, bounded retries, run budget, `run` command | Done, tagged `v0.5.0`; CI runs 39024871768 and 39025436259 passed |
-| v0.6.0 | Episodic trace store: SQLite persistence of orchestrator runs (steps, attempts, ids, model info, timestamps), redaction before storing, success/failed/incomplete/interrupted states, `run --trace-db`, `traces list/show` | Criteria pass locally; merged to main and pushed; CI run 39026432280 on the merge passed; not tagged |
+| v0.6.0 | Episodic trace store: SQLite persistence of orchestrator runs (steps, attempts, ids, model info, timestamps), redaction before storing, success/failed/incomplete/interrupted states, `run --trace-db`, `traces list/show` | Done, tagged `v0.6.0`; CI runs 39026432280 and 39028485876 passed |
+| v0.6.1 | Real Ollama client (stdlib HTTP, hard total deadline, every failure mapped to a provider error kind), `COGMESH_OLLAMA_MODEL` / `COGMESH_MODEL_TIMEOUT_S`, `run` uses it only for plans with a model step | Criteria pass locally (including a real `llama3.2` run); on branch `feature/v0.6.1-ollama-client`, not merged, CI not yet run |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
-`docs/adr/0008-dependency-graph-visualization.md`, `docs/adr/0009-agent-architecture.md`, `docs/adr/0010-orchestrator.md`, `docs/adr/0011-episodic-trace-store.md`.
+`docs/adr/0008-dependency-graph-visualization.md`, `docs/adr/0009-agent-architecture.md`, `docs/adr/0010-orchestrator.md`, `docs/adr/0011-episodic-trace-store.md`, `docs/adr/0012-ollama-client.md`.
 
 ### Known limitations
 - Local directories only; results are in memory, except run traces recorded with `--trace-db` (v0.6.0).
@@ -46,7 +48,7 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 - Orchestrator (v0.5.0): steps run sequentially; `depends_on` controls order only (no data passes
   between steps, inputs are literal); no fallback to another agent. A hung provider call is not
   interrupted: the run budget is checked only before each attempt. Retries apply only to failures an
-  agent marks retryable, at most 5 attempts per step. Without a real model client, `explain_file`
+  agent marks retryable, at most 5 attempts per step. With no provider configured, `explain_file`
   steps fail as `provider_unavailable`. Run results are persisted only when `--trace-db` is given.
 - Trace store (v0.6.0): recording is opt-in (`run --trace-db FILE`). Traces are raw records, not
   validated knowledge, and nothing retrieves or reuses them yet. Secrets are redacted by pattern
@@ -56,6 +58,13 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
   retention or size limits, one writer assumed, no schema migrations (version 1), no per-attempt
   timing, no tool activity beyond agent attempts. Run `traces` against files you trust: they are
   read as data and validated, but they are not authenticated.
+- Ollama client (v0.6.1): only `COGMESH_PROVIDER=ollama` has a client; `groq` exits 2 with a clear
+  message until v0.6.2. Only `run` calls a model, and only for plans with a model step
+  (`explain_file`). The contents of the explained file are sent to the configured Ollama server, so
+  point `COGMESH_OLLAMA_BASE_URL` only at a server you trust. No streaming, proxies, redirects or
+  connection reuse. A missing model (HTTP 404) is not retried; run `ollama pull <model>`. Model
+  output stays `model_unverified`. Verified against one local Ollama with `llama3.2` only; the
+  opt-in live test is `RUN_LIVE_OLLAMA=1 uv run pytest -m live`.
 - Ingested files are treated as data and are never executed.
 
 ## Setup and usage
@@ -92,7 +101,7 @@ secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and
 
 ## Project layout
 
-- `src/cognitive_mesh/` - `config`, `cli`, `ingestion/`, `agents/` (interface, contracts, roles, registry), `orchestrator/` (plans, ordering, runner), `traces/` (SQLite trace store, recorder), `providers/` (model client protocol), `graph/` (JS/TS parsing isolated in `graph/js_parse.py`; visualization in `graph/view.py`, `render_mermaid.py`, `render_html.py`)
+- `src/cognitive_mesh/` - `config`, `cli`, `ingestion/`, `agents/` (interface, contracts, roles, registry), `orchestrator/` (plans, ordering, runner), `traces/` (SQLite trace store, recorder), `providers/` (model client protocol, Ollama client, stdlib HTTP transport), `graph/` (JS/TS parsing isolated in `graph/js_parse.py`; visualization in `graph/view.py`, `render_mermaid.py`, `render_html.py`)
 - `tests/` - pytest suite; fixtures in `tests/fixtures/` (`sample_app`, `dep_app`, `js_app`)
 - `docs/adr/` - architecture decision records; `docs/DETAILED_ROADMAP.md` - per-version criteria
 - `memory-bank/` - agent-facing project record (brief, architecture, progress, active context)
@@ -100,8 +109,8 @@ secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and
 
 ## Roadmap (summary)
 
-Next: v0.6.1 real Ollama client and v0.6.2 real Groq client (both planned, not started), then v0.7.0 semantic
-retrieval (v0.6.0 trace store is merged, CI passed, tag pending), v0.8.0 experience graph, v0.9.0
+Next: v0.6.2 real Groq client (planned, not started), then v0.7.0 semantic retrieval (v0.6.1 Ollama
+client is on its branch awaiting review), v0.8.0 experience graph, v0.9.0
 evidence-aware retrieval, v1.0.0 end-to-end prototype. See `ROADMAP.md`.
 
 ## Principles
