@@ -7,7 +7,7 @@
 
 ## Folder structure logic
 - `src/` layout: all product code in `src/cognitive_mesh/`; tests in `tests/`.
-- Significant decisions go in `docs/adr/` (0002-0004 cover tooling and config, 0005 ingestion, 0006 dependency graph, 0007 JS/TS, 0008 visualization, 0009 agents, 0010 orchestrator, 0011 trace store).
+- Significant decisions go in `docs/adr/` (0002-0004 cover tooling and config, 0005 ingestion, 0006 dependency graph, 0007 JS/TS, 0008 visualization, 0009 agents, 0010 orchestrator, 0011 trace store, 0012 Ollama, 0013 Groq, 0014 semantic memory retrieval).
 
 ## Common patterns used in this project
 - Configuration is read only through `cognitive_mesh.config.load_settings()`; never `os.environ` directly elsewhere.
@@ -42,5 +42,6 @@
 - Orchestrator data flow (ADR-0010 amendments): `input_refs` are checked in `planner._check_refs` before anything runs and resolved in `runner._resolve_inputs`; the producing result's `basis` is recorded in `StepRecord.input_sources` (not persisted). Fallback goes to the next agent of the same capability (max 3), only after a failure result; raised/invalid results and budget expiry are terminal. Trace attempt ids keep the step-wide count.
 - Plan drafting (`orchestrator/generate.py`): request and capability catalog go to the model as one JSON string, reply must be exactly `{"steps": [...]}` and pass `TaskPlan` (strict) and `plan_task`; errors hold fixed text and ids only; nothing is executed.
 - Remote content: `COGMESH_ALLOW_REMOTE_CONTENT=true` is required to build a Groq client (`providers/factory.py`); Ollama is exempt.
+- Memory (`cognitive_mesh.memory`, ADR-0014): `chromadb` is imported only in `memory/index.py` and `sentence_transformers` only in `memory/embedder.py` (lazily, so only `memory` commands pay for it; `cli._make_embedder` is the seam tests replace with `FakeEmbedder` from `tests/memory_support.py`). The SQLite trace db is authoritative; the index is a derived copy keyed `run_id/step_id/attempt_no` with the sha256 of the embedded text. `search` re-reads each hit via `TraceStore.get`, rebuilds the document and returns it as a hit only if the hash still matches; otherwise it is an `UnverifiedHit` (`source_missing|source_changed|source_unreadable`). The collection records model name, revision, dimension and `TEXT_FORMAT_VERSION`; any mismatch raises `MemoryIndexError` (CLI exit 11) and nothing is mixed. Changing the embedded text format means bumping `TEXT_FORMAT_VERSION`. Readers never create an index. Results always carry `SIMILARITY_NOTE`. Real-model checks are opt-in (`RUN_LIVE_EMBEDDINGS=1`).
 - HTML layout: `render_html.order_layers` (barycenter sweeps) and `crossings`; layer membership never changes.
 

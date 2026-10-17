@@ -13,6 +13,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **orchestrator:** Pass step outputs to later steps and add fallback agents
 - **orchestrator:** Draft a plan from a request with a model
 - **graph:** Reduce edge crossings in the HTML layout
+- **memory:** Add semantic retrieval over stored traces
 
 ### Documentation
 - Record CI-on-tags and trace-store migrations
@@ -20,6 +21,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record lockfiles, data passing, plan drafting and layout
 - Hand off after the pre-v0.7.0 review pass
 - Record CI run 39033918355 and the v0.7.0 design
+- **adr:** Accept ADR-0014 semantic memory retrieval
+- Document v0.7.0 semantic memory retrieval
+- Hand off after v0.7.0 semantic memory retrieval
 
 ### Maintenance
 - Run on release tags and check the changelog section
