@@ -4,7 +4,7 @@
 v0.1.0 foundation is implemented: tooling, config loading, and a minimal CLI. The commands
 in "Verified commands" below were run successfully on 2026-10-16 (Windows 11, Git Bash,
 uv 0.13.1, CPython 3.12.3). Everything else here is still planned and unimplemented, except
-the v0.7.0 vector index (ChromaDB + Sentence Transformers, merged, tagged `v0.7.0`) and the v0.8.0 experience graph (branch `feature/v0.8.0-experience-graph`, not merged). v0.6.1 added a real Ollama client (stdlib HTTP, no new dependency; ADR-0012). GitHub Actions CI passed on main (run 38942568274, 2026-10-16).
+the v0.7.0 vector index (ChromaDB + Sentence Transformers, merged, tagged `v0.7.0`) and the v0.8.0 experience graph (merged, tagged `v0.8.0`). v0.6.1 added a real Ollama client (stdlib HTTP, no new dependency; ADR-0012). GitHub Actions CI passed on main (run 38942568274, 2026-10-16).
 
 ## Language and Runtime
 - Language: Python
@@ -28,7 +28,7 @@ Never hardcode credentials in source code or commit secrets.
 
 ## Memory and Data
 - Vector database: ChromaDB
-- Graph representation and traversal: NetworkX 3.7 (runtime dependency since v0.3.0; `types-networkx` in dev; ADR-0006). v0.8.0 (branch `feature/v0.8.0-experience-graph`, ADR-0015) uses it again, private to `experience/graph.py`, and stores the experience graph in its own SQLite file (stdlib `sqlite3`, `PRAGMA application_id`, no new dependency)
+- Graph representation and traversal: NetworkX 3.7 (runtime dependency since v0.3.0; `types-networkx` in dev; ADR-0006). v0.8.0 (ADR-0015) uses it again, private to `experience/graph.py`, and stores the experience graph in its own SQLite file (stdlib `sqlite3`, `PRAGMA application_id`, no new dependency)
 - JS/TS import parsing: tree-sitter 0.26.0 + tree-sitter-javascript 0.25.0 + tree-sitter-typescript 0.23.2 (runtime dependencies since v0.3.1; MIT, official tree-sitter org; private to `graph/js_parse.py`; ADR-0007)
 - Persistent structured storage: SQLite (stdlib `sqlite3`; run traces since v0.6.0, schema version 1, ADR-0011; no new dependency)
 - Embeddings: Sentence Transformers 6.1.0 (Apache-2.0), runtime dependency since v0.7.0 on branch `feature/v0.7.0-semantic-memory` (ADR-0014); torch 2.14.1 is a direct dependency so that `[tool.uv.sources]` can take the CPU build from the official PyTorch index on Linux (`uv.lock` has no `nvidia-*`/`cuda` entries; checked 2026-10-17, Linux install verified by CI run 39043661141 on 2026-10-17: torch CPU, 4 s with `uv sync --locked`)
