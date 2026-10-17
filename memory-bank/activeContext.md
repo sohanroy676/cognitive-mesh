@@ -3,7 +3,7 @@
 <!-- Update this at the end of every session. This is the first thing to read when resuming. -->
 
 ## Current focus
-v0.1.0 to v0.3.2 are done and tagged (`v0.3.2` on `e19d5e1`, pushed). Tooling work after v0.3.2 (git-cliff changelog with a CI freshness check, `uv build` verified, git-tag versioning via hatch-vcs, one-off Mermaid renderer check) was merged to main from `chore/changelog-git-cliff` and pushed with user approval; check its CI run (see progress.md). No PRs open. v0.4.0 Agent Architecture is implemented on `feature/v0.4.0-agent-architecture` (criteria pass locally; not merged, CI not run). v0.5.0 Orchestrator is next, planned only.
+v0.1.0 to v0.3.2 are done and tagged (`v0.3.2` on `e19d5e1`, pushed). Tooling work after v0.3.2 (git-cliff changelog with a CI freshness check, `uv build` verified, git-tag versioning via hatch-vcs, one-off Mermaid renderer check) was merged to main from `chore/changelog-git-cliff` and pushed with user approval; its CI run 39022644447 passed. No PRs open. v0.4.0 Agent Architecture is implemented and merged to main (branch `feature/v0.4.0-agent-architecture`, pushed at session end; criteria pass locally; CI result on main not yet recorded; not tagged). v0.5.0 Orchestrator is next, planned only.
 
 ## Recent decisions
 - ADR-0009 (accepted by the user): agents depend only on the `providers.ModelClient` protocol; `Agent.run` never raises; results are `AgentSuccess | AgentFailure` with explicit failure kinds; capability specs are derived from the handler table; messages never contain input values, file content, model text or exception text; model-written output is `model_unverified`; timeouts are provider-owned (no watchdog).
@@ -25,4 +25,4 @@ v0.1.0 to v0.3.2 are done and tagged (`v0.3.2` on `e19d5e1`, pushed). Tooling wo
 ## Next step
 1. Done: CI run 39022644447 on main passed (changelog check + gitleaks); recorded on branch `docs/record-ci-39022644447`, awaiting the user's approval to merge/push.
 2. Optionally tag nothing: no version bump is pending (v0.3.2 is the latest tag; main is ahead by tooling commits only).
-3. Review v0.4.0 on its branch, then merge and CI on approval; after that plan v0.5.0 (see docs/DETAILED_ROADMAP.md). A real provider client (Groq/Ollama) is not scheduled in v0.4.0; timeouts rely on clients honoring `timeout_s`. Lockfile ingestion (for transitive dependencies) was deliberately deferred in ADR-0006.
+3. Confirm CI on main for the v0.4.0 merge and record it (docs/ branch, changelog regenerate last); ask before tagging `v0.4.0`. Then plan v0.5.0 (see docs/DETAILED_ROADMAP.md). A real provider client (Groq/Ollama) is not scheduled in v0.4.0; timeouts rely on clients honoring `timeout_s`. Lockfile ingestion (for transitive dependencies) was deliberately deferred in ADR-0006.
