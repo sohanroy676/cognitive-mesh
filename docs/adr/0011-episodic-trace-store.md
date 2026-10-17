@@ -1,7 +1,7 @@
 # ADR-0011: Episodic trace store
 
 ## Status
-Proposed (drafted 2026-10-17; the user confirms before any code is written)
+Accepted (drafted and accepted by the user 2026-10-17, before any code was written)
 
 ## Date
 2026-10-17
