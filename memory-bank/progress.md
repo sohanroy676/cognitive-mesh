@@ -34,6 +34,7 @@
 
 ## In progress
 
-- Nothing in flight at handoff 2026-10-17. v0.6.2 was merged to main and pushed (CI result recorded next session); `v0.6.1` is tagged and pushed; `v0.6.2` is NOT tagged.
+- Nothing in flight at handoff 2026-10-17. v0.6.2 was merged to main and pushed (CI run 39031027771 passed, recorded on `docs/record-ci-v0.6.2`); `v0.6.1` is tagged and pushed; `v0.6.2` is NOT tagged yet (approved, via `chore/release-v0.6.2`).
+- Pre-v0.7.0 review ranked (plan file, 2026-10-17); user chose trace-store migrations first, after the tag and a CI-on-tags chore.
 - Next session reviews the known items before v0.7.0 (see activeContext.md "Next step").
 - Stray local branch `docs/adr-0011-trace-store` (no own commits) and all old branches are kept; local branches are never deleted by the agent, the user may clean them up.
