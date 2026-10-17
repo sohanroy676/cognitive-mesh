@@ -58,7 +58,7 @@ while tracking their source, validity, confidence, and conflicts.
   or task uses the results yet.
 - Knowledge Graph
   Use NetworkX to represent claims, entities, relationships, provenance, and conflicts.
-  Experiences, entities and unvalidated claims are implemented in v0.8.0 (branch, not merged) as
+  Experiences, entities and unvalidated claims are implemented in v0.8.0 (merged, tagged) as
   `src/cognitive_mesh/experience/` (ADR-0015): built from the trace database, persisted in a separate SQLite
   file with a content hash, sources re-checked on load. Conflicts, confidence and validation are not
   implemented (v0.9.0).
