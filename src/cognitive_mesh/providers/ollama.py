@@ -6,12 +6,8 @@ Prompt text, reply text, response bodies and exception text are never put in a m
 import json
 from typing import Any
 
-from cognitive_mesh.providers.base import (
-    ModelRequest,
-    ModelResponse,
-    ProviderError,
-    ProviderErrorKind,
-)
+from cognitive_mesh.providers.base import ModelRequest, ModelResponse, ProviderError
+from cognitive_mesh.providers.errors import bad_reply, status_error, transport_error
 from cognitive_mesh.providers.http import HttpTransport, StdlibTransport, TransportError
 
 _HEADERS = {"Content-Type": "application/json", "Accept": "application/json"}
@@ -19,23 +15,8 @@ _BODY_SLACK = 64 * 1024
 _ESCAPE_FACTOR = 6  # worst case: every output char is a \uXXXX escape
 
 
-def _status_error(status: int) -> ProviderError | None:
-    if status == 200:
-        return None
-    message = f"ollama returned HTTP {status}"
-    if status == 429:
-        return ProviderError(ProviderErrorKind.RATE_LIMITED, message)
-    if status >= 500:
-        return ProviderError(ProviderErrorKind.UNAVAILABLE, message)
-    if status in (401, 403):
-        return ProviderError(ProviderErrorKind.AUTH, message)
-    if 400 <= status < 500:  # includes 404: the model is not pulled
-        return ProviderError(ProviderErrorKind.OTHER, message)
-    return ProviderError(ProviderErrorKind.BAD_RESPONSE, message)
-
-
 def _bad(reason: str) -> ProviderError:
-    return ProviderError(ProviderErrorKind.BAD_RESPONSE, f"ollama reply rejected: {reason}")
+    return bad_reply("ollama", reason)
 
 
 def _parse_reply(body: bytes) -> str:
@@ -84,14 +65,8 @@ class OllamaClient:
                 max_body_bytes=request.max_output_chars * _ESCAPE_FACTOR + _BODY_SLACK,
             )
         except TransportError as exc:
-            if exc.kind == "timeout":
-                raise ProviderError(ProviderErrorKind.TIMEOUT, "ollama call timed out") from None
-            if exc.kind == "too_large":
-                raise _bad("body too large") from None
-            raise ProviderError(
-                ProviderErrorKind.UNAVAILABLE, "ollama could not be reached"
-            ) from None
-        error = _status_error(reply.status)
+            raise transport_error(self.provider, exc) from None
+        error = status_error(self.provider, reply.status)
         if error is not None:
             raise error
         return ModelResponse(

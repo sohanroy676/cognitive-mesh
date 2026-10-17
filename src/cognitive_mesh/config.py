@@ -27,8 +27,21 @@ class Settings(BaseSettings):
     groq_api_key: SecretStr | None = Field(default=None, validation_alias="GROQ_API_KEY")
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2"
+    groq_model: str = "qwen/qwen3.8-27b"
+    groq_reasoning_effort: Literal["", "none", "default", "low", "medium", "high"] = "none"
     model_timeout_s: float = Field(default=30.0, gt=0, le=600)
     log_level: str = "INFO"
+
+    @field_validator("groq_api_key")
+    @classmethod
+    def _check_key_characters(cls, value: SecretStr | None) -> SecretStr | None:
+        # A blank key is handled by the provider check below; anything else must be a single
+        # printable-ASCII token so it can never add a line to an HTTP header. Never echo the value.
+        if value is not None:
+            secret = value.get_secret_value()
+            if secret.strip() and not all("!" <= ch <= "~" for ch in secret):
+                raise ValueError("must be printable ASCII with no spaces or line breaks")
+        return value
 
     @field_validator("ollama_base_url")
     @classmethod
@@ -49,7 +62,7 @@ class Settings(BaseSettings):
             raise ValueError("must be an http(s) URL with a host and no credentials or query")
         return value
 
-    @field_validator("ollama_model")
+    @field_validator("ollama_model", "groq_model")
     @classmethod
     def _check_model(cls, value: str) -> str:
         if len(value) > 200 or not _MODEL_NAME.fullmatch(value):

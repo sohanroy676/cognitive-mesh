@@ -19,7 +19,7 @@ planned and unimplemented. v0.6.1 added a real Ollama client (stdlib HTTP, no ne
 - Local model runtime: Ollama
 - Model selection and routing: Custom Python implementation
 - Model IDs, provider SDKs, and model availability: TBD
-- Ollama client implemented in v0.6.1 (`providers/ollama.py`, ADR-0012) on stdlib `http.client` (`providers/http.py`, one total deadline per call, no new dependency). Groq is planned for v0.6.2 (ADR-0013) and will reuse the transport; its model ID is decided then. Default Ollama model: `llama3.2`.
+- Ollama client implemented in v0.6.1 (`providers/ollama.py`, ADR-0012) on stdlib `http.client` (`providers/http.py`, one total deadline per call, no new dependency). Groq client implemented in v0.6.2 (`providers/groq.py`, ADR-0013) on the same transport; shared failure mapping in `providers/errors.py`; default model `qwen/qwen3.8-27b` (Groq preview model, the only Qwen on Groq's list on 2026-10-17; `COGMESH_GROQ_MODEL`), `COGMESH_GROQ_REASONING_EFFORT` default `none`. Default Ollama model: `llama3.2`.
 
 The application should support multiple configured model providers where available.
 Provider-specific logic should be isolated behind a common internal interface.
@@ -125,7 +125,11 @@ COGMESH_PROVIDER=ollama COGMESH_MODEL_TIMEOUT_S=120 uv run cognitive-mesh run te
 uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # empty cwd, no config: exit 7, provider_unavailable
 COGMESH_PROVIDER=ollama COGMESH_OLLAMA_BASE_URL=http://127.0.0.1:1 uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # exit 7, provider_unavailable after 2 attempts
 COGMESH_PROVIDER=ollama COGMESH_OLLAMA_MODEL=no-such-model uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # exit 7, provider_error (HTTP 404, not retried)
-COGMESH_PROVIDER=groq GROQ_API_KEY=gsk_fake uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # exit 2, no Groq client yet (v0.6.2)
+COGMESH_PROVIDER=groq uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # empty cwd, no key: exit 2, names GROQ_API_KEY
+COGMESH_PROVIDER=groq GROQ_API_KEY=gsk_fake uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # real call to api.groq.com with a fake key: exit 7, provider_error (auth), not retried
+COGMESH_PROVIDER=groq uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app [--json --trace-db FILE]   # repo root, key from the ignored .env: exit 0, explain_file succeeded, model_unverified, provider groq; key absent from stdout/stderr/trace db
+COGMESH_PROVIDER=groq COGMESH_GROQ_MODEL=no/such-model uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # exit 7, provider_error (other)
+RUN_LIVE_GROQ=1 RUN_LIVE_GROQ_KEY=... uv run pytest -m live tests/test_live_groq.py   # 1 passed; skipped by default and in CI
 COGMESH_PROVIDER=bogus uv run cognitive-mesh run tests/fixtures/plans/ok.json --root tests/fixtures/dep_app   # exit 0: plans without a model step never read config
 RUN_LIVE_OLLAMA=1 uv run pytest -m live   # opt-in real Ollama test, 1 passed; skipped by default and in CI
 ```
@@ -145,16 +149,17 @@ Do not document unverified commands as working commands.
 Settings load via `cognitive_mesh.config.load_settings()` from the environment, then an
 ignored `.env` in the working directory. Copy `.env.example` to `.env` to start.
 - `COGMESH_PROVIDER` (required): `groq` or `ollama`
-- `GROQ_API_KEY`: required when provider is `groq`; held as `SecretStr`
+- `GROQ_API_KEY`: required when provider is `groq`; held as `SecretStr`; must be printable ASCII without spaces or line breaks
+- `COGMESH_GROQ_MODEL` (default `qwen/qwen3.8-27b`), `COGMESH_GROQ_REASONING_EFFORT` (`none` default; `default|low|medium|high`, or empty to omit)
 - `COGMESH_OLLAMA_BASE_URL` (validated: http/https, host, no credentials/query), `COGMESH_OLLAMA_MODEL` (default `llama3.2`), `COGMESH_MODEL_TIMEOUT_S` (default 30, >0, max 600), `COGMESH_LOG_LEVEL`: optional, have defaults
 - `run` reads config only when the plan has a model step (`load_settings_if_configured`: no `COGMESH_PROVIDER` means no client; any other problem exits 2). Other commands never read it.
 Missing/invalid values raise `ConfigError`; the CLI prints it to stderr and exits 2.
 
 ## External Services
-- Groq API: Planned primary external model provider
+- Groq API: external model provider; client implemented and verified in v0.6.2 (fixed endpoint; one key, `qwen/qwen3.8-27b`)
 - Ollama: local model runtime; client implemented in v0.6.1 (only `run` with a model step calls it)
 - Other model APIs: Optional future integrations
-- API credentials and endpoint configuration: see Configuration above (Ollama calls exist since v0.6.1; no Groq client until v0.6.2)
+- API credentials and endpoint configuration: see Configuration above (Ollama calls exist since v0.6.1, Groq since v0.6.2)
 
 The core application should separate provider configuration from orchestration,
 memory, and agent logic.

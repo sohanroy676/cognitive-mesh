@@ -1,7 +1,7 @@
 # ADR-0013: Real Groq client
 
 ## Status
-Proposed (drafted in plan mode 2026-10-17; the user confirms it before any code is written)
+Accepted (drafted in plan mode and confirmed by the user 2026-10-17, before any code was written)
 
 ## Date
 2026-10-17
