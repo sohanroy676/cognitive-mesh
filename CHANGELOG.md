@@ -18,6 +18,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Add ADR-0009 agent architecture
 - Record v0.4.0 agent architecture
 - Hand off after v0.4.0 agent architecture
+- Record v0.4.0 CI result
 
 ### Maintenance
 - Fetch full history for gitleaks

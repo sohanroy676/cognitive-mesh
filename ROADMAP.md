@@ -45,7 +45,7 @@ Completed 2026-10-17. Merged to main (`e19d5e1`); the first CI run on that merge
 
 ### v0.4.0 — Agent Architecture
 
-Implemented 2026-10-17 on `feature/v0.4.0-agent-architecture`; its DETAILED_ROADMAP Test/Expected items pass locally. Merged to main at session end; CI on that merge is not yet recorded; not tagged. See ADR-0009.
+Implemented 2026-10-17 on `feature/v0.4.0-agent-architecture`; its DETAILED_ROADMAP Test/Expected items pass locally. Merged to main at session end; CI run 39023604187 on that merge passed (2026-10-17); not tagged. See ADR-0009.
 
 - Common `Agent` interface whose `run` never raises; capability declarations derived from the handler table; strict input/output contracts; success and failure results (`AgentSuccess | AgentFailure`) with explicit failure kinds.
 - Roles: `dependency_analyst` (deterministic, over the dependency graph) and `code_explainer` (model-backed, output marked `model_unverified`).
