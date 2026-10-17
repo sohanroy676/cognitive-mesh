@@ -29,6 +29,13 @@ Status: implemented and verified locally on `feature/v0.3.0-dependency-graph` (2
 
 ## Next — Planned, Not Started
 
+### v0.3.1 — JS/TS and Dynamic Import Analysis
+- Extend the dependency graph to JS/TS `import` / `require` / dynamic `import()` statements.
+- Detect Python dynamic imports (`importlib.import_module`, `__import__`) and record them as
+  evidence-backed edges when the target is a literal, otherwise as unresolved.
+- Parser choice (new dependency or restricted stdlib approach) to be decided in an ADR.
+- Create the README update habit: `README.md` is refreshed every version.
+
 ### v0.4.0 — Agent Architecture
 - Define agent interfaces, responsibilities, and capability descriptions.
 - Establish the initial specialized agent roles.
