@@ -7,7 +7,7 @@
 
 ## Folder structure logic
 - `src/` layout: all product code in `src/cognitive_mesh/`; tests in `tests/`.
-- Significant decisions go in `docs/adr/` (0002-0004 cover tooling and config, 0005 ingestion, 0006 dependency graph, 0007 JS/TS, 0008 visualization, 0009 agents, 0010 orchestrator, 0011 trace store).
+- Significant decisions go in `docs/adr/` (0002-0004 cover tooling and config, 0005 ingestion, 0006 dependency graph, 0007 JS/TS, 0008 visualization, 0009 agents, 0010 orchestrator, 0011 trace store, 0012 Ollama, 0013 Groq, 0014 semantic memory retrieval).
 
 ## Common patterns used in this project
 - Configuration is read only through `cognitive_mesh.config.load_settings()`; never `os.environ` directly elsewhere.
