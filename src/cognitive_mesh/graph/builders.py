@@ -10,11 +10,19 @@ import json
 import re
 import sys
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
 from posixpath import dirname, join, normpath, splitext
 
 from cognitive_mesh.graph import js_parse
+from cognitive_mesh.graph.lockfiles import (
+    LockfileProblem,
+    LockParse,
+    parse_package_lock,
+    parse_uv_lock,
+)
 from cognitive_mesh.graph.models import (
+    Ecosystem,
     Edge,
     EdgeKind,
     Evidence,
@@ -40,6 +48,7 @@ class _Accumulator:
         self.nodes: dict[str, Node] = {}
         self.edges: dict[tuple[str, str, EdgeKind], list[Evidence]] = {}
         self.diagnostics: list[GraphDiagnostic] = []
+        self.locked: set[str] = set()  # ecosystems with at least one parsed lockfile
 
     def node(self, node: Node) -> None:
         self.nodes.setdefault(node.id, node)
@@ -280,6 +289,10 @@ def _manifests(acc: _Accumulator, result: IngestionResult) -> None:
             _requirements_txt(acc, file, result.root)
         elif base == "package.json":
             _package_json(acc, file, result.root)
+        elif base == "uv.lock":
+            _lockfile(acc, file, parse_uv_lock, "pypi")
+        elif base == "package-lock.json":
+            _lockfile(acc, file, parse_package_lock, "npm")
         else:
             acc.diag(
                 file.ref.path,
@@ -287,6 +300,34 @@ def _manifests(acc: _Accumulator, result: IngestionResult) -> None:
                 "warning",
                 "manifest type is ingested but its dependencies are not parsed",
             )
+
+
+def _lockfile(
+    acc: _Accumulator,
+    file: IngestedFile,
+    parser: Callable[[IngestedFile], LockParse],
+    ecosystem: Ecosystem,
+) -> None:
+    try:
+        parsed = parser(file)
+    except LockfileProblem as exc:
+        acc.diag(
+            file.ref.path, GraphDiagnosticCode.PARSE_ERROR, "error", f"{exc}; no relationships"
+        )
+        return
+    for pkg in parsed.packages:
+        acc.node(
+            Node(
+                id=pkg.id,
+                kind=NodeKind.PACKAGE,
+                name=pkg.name,
+                ecosystem=pkg.ecosystem,
+                ref=file.ref,
+            )
+        )
+    for dep in parsed.dependencies:
+        acc.edge(dep.source, dep.target, EdgeKind.REQUIRES, dep.evidence)
+    acc.locked.add(ecosystem)
 
 
 def _dotted_names(path: str) -> list[str]:
@@ -712,13 +753,18 @@ def build(result: IngestionResult) -> tuple[list[Node], list[Edge], list[GraphDi
     _python_imports(acc, result)
     _js_imports(acc, result)
     _contains(acc)
-    acc.diag(
-        ".",
-        GraphDiagnosticCode.TRANSITIVE_UNKNOWN,
-        "info",
-        "lockfiles are excluded from ingestion: dependencies of declared packages are unknown, "
-        "not absent",
+    unlocked = sorted(
+        {n.ecosystem for n in acc.nodes.values() if n.ecosystem and n.ecosystem not in acc.locked}
     )
+    if unlocked or not acc.locked:
+        scope = ", ".join(unlocked) + " packages" if unlocked else "any ecosystem"
+        acc.diag(
+            ".",
+            GraphDiagnosticCode.TRANSITIVE_UNKNOWN,
+            "info",
+            f"no readable lockfile for {scope} (only uv.lock and package-lock.json v2/v3 are "
+            "read): dependencies of declared packages are unknown, not absent",
+        )
     nodes = sorted(acc.nodes.values(), key=lambda n: n.id)
     edges = [
         Edge(source=s, target=t, kind=k, evidence=tuple(ev))

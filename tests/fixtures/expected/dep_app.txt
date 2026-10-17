@@ -8,4 +8,4 @@ edges: {'contains': 5, 'declares': 8, 'imports': 8}
 diagnostics: 3
   [warning] unparseable_requirement requirements.txt: line 2: option or URL line not followed; recorded as unresolved
   [warning] unparseable_requirement requirements.txt: line 3: option or URL line not followed; recorded as unresolved
-  [info] transitive_unknown .: lockfiles are excluded from ingestion: dependencies of declared packages are unknown, not absent
+  [info] transitive_unknown .: no readable lockfile for npm, pypi packages (only uv.lock and package-lock.json v2/v3 are read): dependencies of declared packages are unknown, not absent

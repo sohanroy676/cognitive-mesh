@@ -292,7 +292,7 @@ def test_sensitive_file_in_subdirectory_is_excluded(tmp_path: Path, opened: list
 
 
 def test_generated_files_are_not_read(tmp_path: Path, opened: list[str]) -> None:
-    write(tmp_path, "uv.lock", "lock")
+    write(tmp_path, "poetry.lock", "lock")
     write(tmp_path, "app.min.js", "x")
     result = ingest_application(tmp_path)
     assert opened == []

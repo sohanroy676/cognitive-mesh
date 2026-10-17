@@ -65,3 +65,21 @@ only the in-memory `IngestionResult` from v0.2.0 (ADR-0005). Lockfiles are exclu
 - Graph results are in-memory only.
 - Partly superseded by ADR-0007 (v0.3.1): JS/TS imports and literal dynamic imports are now
   analysed, and computed dynamic imports are reported as unresolved. The other limits above stand.
+
+## Amendment 2026-10-17: transitive dependencies from lockfiles
+Accepted by the user before coding.
+- New edge kind `requires`: locked package -> locked package, taken only from a lockfile that states
+  it (`graph/lockfiles.py`, standard library only). Every edge keeps evidence (lockfile, line of the
+  package entry, rule `uv.lock:dependencies` / `package-lock.json:<section>`, "name version -> dep").
+- `uv.lock`: `[[package]]` entries with `dependencies`. Entries whose source is `virtual`, `editable`
+  or `directory` (the project and workspace members) are skipped; extras and dev groups are not read.
+- `package-lock.json`: lockfileVersion 2 or 3 (`packages` table). The root entry and `link` entries are
+  skipped. A dependency resolves like Node does (nearest `node_modules`); one that is not in the lock
+  (e.g. an uninstalled optional dependency) adds no edge. Packages are keyed by name, so several
+  locked versions of one npm package become one node. Version 1 lockfiles are reported as a
+  `parse_error` diagnostic with no relationships.
+- More than 20,000 packages, or an unparseable file, is a `parse_error` diagnostic and no edges.
+- `transitive_unknown` is now emitted per ecosystem without a parsed lockfile (or when none was
+  read), not always. A lockfile may disagree with its manifest; that is not detected yet.
+- `requires` edges are followed by the existing traversal, so `--deps-of ... --transitive` now reaches
+  locked packages.

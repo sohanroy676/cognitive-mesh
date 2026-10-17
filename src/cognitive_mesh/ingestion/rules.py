@@ -27,11 +27,10 @@ EXCLUDED_DIRS = frozenset(
     }  # fmt: skip
 )
 
+# uv.lock and package-lock.json are NOT here: they are read as manifests (ADR-0005 amendment).
 GENERATED_NAMES = frozenset(
     {
-        "uv.lock",
         "poetry.lock",
-        "package-lock.json",
         "yarn.lock",
         "pnpm-lock.yaml",
         "pipfile.lock",
@@ -51,6 +50,8 @@ SENSITIVE_PATTERNS = (
 
 _MANIFEST_NAMES = frozenset(
     {
+        "uv.lock",
+        "package-lock.json",
         "pyproject.toml",
         "setup.cfg",
         "setup.py",

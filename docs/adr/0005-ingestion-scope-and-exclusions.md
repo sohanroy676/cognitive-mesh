@@ -67,3 +67,13 @@ Accepted by the user before coding. Still best effort, not exhaustive.
 - Known costs: it can redact an innocent random id or a path component (seen once in this repository's
   own `.claude` settings), and it misses short, low-entropy or hex-only secrets.
 - Reports still hold only the rule name and line, never the value.
+
+## Amendment 2026-10-17: uv.lock and package-lock.json are read
+Accepted by the user before coding.
+- `uv.lock` and `package-lock.json` are no longer "generated" exclusions; they are classified as
+  manifests and syntax-checked (TOML, JSON). `poetry.lock`, `Pipfile.lock`, `yarn.lock`,
+  `pnpm-lock.yaml` and `Cargo.lock` stay excluded and are reported as `excluded_generated`.
+- The 1 MiB file limit still applies: a larger lockfile is `too_large` and not read, so a big
+  `package-lock.json` can fall back to "transitive dependencies unknown".
+- Subresource-integrity hashes (`sha256-`, `sha384-`, `sha512-` prefixes) are never flagged by the
+  entropy rule, so lockfiles are not filled with false redactions.
