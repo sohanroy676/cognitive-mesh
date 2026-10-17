@@ -34,7 +34,6 @@
 
 ## In progress
 
-- `feature/v0.6.1-ollama-client` was merged to main and pushed; its CI result is recorded next session (`gh run list`). Not tagged. Nothing else in flight.
-- Stray local branch `docs/adr-0011-trace-store` (points at old main `5277c2d`, no own commits) was found, not created by this work, and left untouched; the user may delete it.
-- Old branches (incl. `feature/v0.3.1-js-dynamic-imports`, pushed) are kept; local branches are never deleted.
-- Old branch `feature/v0.2.0-application-ingestion` is kept (local branches are never deleted).
+- Nothing in flight at handoff 2026-10-17. v0.6.2 was merged to main and pushed (CI result recorded next session); `v0.6.1` is tagged and pushed; `v0.6.2` is NOT tagged.
+- Next session reviews the known items before v0.7.0 (see activeContext.md "Next step").
+- Stray local branch `docs/adr-0011-trace-store` (no own commits) and all old branches are kept; local branches are never deleted by the agent, the user may clean them up.
