@@ -1,7 +1,7 @@
 # ADR-0015: Experience graph over stored traces
 
 ## Status
-Proposed (design choices confirmed by the user in plan mode 2026-10-17; this text awaits the user's review before any code is written)
+Accepted (design choices confirmed by the user in plan mode 2026-10-17; text, including the lazy `memory/__init__.py` amendment, reviewed and accepted by the user 2026-10-17, before any code was written)
 
 ## Date
 2026-10-17
