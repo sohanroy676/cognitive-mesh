@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
+from cognitive_mesh.agents.context import RecalledContext
 from cognitive_mesh.graph import DependencyGraph
 from cognitive_mesh.ingestion import IngestionResult
 
@@ -77,6 +78,7 @@ class AgentContext:
 
     ingestion: IngestionResult | None = None
     graph: DependencyGraph | None = None
+    recalled: RecalledContext | None = None  # past experience, as data (ADR-0017)
 
 
 class AgentSuccess(_Frozen):
