@@ -11,7 +11,8 @@ For each version:
 
 Exact test commands are TBD until the project environment and test framework are configured.
 Use deterministic fixtures and mocked external APIs where possible. Tests requiring real
-providers should be identified separately and must not require committed credentials.
+providers should be identified separately and must not require committed credentials;
+they are opt-in (marker plus environment variable) and skipped by default and in CI.
 
 ---
 
@@ -242,6 +243,61 @@ providers should be identified separately and must not require committed credent
 - A failed execution is stored as successful.
 - Trace fields are silently misassociated.
 - Storage errors leave partially written or misleading records.
+
+---
+
+## v0.6.1 — Real Ollama Client
+
+### Implement
+- A `ModelClient` implementation for a local Ollama runtime that honors `ModelRequest.timeout_s`.
+- Configuration of the base URL (existing `COGMESH_OLLAMA_BASE_URL`) and the model name.
+- A provider factory that builds the client from settings, and CLI wiring so `run` can use it.
+- Mapping of every failure (refused connection, timeout, missing model, server error, malformed or
+  oversized reply) to an existing `ProviderError` kind.
+
+### Test
+- Success with a fake server or injected transport: JSON and text responses, `ModelInfo` recorded in the trace.
+- Timeout, connection refused, HTTP 404 (model not pulled), HTTP 5xx, non-JSON body, oversized body,
+  truncated reply: each becomes an explicit `AgentFailure` with the right retryable flag.
+- Prompt text, file content and reply text never appear in errors, logs, traces or CLI output.
+- Commands that need no model still run without any configuration.
+- An opt-in test against a real Ollama (marker plus environment variable) is skipped by default and in CI.
+
+### Expected Output
+- `explain_file` returns a `model_unverified` result when a local Ollama is available.
+- Provider failures are explicit and distinguishable; a hung server is stopped at `timeout_s`.
+
+### Fix If
+- A hung or slow server blocks past `timeout_s`.
+- Prompt or file content, or raw exception text, appears in output, traces or logs.
+- A command that needs no model starts requiring configuration.
+- The real-provider test runs by default or in CI.
+
+---
+
+## v0.6.2 — Real Groq Client
+
+### Implement
+- A `ModelClient` implementation for the Groq API with the key read from `GROQ_API_KEY` (`SecretStr`).
+- Mapping of 401/403, 429, timeouts, 5xx and malformed replies to existing `ProviderError` kinds.
+- Provider selection in the factory from `COGMESH_PROVIDER`; a missing key stays a `ConfigError`.
+
+### Test
+- Injected transport or fake server for success and for every error class above.
+- A key placed in a fake error body or header never reaches output, traces, logs or exceptions.
+- Rate limiting is retried only within the orchestrator's existing bounded policy and run budget.
+- Both clients map the same failure to the same `ProviderErrorKind`.
+- An opt-in test against the real API needs a user-provided key and is skipped by default and in CI.
+
+### Expected Output
+- `explain_file` returns a `model_unverified` result when a Groq key is configured.
+- Auth, rate-limit and outage failures are explicit and distinguishable.
+
+### Fix If
+- A key appears in any output, trace, log or committed file.
+- Rate limits cause an unbounded retry loop.
+- A provider error is reported as success.
+- The two clients disagree on the same failure.
 
 ---
 

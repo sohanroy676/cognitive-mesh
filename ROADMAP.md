@@ -65,7 +65,7 @@ Implemented 2026-10-17 on `feature/v0.5.0-orchestrator`; its DETAILED_ROADMAP Te
 
 ### v0.6.0 — Episodic Trace Store
 
-Implemented 2026-10-17 on `feature/v0.6.0-trace-store`; its DETAILED_ROADMAP Test/Expected items pass locally. Merged to main and pushed with user approval; CI result on the merge not yet recorded; not tagged. See ADR-0011.
+Implemented 2026-10-17 on `feature/v0.6.0-trace-store`; its DETAILED_ROADMAP Test/Expected items pass locally. Merged to main and pushed with user approval; CI run 39026432280 on the merge passed; not tagged. See ADR-0011.
 
 - `cognitive_mesh.traces`: SQLite (stdlib `sqlite3`, no new dependency) tables `runs`, `steps`, `attempts`; stable run ids; every attempt keeps its agent task id, agent id, result and model/provider info.
 - A run is committed as `running` before it starts and finished in one transaction, so a crash or a rolled-back write reads back as `interrupted`; `succeeded | failed | incomplete` are recomputed from the steps on read and a disagreeing or malformed record raises instead of being trusted.
@@ -75,7 +75,22 @@ Implemented 2026-10-17 on `feature/v0.6.0-trace-store`; its DETAILED_ROADMAP Tes
 
 ## Next — Planned, Not Started
 
+### v0.6.1 — Real Ollama Client (planned, not started)
+- Implement `ModelClient` for a local Ollama runtime (`providers/ollama.py`); base URL from `COGMESH_OLLAMA_BASE_URL`, model name from a new setting (name decided in ADR-0012).
+- Enforce `timeout_s`; map connection refused, timeouts, missing model (HTTP 404), server errors, malformed and oversized replies to the existing `ProviderError` kinds.
+- Build the client from `Settings` (provider factory) and pass it to `default_registry` in the CLI; commands that need no model keep needing no configuration.
+- Test with a fake HTTP server or injected transport (no network, no Ollama needed). A real-Ollama test is opt-in and skipped by default and in CI.
+- Library choice (stdlib or a new dependency) is decided in ADR-0012 and confirmed by the user before coding.
+
+### v0.6.2 — Real Groq Client (planned, not started)
+- Implement `ModelClient` for the Groq API (`providers/groq.py`); key from `GROQ_API_KEY` (`SecretStr`), same model setting as v0.6.1.
+- Map 401/403 to `auth`, 429 to `rate_limited`, timeouts, 5xx and malformed replies to the existing `ProviderError` kinds; the key never appears in logs, errors, traces or output.
+- The provider factory selects Groq or Ollama from `COGMESH_PROVIDER`; a missing key stays a `ConfigError` (exit 2).
+- Test with injected transport only. A real-API test needs a user-provided key, is opt-in, and is skipped by default and in CI. Nothing real is committed.
+- Library choice is decided in ADR-0013 and confirmed by the user before coding.
+
 ### v0.7.0 — Semantic Memory Retrieval
+- Planned after the real provider clients (v0.6.1, v0.6.2); retrieval itself must not require a model provider (embeddings come from Sentence Transformers). ADR-0014.
 - Generate embeddings for eligible stored experiences.
 - Use ChromaDB for semantic retrieval.
 - Test retrieval relevance and behavior when no useful memory exists.

@@ -19,6 +19,7 @@ planned and unimplemented. GitHub Actions CI passed on main (run 38942568274, 20
 - Local model runtime: Ollama
 - Model selection and routing: Custom Python implementation
 - Model IDs, provider SDKs, and model availability: TBD
+- Real clients are planned (not implemented): Ollama in v0.6.1, Groq in v0.6.2; HTTP library choice is decided in ADR-0012/0013.
 
 The application should support multiple configured model providers where available.
 Provider-specific logic should be isolated behind a common internal interface.
