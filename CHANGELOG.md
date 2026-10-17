@@ -11,6 +11,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 ### Documentation
 - Record v0.5.0 orchestrator and ADR-0010
 - Hand off after v0.5.0 orchestrator
+- Record v0.5.0 CI result
 
 ## [0.4.0] - 2026-10-17
 

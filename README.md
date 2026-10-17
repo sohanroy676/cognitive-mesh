@@ -19,7 +19,7 @@ specialized agents, and keeps traceable memory of what it did and why.
 | v0.3.1 | JS/TS imports and literal dynamic imports in the graph; computed ones stay unresolved | Done, tagged `v0.3.1`; CI run 39012713238 passed |
 | v0.3.2 | Graph visualization: Mermaid text or self-contained HTML/SVG, with evidence and visible truncation | Done; merged to main, CI run 39021177652 passed |
 | v0.4.0 | Agent architecture: common interface, two roles, capability declarations, explicit failure results, provider protocol (fake clients only) | Criteria pass locally; merged to main; Done, tagged `v0.4.0`; CI runs 39023604187 and 39024302873 passed |
-| v0.5.0 | Orchestrator: validated task plans, dependency ordering, capability-based assignment, explicit failed/blocked/incomplete results, bounded retries, run budget, `run` command | Criteria pass locally; merged to main; CI result on the merge not yet recorded; not tagged |
+| v0.5.0 | Orchestrator: validated task plans, dependency ordering, capability-based assignment, explicit failed/blocked/incomplete results, bounded retries, run budget, `run` command | Criteria pass locally; merged to main; CI run 39024871768 on the merge passed; not tagged |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
@@ -88,7 +88,7 @@ secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and
 
 ## Roadmap (summary)
 
-Next: v0.6.0 trace store (v0.5.0 orchestrator is merged, CI result and tag pending), v0.7.0 semantic retrieval, v0.8.0 experience graph, v0.9.0
+Next: v0.6.0 trace store (v0.5.0 orchestrator is merged and CI passed, tag pending), v0.7.0 semantic retrieval, v0.8.0 experience graph, v0.9.0
 evidence-aware retrieval, v1.0.0 end-to-end prototype. See `ROADMAP.md`.
 
 ## Principles
