@@ -8,6 +8,9 @@ hits are counted too. No excerpt of any trace and no review note is copied into 
 
 import hashlib
 from pathlib import PureWindowsPath
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict
 
 from cognitive_mesh.agents.context import (
     MAX_CLAIMS,
@@ -26,6 +29,31 @@ from cognitive_mesh.experience.graph import ExperienceGraph
 from cognitive_mesh.graph import DependencyGraph, GraphError
 from cognitive_mesh.retrieval.models import RecalledClaim, RecallResult
 from cognitive_mesh.traces import TraceNotFoundError, TraceStore, TraceStoreError
+
+
+class NotApplicable(BaseModel):
+    """A hit that failed the relevance gate. Shown to the user; never sent to an agent."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: Literal["claim", "raw"]
+    label: str  # a claim's text or a run/step id: untrusted data
+    reason: str
+    similarity: float
+
+
+class GatedContext(BaseModel):
+    """The pack for the agents, and what was kept out of it, for the person."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    pack: RecalledContext
+    not_applicable: tuple[NotApplicable, ...]
+
+
+REASON_SUBJECT = "the claim's subject is not in the current application"
+REASON_OTHER_DIRECTORY = "the run analysed a directory with a different name"
+REASON_NO_DIRECTORY = "the run recorded no directory"
 
 
 def root_name(path: str) -> str:
@@ -82,16 +110,23 @@ def build_context(
     current_graph: DependencyGraph,
     store: TraceStore,
     current_root: str,
-) -> RecalledContext:
+) -> GatedContext:
     """The gated pack for one task. `current_root` is the directory the task will run against."""
     here = root_name(current_root)
     unconfirmed = len(result.unconfirmed)
-    not_applicable = 0
+    held_back: list[NotApplicable] = []
     claims: list[ClaimItem] = []
     for recalled in result.claims:
         subject, obj = claim_parts(experience, experience.node(recalled.assessment.claim_id))
         if not _in_graph(current_graph, subject):
-            not_applicable += 1
+            held_back.append(
+                NotApplicable(
+                    kind="claim",
+                    label=recalled.assessment.name,
+                    reason=REASON_SUBJECT,
+                    similarity=max((v.similarity for v in recalled.retrieved_via), default=0.0),
+                )
+            )
             continue
         claims.append(_claim_item(recalled, experience, subject, obj))
 
@@ -103,7 +138,14 @@ def build_context(
             unconfirmed += 1
             continue
         if source_root is None or root_name(source_root) != here:
-            not_applicable += 1
+            held_back.append(
+                NotApplicable(
+                    kind="raw",
+                    label=f"{item.run_id}/{item.step_id}/{item.attempt_no}",
+                    reason=REASON_NO_DIRECTORY if source_root is None else REASON_OTHER_DIRECTORY,
+                    similarity=item.similarity,
+                )
+            )
             continue
         raw.append(
             RawItem(
@@ -120,7 +162,7 @@ def build_context(
     over_limit = max(0, len(claims) - MAX_CLAIMS) + max(0, len(raw) - MAX_RAW)
     claims, raw = claims[:MAX_CLAIMS], raw[:MAX_RAW]
     empty = not claims and not raw
-    return RecalledContext(
+    pack = RecalledContext(
         message=NO_PRIOR_CONTEXT if empty else "",
         query_sha256=hashlib.sha256(query.encode("utf-8")).hexdigest(),
         current_fingerprint=result.current_fingerprint,
@@ -129,7 +171,8 @@ def build_context(
         claims=tuple(claims),
         raw=tuple(raw),
         withheld=Withheld(
-            unconfirmed=unconfirmed, not_applicable=not_applicable, over_limit=over_limit
+            unconfirmed=unconfirmed, not_applicable=len(held_back), over_limit=over_limit
         ),
         empty=empty,
     )
+    return GatedContext(pack=pack, not_applicable=tuple(held_back))

@@ -54,6 +54,7 @@ if TYPE_CHECKING:
     from cognitive_mesh.experience.reviews import Review
     from cognitive_mesh.experience.store import LoadedGraph
     from cognitive_mesh.memory import Embedder
+    from cognitive_mesh.workflow import PreparedContext
 
 EXIT_OK = 0
 EXIT_CONFIG_ERROR = 2
@@ -160,6 +161,26 @@ def _build_parser() -> argparse.ArgumentParser:
         help="drop hits below this cosine similarity, 0 to 1",
     )
     recall.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
+    task = sub.add_parser(
+        "task",
+        help="run a plan with recalled experience as context (ADR-0017); records what was offered",
+    )
+    task.add_argument("request", help="the task in plain words; also the recall query")
+    task.add_argument("--plan", type=Path, required=True, metavar="FILE", help="plan JSON file")
+    task.add_argument("--root", type=Path, required=True, help="application directory to analyze")
+    task.add_argument("--db", type=Path, required=True, metavar="FILE", help="trace database")
+    task.add_argument("--index", type=Path, required=True, metavar="DIR", help="index directory")
+    task.add_argument("--graph", type=Path, required=True, metavar="FILE", help="graph file")
+    task.add_argument("--reviews", type=Path, metavar="FILE", help="reviews file (optional)")
+    task.add_argument("--k", type=_hit_limit, default=5, help="at most this many hits (max 20)")
+    task.add_argument(
+        "--min-similarity",
+        type=float,
+        default=DEFAULT_MIN_SIMILARITY,
+        metavar="X",
+        help="drop hits below this cosine similarity, 0 to 1",
+    )
+    task.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
     experience = sub.add_parser("experience", help="build and query the experience graph")
     exp_sub = experience.add_subparsers(dest="experience_command", required=True)
     exp_build = exp_sub.add_parser("build", help="build the graph file from the trace database")
@@ -202,6 +223,13 @@ def _build_parser() -> argparse.ArgumentParser:
         cmd.add_argument("--graph", type=Path, required=True, metavar="FILE", help="graph file")
         cmd.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
     return parser
+
+
+def _hit_limit(text: str) -> int:
+    value = _positive_int(text)
+    if value > 20:
+        raise argparse.ArgumentTypeError("must be at most 20")
+    return value
 
 
 def _positive_int(text: str) -> int:
@@ -427,7 +455,10 @@ def _registry_for(validated: ValidatedPlan) -> AgentRegistry:
     return default_registry(build_model_client(settings), model_timeout_s=settings.model_timeout_s)
 
 
-def _run_plan(plan_path: Path, root: Path, as_json: bool, trace_db: Path | None) -> int:
+def _load_run_inputs(
+    plan_path: Path, root: Path
+) -> tuple[ValidatedPlan, IngestionResult, AgentRegistry] | int:
+    """Validate the plan, ingest the application and build the registry, or return an exit code."""
     registry = default_registry()
     try:
         validated = plan_task(_load_plan(plan_path), registry)
@@ -442,6 +473,14 @@ def _run_plan(plan_path: Path, root: Path, as_json: bool, trace_db: Path | None)
     except ConfigError as exc:
         print(exc, file=sys.stderr)
         return EXIT_CONFIG_ERROR
+    return validated, ingestion, registry
+
+
+def _run_plan(plan_path: Path, root: Path, as_json: bool, trace_db: Path | None) -> int:
+    loaded = _load_run_inputs(plan_path, root)
+    if isinstance(loaded, int):
+        return loaded
+    validated, ingestion, registry = loaded
     context = AgentContext(ingestion=ingestion, graph=build_dependency_graph(ingestion))
     if trace_db is None:
         run = Orchestrator(registry).run(validated, context)
@@ -701,6 +740,136 @@ def _recall(args: argparse.Namespace) -> int:
     for note in found.notes:
         print(note)
     return EXIT_OK
+
+
+def _run_task(args: argparse.Namespace) -> int:
+    """Run a plan with the experience recalled for the request, and record what was offered."""
+    from cognitive_mesh import workflow
+
+    try:
+        workflow.validate_request(args.request)
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+    loaded = _load_run_inputs(args.plan, args.root)
+    if isinstance(loaded, int):
+        return loaded
+    validated, ingestion, registry = loaded
+    graph = build_dependency_graph(ingestion)
+    try:
+        store = TraceStore.create(args.db)
+    except TraceStoreError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_TRACE_STORE_ERROR
+    with store:
+        return _guarded(
+            lambda: _task_with_store(args, store, validated, ingestion, graph, registry)
+        )
+
+
+def _task_with_store(
+    args: argparse.Namespace,
+    store: TraceStore,
+    validated: ValidatedPlan,
+    ingestion: IngestionResult,
+    graph: DependencyGraph,
+    registry: AgentRegistry,
+) -> int:
+    from cognitive_mesh import workflow
+
+    prepared = workflow.prepare_context(
+        args.request,
+        ingestion=ingestion,
+        graph=graph,
+        store=store,
+        index_dir=args.index,
+        graph_file=args.graph,
+        reviews_file=args.reviews,
+        make_embedder=_make_embedder,
+        k=args.k,
+        min_similarity=args.min_similarity,
+    )
+    pack = prepared.gated.pack
+    recorder = TraceRecorder(store)
+    try:
+        run_id = recorder.begin(
+            validated, ingestion, recalled=pack, request_length=len(args.request)
+        )
+    except TraceStoreError as exc:  # nothing ran: the offered context could not be recorded
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_TRACE_STORE_ERROR
+    context = AgentContext(ingestion=ingestion, graph=graph, recalled=pack)
+    run = Orchestrator(registry, now=utc_now).run(validated, context)
+    saved = True
+    try:
+        recorder.finish(run_id, run)
+    except TraceStoreError as exc:
+        saved = False
+        print(f"warning: the trace was not saved: {_printable(str(exc))}", file=sys.stderr)
+    if args.as_json:
+        print(json.dumps(_task_payload(prepared, run, run_id if saved else None), indent=2))
+    else:
+        _print_context(prepared)
+        _print_run(run)
+        if saved:
+            print(f"trace: {run_id}")
+    if not saved:
+        return EXIT_TRACE_STORE_ERROR
+    return EXIT_OK if run.status is TaskStatus.SUCCEEDED else EXIT_TASK_NOT_SUCCEEDED
+
+
+def _task_payload(
+    prepared: "PreparedContext", run: TaskRun, trace_id: str | None
+) -> dict[str, object]:
+    return {
+        "context": prepared.gated.pack.model_dump(mode="json"),
+        "not_applicable": [n.model_dump(mode="json") for n in prepared.gated.not_applicable],
+        "not_searched": list(prepared.not_searched),
+        "notes": list(prepared.recall.notes) if prepared.recall else [],
+        "run": run.model_dump(mode="json"),
+        "trace_id": trace_id,
+    }
+
+
+def _print_context(prepared: "PreparedContext") -> None:
+    """What the agents are given, and what was kept from them. Nothing here is verified truth."""
+    pack = prepared.gated.pack
+    print("prior context for this task (from earlier runs; data, not verified truth):")
+    for why in prepared.not_searched:
+        print(f"  not searched: {why}")
+    if pack.empty:
+        print(f"  {_printable(pack.message)}")
+    for claim in pack.claims:
+        print(f"  [{_printable(claim.status)}] {_printable(claim.name)}")
+        print(f"    {_printable(claim.meaning)}")
+        for s in claim.supporting:
+            print(f"    supported by {_printable(s.doc_id or s.run_id)}")
+        for c in claim.contradicting:
+            kind = "same version" if c.same_version else "other or unrecorded version"
+            print(f"    contradicted by {_printable(c.doc_id or c.run_id)} ({kind})")
+        if claim.confirmed_reviews or claim.rejected_reviews:
+            print(
+                f"    reviews: {claim.confirmed_reviews} confirmed, "
+                f"{claim.rejected_reviews} rejected"
+            )
+    for raw in pack.raw:
+        print(
+            f"  [raw: {_printable(raw.kind)}] {_printable(raw.run_id)} "
+            f"step={_printable(raw.step_id)} {_printable(raw.capability)}  ({raw.label})"
+        )
+    w = pack.withheld
+    print(
+        f"  withheld from the agents: {w.unconfirmed} unconfirmed, "
+        f"{w.not_applicable} not applicable, {w.over_limit} over the size limit"
+    )
+    for held in prepared.gated.not_applicable:
+        print(
+            f"  retrieved but not applicable ({_printable(held.reason)}): "
+            f"{_printable(held.label)} (similarity {held.similarity:.3f})"
+        )
+    if prepared.recall is not None:
+        for note in prepared.recall.notes:
+            print(note)
 
 
 def _run_experience(args: argparse.Namespace) -> int:
@@ -1036,6 +1205,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_experience(args)
     if args.command == "recall":
         return _run_recall(args)
+    if args.command == "task":
+        return _run_task(args)
     if args.command == "agents":
         return _run_agents(args.as_json)
     if args.command == "graph":

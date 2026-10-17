@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from cognitive_mesh.agents.context import MAX_CLAIMS, NO_PRIOR_CONTEXT, RAW_LABEL, RecalledContext
 from cognitive_mesh.experience import Snapshot, build_from_traces
@@ -10,7 +11,8 @@ from cognitive_mesh.experience.graph import ExperienceGraph
 from cognitive_mesh.graph import DependencyGraph, build_dependency_graph
 from cognitive_mesh.ingestion import ingest_application
 from cognitive_mesh.memory.models import SourceCheck, UnverifiedHit
-from cognitive_mesh.retrieval import build_context, recall, root_name
+from cognitive_mesh.retrieval import GatedContext, build_context, recall, root_name
+from cognitive_mesh.retrieval.context import REASON_SUBJECT
 from cognitive_mesh.traces import TraceStore
 from experience_support import Step, deps_step, failed_step, make_db, model_step
 from test_recall import Scripted
@@ -28,19 +30,23 @@ def current_graph() -> DependencyGraph:
     return build_dependency_graph(ingest_application(FIXTURE))
 
 
-def pack(
+def gated(
     tmp_path: Path,
     runs: Mapping[str, tuple[list[Step], str | None]],
     searcher: Scripted,
     roots: Mapping[str, str] | None = None,
     here: str = APP,
-) -> RecalledContext:
+) -> GatedContext:
     tmp_path.mkdir(parents=True, exist_ok=True)
     db = make_db(tmp_path, runs, roots)
     with TraceStore.open_existing(db) as store:
         snap: Snapshot = build_from_traces(store)
         result = recall("q", searcher, store, snap, k=5, min_similarity=0.2)
         return build_context("q", result, ExperienceGraph(snap), current_graph(), store, here)
+
+
+def pack(*args: Any, **kwargs: Any) -> RecalledContext:
+    return gated(*args, **kwargs).pack
 
 
 def test_a_relevant_claim_arrives_with_status_meaning_and_ids(tmp_path: Path) -> None:
@@ -113,7 +119,7 @@ def test_no_excerpt_and_no_request_text_leak_into_the_pack(tmp_path: Path) -> No
             min_similarity=0.2,
         )
         assert result.experiences_without_claims[0].excerpt  # the source has an excerpt...
-        got = build_context(canary, result, ExperienceGraph(snap), current_graph(), store, APP)
+        got = build_context(canary, result, ExperienceGraph(snap), current_graph(), store, APP).pack
     text = got.model_dump_json()
     assert result.experiences_without_claims[0].excerpt not in text  # ...and it is not copied
     assert canary not in text and got.query_sha256 and len(got.query_sha256) == 64
@@ -135,3 +141,12 @@ def test_building_twice_gives_the_same_pack(tmp_path: Path) -> None:
 
 def test_root_name_handles_both_separators() -> None:
     assert root_name("C:\\a\\b\\app") == root_name("/x/y/app") == "app"
+
+
+def test_held_back_hits_are_listed_for_the_person_but_not_for_the_agents(tmp_path: Path) -> None:
+    runs = {"r1": ([deps_step("r1", "s1", GONE, [B])], FP1)}
+    got = gated(tmp_path, runs, Scripted([("r1", "s1", 1, 0.77)]))
+    (held,) = got.not_applicable
+    assert (held.kind, held.reason, held.similarity) == ("claim", REASON_SUBJECT, 0.77)
+    assert GONE in held.label
+    assert held.label not in got.pack.model_dump_json()  # the agents never see it
