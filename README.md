@@ -8,14 +8,14 @@ specialized agents, and keeps traceable memory of what it did and why.
 > graph exist. There are no model-provider calls, agents, orchestrator or persistent memory yet.
 > This README is updated with every version; the roadmap is not evidence that a feature exists.
 
-## What works today (v0.3.1, on a branch; main is v0.3.0)
+## What works today (v0.3.1)
 
 | Version | Capability | Status |
 |---|---|---|
 | v0.1.0 | Project foundation: uv, ruff, mypy (strict), pytest, config loading, minimal CLI | Done, tagged |
 | v0.2.0 | Read-only application ingestion with source references, diagnostics and secret redaction | Done, tagged |
 | v0.3.0 | Dependency graph with evidence on every edge, unresolved items kept visible | Done, tagged; CI run 39010744225 passed |
-| v0.3.1 | JS/TS imports and literal dynamic imports in the graph; computed ones stay unresolved | Implemented and verified locally on `feature/v0.3.1-js-dynamic-imports`; not merged, CI not yet run |
+| v0.3.1 | JS/TS imports and literal dynamic imports in the graph; computed ones stay unresolved | Done; merged to main, CI run 39012713238 passed |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`.
@@ -65,7 +65,7 @@ secrets. Packaging/build commands have not been run and are TBD.
 
 ## Roadmap (summary)
 
-Next: merge v0.3.1 (JS/TS and dynamic-import analysis), then v0.4.0 agent architecture, v0.5.0
+Next: v0.4.0 agent architecture, v0.5.0
 orchestrator, v0.6.0 trace store, v0.7.0 semantic retrieval, v0.8.0 experience graph, v0.9.0
 evidence-aware retrieval, v1.0.0 end-to-end prototype. See `ROADMAP.md`.
 

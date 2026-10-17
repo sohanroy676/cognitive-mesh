@@ -3,7 +3,7 @@
 <!-- Update this at the end of every session. This is the first thing to read when resuming. -->
 
 ## Current focus
-v0.3.0 is merged, CI-green and tagged (`v0.3.0`, 2026-10-17). v0.3.1 (JS/TS + dynamic imports) is implemented and verified locally on `feature/v0.3.1-js-dynamic-imports`; it is not merged or pushed and CI has not run, so it is not done yet.
+v0.3.0 is tagged. v0.3.1 (JS/TS + dynamic imports) is merged to main and pushed (`0d16c4a`), CI green (run 39012713238), not tagged. Dependabot PRs #1, #3, #4 are merged; no PRs are open. v0.4.0 Agent Architecture is next, planned only.
 
 ## Recent decisions
 - ADR-0007 (accepted by the user): tree-sitter for JS/TS, private to `graph/js_parse.py`; syntax-node matching only; computed dynamic imports are `unresolved:dynamic:*` + `computed_import`; bare/aliased JS specifiers stay unresolved; no `.js`->`.ts` remap.
@@ -14,12 +14,11 @@ v0.3.0 is merged, CI-green and tagged (`v0.3.0`, 2026-10-17). v0.3.1 (JS/TS + dy
 - CHANGELOG generation deliberately not set up (not requested).
 
 ## Blockers / open questions
-- Pushes and merges always need explicit user approval (v0.3.1 branch is unpushed).
-- Dependabot PRs #1, #3, #4: reviewed, none look breaking for our workflow; merging needs approval. Note #3's CI did not exercise gitleaks (step is gated on `RUN_SECRET_SCAN`).
+- Pushes and merges always need explicit user approval. Tagging v0.3.1 needs approval.
+- gitleaks-action@v3 was merged but never exercised in CI (step is gated on `RUN_SECRET_SCAN`); enabling that repo variable would test it.
 - Writing an ~880 KB file and opening it took ~23 s on this Windows machine (inside `open()`, not our code; cause unverified, possibly on-access scanning). Tests use smaller files.
 - Local branches are never deleted by the agent (rule in CLAUDE.md); old branches are kept.
 - Build/packaging command is untested (TBD).
 
 ## Next step
-1. v0.3.1 is committed on its branch. Get the user's approval to push/merge, confirm CI, then mark v0.3.1 done in ROADMAP/README.
-2. Handle Dependabot PRs #1, #3, #4 (with approval), then plan v0.4.0 Agent Architecture. Lockfile ingestion (for transitive dependencies) was deliberately deferred in ADR-0006.
+1. Ask about tagging v0.3.1, then plan v0.4.0 Agent Architecture (see docs/DETAILED_ROADMAP.md) via `/new-feature` after the user approves the plan. Lockfile ingestion (for transitive dependencies) was deliberately deferred in ADR-0006.
