@@ -277,3 +277,21 @@ def test_graph_format_usage_errors_exit_2(
     assert exc.value.code == EXIT_CONFIG_ERROR
     out = capsys.readouterr()
     assert out.out == "" and out.err
+
+
+def test_agents_lists_roles_without_config(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["agents"]) == EXIT_OK  # no COGMESH_PROVIDER set
+    out = capsys.readouterr().out
+    assert "dependency_analyst" in out and "code_explainer" in out
+    assert "dependencies_of [deterministic]" in out
+    assert "explain_file [uses model]" in out
+
+
+def test_agents_json_has_schemas(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["agents", "--json"]) == EXIT_OK
+    payload = json.loads(capsys.readouterr().out)
+    assert [a["id"] for a in payload["agents"]] == ["code_explainer", "dependency_analyst"]
+    for agent in payload["agents"]:
+        for cap in agent["capabilities"]:
+            assert cap["input_schema"]["type"] == "object"
+            assert cap["output_schema"]["type"] == "object"

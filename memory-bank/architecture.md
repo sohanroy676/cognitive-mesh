@@ -27,12 +27,15 @@ while tracking their source, validity, confidence, and conflicts.
   dependencies are reported as unknown (lockfiles are excluded).
 - Agent Registry
   Define available agent roles, capabilities, constraints, and interfaces.
+  Implemented in v0.4.0 as `src/cognitive_mesh/agents/` (ADR-0009): common `Agent` interface, two roles
+  (`dependency_analyst`, `code_explainer`), registry, explicit failure results. In-memory only.
 - Task Planner
   Break a user request into appropriate tasks and dependencies.
 - Custom Orchestrator
   Assign tasks, coordinate execution, manage results, and handle failures.
 - Model Provider Interface
   Route model requests to configured providers, including Groq and Ollama where available.
+  Only the protocol and error types exist (v0.4.0, `src/cognitive_mesh/providers/`); no Groq or Ollama client yet.
 - Episodic Trace Store
   Preserve task executions, model/provider details, tool activity, outputs, and outcomes.
 - Memory Validation

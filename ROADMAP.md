@@ -43,12 +43,17 @@ Completed 2026-10-17. Merged to main (`e19d5e1`); the first CI run on that merge
 - Node names and evidence are escaped; output is ASCII and deterministic; text and `--json` output are unchanged (diffed against saved baselines).
 - Known limitations: naive layout (edges can cross); cycle members outrank unresolved items when truncating; Mermaid output checked once in mermaid-cli 12.0.0 (manual, not in CI), other renderers unchecked; HTML viewed only in headless Edge.
 
-## Next — Planned, Not Started
+### v0.4.0 — Agent Architecture
 
-### v0.4.0 — Agent Architecture (planned after v0.3.2)
-- Define agent interfaces, responsibilities, and capability descriptions.
-- Establish the initial specialized agent roles.
-- Test agent input/output contracts and error handling.
+Implemented 2026-10-17 on `feature/v0.4.0-agent-architecture`; its DETAILED_ROADMAP Test/Expected items pass locally. Merged to main at session end; CI on that merge is not yet recorded; not tagged. See ADR-0009.
+
+- Common `Agent` interface whose `run` never raises; capability declarations derived from the handler table; strict input/output contracts; success and failure results (`AgentSuccess | AgentFailure`) with explicit failure kinds.
+- Roles: `dependency_analyst` (deterministic, over the dependency graph) and `code_explainer` (model-backed, output marked `model_unverified`).
+- `providers.ModelClient` protocol with `ProviderError`; all provider handling is in one helper, so agents contain no provider-specific code. Only fake clients exist.
+- `cognitive-mesh agents [--json]` lists roles and capabilities.
+- Known limitations: no real provider client; timeouts are enforced by clients only (no watchdog); nothing persisted; no orchestrator.
+
+## Next — Planned, Not Started
 
 ### v0.5.0 — Basic Orchestrator and Task Planning
 - Implement the custom orchestration workflow.

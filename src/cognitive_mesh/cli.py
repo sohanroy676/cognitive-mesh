@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from cognitive_mesh import __version__
+from cognitive_mesh.agents import default_registry
 from cognitive_mesh.config import ConfigError, load_settings
 from cognitive_mesh.graph import (
     DEFAULT_MAX_EDGES,
@@ -52,6 +53,8 @@ def _build_parser() -> argparse.ArgumentParser:
     graph.add_argument("--output", type=Path, metavar="FILE", help="with --format, write to FILE")
     graph.add_argument("--max-nodes", type=_positive_int, help="with --format, node limit")
     graph.add_argument("--max-edges", type=_positive_int, help="with --format, edge limit")
+    agents = sub.add_parser("agents", help="list agent roles and their declared capabilities")
+    agents.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
     return parser
 
 
@@ -171,15 +174,31 @@ def _run_graph_view(
     return EXIT_OK
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """With no subcommand, validate configuration. `ingest` and `graph` need no provider config.
+def _run_agents(as_json: bool) -> int:
+    specs = default_registry().specs()
+    if as_json:
+        print(json.dumps({"agents": [s.model_dump(mode="json") for s in specs]}, indent=2))
+        return EXIT_OK
+    for spec in specs:
+        print(f"{spec.id}  ({spec.role})")
+        print(f"  {_printable(spec.description)}")
+        for cap in spec.capabilities:
+            kind = "uses model" if cap.uses_model else "deterministic"
+            print(f"  - {cap.name} [{kind}]: {_printable(cap.description)}")
+    return EXIT_OK
 
-    Neither path makes provider network calls.
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """With no subcommand, validate configuration. `ingest`, `graph` and `agents` need no config.
+
+    None of these paths makes provider network calls.
     """
     parser = _build_parser()
     args = parser.parse_args(argv)
     if args.command == "ingest":
         return _run_ingest(args.path, args.as_json, args.include_content)
+    if args.command == "agents":
+        return _run_agents(args.as_json)
     if args.command == "graph":
         if args.fmt is not None:
             if args.as_json or args.deps_of is not None or args.transitive:
