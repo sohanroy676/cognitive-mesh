@@ -198,4 +198,5 @@ def test_a_run_that_compared_claims_adds_no_claim_to_the_graph(tmp_path: Path) -
     with TraceStore.open_existing(db) as store:
         snapshot = build_from_traces(store)
     assert not [n for n in snapshot.nodes if n.kind is NodeKind.CLAIM]
+    assert snapshot.diagnostics == ()  # ignored on purpose, not misread as a listing
     assert [n for n in snapshot.nodes if n.kind is NodeKind.ATTEMPT]  # but the run is recorded
