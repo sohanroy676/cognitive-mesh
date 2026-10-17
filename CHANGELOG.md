@@ -3,11 +3,10 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [0.6.1] - 2026-10-17
 
 ### Added
 - **providers:** Add Ollama model client
-- **providers:** Add Groq client with shared error mapping
 
 ### Documentation
 - **adr:** Add ADR-0012 Ollama client
@@ -15,8 +14,6 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Hand off after v0.6.1
 - Record v0.6.1 CI and v0.6.2 plan
 - **adr:** Propose ADR-0013 Groq client
-- Record v0.6.2 Groq client
-- Record real-API Groq verification
 
 ## [0.6.0] - 2026-10-17
 
