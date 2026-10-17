@@ -75,7 +75,7 @@ Implemented 2026-10-17 on `feature/v0.6.0-trace-store`; its DETAILED_ROADMAP Tes
 
 ### v0.6.1 — Real Ollama Client
 
-Implemented 2026-10-17 on `feature/v0.6.1-ollama-client`; its DETAILED_ROADMAP Test/Expected items pass locally, including a real `llama3.2` run and the opt-in live test. Merged to main and pushed; CI result not yet recorded; not tagged. See ADR-0012.
+Implemented 2026-10-17 on `feature/v0.6.1-ollama-client`; its DETAILED_ROADMAP Test/Expected items pass locally, including a real `llama3.2` run and the opt-in live test. Merged to main and pushed; CI run 39029734411 on the merge passed; not tagged. See ADR-0012.
 - `ModelClient` for a local Ollama (`providers/ollama.py`) on a private stdlib transport (`providers/http.py`): one total deadline per call, no new dependency.
 - Settings `COGMESH_OLLAMA_MODEL` (default `llama3.2`) and `COGMESH_MODEL_TIMEOUT_S` (default 30, max 600); `COGMESH_OLLAMA_BASE_URL` is validated.
 - `providers/factory.py`; `run` reads config only for plans with a model step; no provider set keeps the old `provider_unavailable` behavior; bad config exits 2.
@@ -91,7 +91,7 @@ Implemented 2026-10-17 on `feature/v0.6.1-ollama-client`; its DETAILED_ROADMAP T
 - Library choice is decided in ADR-0013 and confirmed by the user before coding.
 
 ### v0.7.0 — Semantic Memory Retrieval
-- Planned after the real provider clients (v0.6.1, v0.6.2); retrieval itself must not require a model provider (embeddings come from Sentence Transformers). ADR-0014.
+- Planned after the real provider clients (v0.6.1, v0.6.2) and a review pass over the known items (decided 2026-10-17); retrieval itself must not require a model provider (embeddings come from Sentence Transformers). ADR-0014.
 - Generate embeddings for eligible stored experiences.
 - Use ChromaDB for semantic retrieval.
 - Test retrieval relevance and behavior when no useful memory exists.
