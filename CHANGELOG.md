@@ -10,6 +10,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **providers:** Require opt-in before sending content to Groq
 - **ingestion:** Add secret formats and an entropy check
 - **graph:** Read uv.lock and package-lock.json for transitive dependencies
+- **orchestrator:** Pass step outputs to later steps and add fallback agents
 
 ### Documentation
 - Record CI-on-tags and trace-store migrations

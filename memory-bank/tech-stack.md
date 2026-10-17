@@ -118,6 +118,7 @@ uv run cognitive-mesh run tests/fixtures/plans/nope.json --root tests/fixtures/d
 uv run cognitive-mesh run tests/fixtures/plans/ok.json --root does-not-exist                  # exit 3
 uv run cognitive-mesh run tests/fixtures/plans/ok.json --root tests/fixtures/dep_app --trace-db FILE   # exit 0, prints trace: RUN_ID
 uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app --trace-db FILE   # exit 7, recorded as failed
+COGMESH_MODEL_TIMEOUT_S=120 uv run cognitive-mesh plan "REQUEST" [--output FILE]   # repo root, .env provider ollama + llama3.2: exit 0, prints a plan, stderr says unreviewed (run 2026-10-17; the plan it drafted had a nonsensical node_id)
 uv run cognitive-mesh traces list --db FILE [--json]    # exit 0 (newest first)
 uv run cognitive-mesh traces show RUN_ID --db FILE [--json]   # exit 0; in a new process too
 uv run cognitive-mesh traces show nope --db FILE                # exit 9, "no run has the id"
