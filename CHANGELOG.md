@@ -8,6 +8,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 ### Documentation
 - Mark v0.3.2 done after green CI
 - Document changelog workflow
+- Record verified build and version gap
 
 ### Maintenance
 - Fetch full history for gitleaks
