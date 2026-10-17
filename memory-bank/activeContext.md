@@ -3,7 +3,7 @@
 <!-- Update this at the end of every session. This is the first thing to read when resuming. -->
 
 ## Current focus
-v0.3.0 and v0.3.1 are tagged and pushed. v0.3.2 Dependency Graph Visualization is implemented and committed on `feature/v0.3.2-graph-visualization` (`c6d49b8`), not pushed or merged; it awaits the user's review. v0.4.0 is planned after it and not started.
+v0.3.0 and v0.3.1 are tagged and pushed. v0.3.2 Dependency Graph Visualization is merged to main and pushed (2026-10-17); done only once CI on main is green. v0.3.2 is not tagged. v0.4.0 is planned next and not started.
 
 ## Recent decisions
 - ADR-0008 (accepted by the user): Mermaid and self-contained HTML/SVG from one `GraphView`; no new dependency, no script or network loads; escaped, ASCII, deterministic output; visible truncation (HTML 300/1000, Mermaid 100/200); `--format` is exclusive with `--json`/`--deps-of`; exit 5 for write errors.
@@ -15,12 +15,12 @@ v0.3.0 and v0.3.1 are tagged and pushed. v0.3.2 Dependency Graph Visualization i
 - CHANGELOG generation deliberately not set up (not requested).
 
 ## Blockers / open questions
-- Pushes and merges always need explicit user approval (v0.3.2 is unpushed).
+- Pushes and merges always need explicit user approval (v0.3.2 was merged and pushed on explicit approval).
 - `RUN_SECRET_SCAN` is now `true`, so gitleaks-action@v3 will run for the first time on the next push; the shallow checkout may need `fetch-depth: 0`, and real findings must be reported, not hidden.
 - Writing an ~880 KB file and opening it took ~23 s on this Windows machine (inside `open()`, not our code; cause unverified, possibly on-access scanning). Tests use smaller files.
 - Local branches are never deleted by the agent (rule in CLAUDE.md); old branches are kept.
 - Build/packaging command is untested (TBD).
 
 ## Next step
-1. User reviews v0.3.2; on approval push the branch (first gitleaks run), check CI, merge, then mark v0.3.2 done in ROADMAP.md/README.md after CI on main is green.
-2. Only after v0.3.2 is merged and the user asks: plan v0.4.0 Agent Architecture (see docs/DETAILED_ROADMAP.md). Lockfile ingestion (for transitive dependencies) was deliberately deferred in ADR-0006.
+1. Check CI on main (and the first gitleaks run); if green, mark v0.3.2 done in ROADMAP.md/README.md. Ask about tagging v0.3.2.
+2. Only when the user asks: plan v0.4.0 Agent Architecture (see docs/DETAILED_ROADMAP.md). Lockfile ingestion (for transitive dependencies) was deliberately deferred in ADR-0006.
