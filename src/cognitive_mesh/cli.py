@@ -5,6 +5,7 @@ import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 
@@ -44,6 +45,9 @@ from cognitive_mesh.traces import (
     utc_now,
 )
 
+if TYPE_CHECKING:
+    from cognitive_mesh.memory import Embedder
+
 EXIT_OK = 0
 EXIT_CONFIG_ERROR = 2
 EXIT_INGESTION_ERROR = 3
@@ -54,7 +58,9 @@ EXIT_TASK_NOT_SUCCEEDED = 7
 EXIT_TRACE_STORE_ERROR = 8
 EXIT_TRACE_NOT_FOUND = 9
 EXIT_PLAN_GENERATION_ERROR = 10
+EXIT_MEMORY_ERROR = 11
 MAX_PLAN_BYTES = 256 * 1024
+DEFAULT_MIN_SIMILARITY = 0.2  # from one live run on 3 documents (ADR-0014); a rough starting point
 
 
 def _printable(text: str) -> str:
@@ -106,6 +112,23 @@ def _build_parser() -> argparse.ArgumentParser:
     traces_show.add_argument("run_id")
     traces_show.add_argument("--db", type=Path, required=True, metavar="FILE")
     traces_show.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
+    memory = sub.add_parser("memory", help="semantic search over recorded run traces")
+    memory_sub = memory.add_subparsers(dest="memory_command", required=True)
+    memory_index = memory_sub.add_parser("index", help="embed recorded steps into a vector index")
+    memory_search = memory_sub.add_parser("search", help="find past steps similar to a query")
+    memory_search.add_argument("query", help="what to look for, in plain words")
+    memory_search.add_argument("--k", type=_positive_int, default=5, help="at most this many hits")
+    memory_search.add_argument(
+        "--min-similarity",
+        type=float,
+        default=DEFAULT_MIN_SIMILARITY,
+        metavar="X",
+        help="drop hits below this cosine similarity, 0 to 1",
+    )
+    for cmd in (memory_index, memory_search):
+        cmd.add_argument("--db", type=Path, required=True, metavar="FILE", help="trace database")
+        cmd.add_argument("--index", type=Path, required=True, metavar="DIR", help="index directory")
+        cmd.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
     return parser
 
 
@@ -456,6 +479,69 @@ def _run_traces_show(run_id: str, db: Path, as_json: bool) -> int:
     return EXIT_OK
 
 
+def _make_embedder() -> "Embedder":
+    # Imported here so other commands do not pay for loading chromadb and torch.
+    from cognitive_mesh.memory import SentenceTransformerEmbedder
+
+    return SentenceTransformerEmbedder()
+
+
+def _run_memory(args: argparse.Namespace) -> int:
+    from cognitive_mesh.memory import MemoryIndex, MemoryIndexError
+
+    try:
+        embedder = _make_embedder()
+        if args.memory_command == "index":
+            with TraceStore.open_existing(args.db) as store:
+                report = MemoryIndex.open_for_write(args.index, embedder).index_traces(store)
+            if args.as_json:
+                print(json.dumps(report.model_dump(mode="json"), indent=2))
+            else:
+                print(
+                    f"indexed: {report.added} added, {report.updated} updated, "
+                    f"{report.unchanged} unchanged, {report.orphaned} orphaned"
+                )
+            if report.malformed_runs:
+                ids = ", ".join(_printable(i) for i in report.malformed_runs)
+                print(
+                    f"{len(report.malformed_runs)} malformed run(s) skipped: {ids}", file=sys.stderr
+                )
+                return EXIT_TRACE_STORE_ERROR
+            return EXIT_OK
+        with TraceStore.open_existing(args.db) as store:
+            index = MemoryIndex.open_existing(args.index, embedder)
+            found = index.search(args.query, store, k=args.k, min_similarity=args.min_similarity)
+    except TraceStoreError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_TRACE_STORE_ERROR
+    except MemoryIndexError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_MEMORY_ERROR
+    except ValueError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+    if args.as_json:
+        print(json.dumps(found.model_dump(mode="json"), indent=2))
+        return EXIT_OK
+    for hit in found.hits:
+        basis = f" basis={hit.basis}" if hit.basis else ""
+        print(
+            f"{hit.similarity:.3f}  {_printable(hit.run_id)} step={_printable(hit.step_id)} "
+            f"attempt={hit.attempt_no} {hit.capability} {hit.result_status}{basis}"
+        )
+    for miss in found.unverified:
+        print(
+            f"{miss.similarity:.3f}  {_printable(miss.run_id)} step={_printable(miss.step_id)} "
+            f"NOT CONFIRMED ({miss.reason.value})"
+        )
+    if found.message:
+        print(found.message)
+    if found.dropped_weak:
+        print(f"{found.dropped_weak} weak match(es) below {found.min_similarity} dropped")
+    print(found.note)
+    return EXIT_OK
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """With no subcommand, validate configuration. Other subcommands need no config.
 
@@ -473,6 +559,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.traces_command == "list":
             return _run_traces_list(args.db, args.as_json)
         return _run_traces_show(args.run_id, args.db, args.as_json)
+    if args.command == "memory":
+        return _run_memory(args)
     if args.command == "agents":
         return _run_agents(args.as_json)
     if args.command == "graph":
