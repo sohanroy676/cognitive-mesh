@@ -26,9 +26,9 @@ Completed 2026-10-17. Merged to main (`d172312`); GitHub Actions CI run 39010744
 - Test dependency links against known sample applications (`tests/fixtures/dep_app`).
 - Known limitations: declared direct dependencies and Python imports only; lockfiles excluded so transitive external dependencies are unknown; JS/TS imports and dynamic imports not analysed (addressed in v0.3.1); in-memory only.
 
-## Now — v0.3.1: JS/TS and Dynamic Import Analysis (implemented, not yet merged)
+## Now — v0.3.1: JS/TS and Dynamic Import Analysis (done, next: v0.4.0)
 
-Status: implemented and verified locally on branch `feature/v0.3.1-js-dynamic-imports` (2026-10-17). Not merged, not pushed, CI not yet run; mark done only after merge and green CI. See ADR-0007.
+Status: done 2026-10-17. Merged to main (`0d16c4a`); GitHub Actions CI run 39012713238 passed. Not tagged. See ADR-0007.
 
 - JS/TS `import` / `export ... from` / `require()` / literal `import()` / type-only imports become evidence-backed edges (tree-sitter, private to `graph/js_parse.py`).
 - Python `importlib.import_module` / `__import__` with a literal argument become edges; computed ones become `unresolved` nodes plus a `computed_import` diagnostic.
