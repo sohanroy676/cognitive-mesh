@@ -2,6 +2,7 @@
 
 import time
 from collections.abc import Callable
+from datetime import datetime
 
 from cognitive_mesh.agents import (
     AgentContext,
@@ -31,6 +32,7 @@ class Orchestrator:
         run_budget_s: float | None = None,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
+        now: Callable[[], datetime] | None = None,
     ) -> None:
         if run_budget_s is not None and run_budget_s <= 0:
             raise ValueError("run_budget_s must be positive")
@@ -39,13 +41,19 @@ class Orchestrator:
         self._budget = run_budget_s
         self._clock = clock
         self._sleep = sleep
+        self._now = now
 
     def run(self, plan: ValidatedPlan, context: AgentContext) -> TaskRun:
         start = self._clock()
         status: dict[str, StepStatus] = {}
         records: list[StepRecord] = []
         for step in plan.order:
+            started = self._now() if self._now else None
             record = self._run_step(plan.task_id, step, status, context, start)
+            if self._now is not None:
+                record = record.model_copy(
+                    update={"started_at": started, "finished_at": self._now()}
+                )
             status[step.step_id] = record.status
             records.append(record)
         return TaskRun(task_id=plan.task_id, steps=tuple(records))

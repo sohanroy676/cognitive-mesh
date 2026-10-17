@@ -33,3 +33,7 @@ coverage/
 # Logs
 *.log
 npm-debug.log*
+
+# Trace databases
+*.sqlite3
+*.sqlite3-*

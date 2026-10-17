@@ -29,7 +29,7 @@ Never hardcode credentials in source code or commit secrets.
 - Vector database: ChromaDB
 - Graph representation and traversal: NetworkX 3.7 (runtime dependency since v0.3.0; `types-networkx` in dev; ADR-0006)
 - JS/TS import parsing: tree-sitter 0.26.0 + tree-sitter-javascript 0.25.0 + tree-sitter-typescript 0.23.2 (runtime dependencies since v0.3.1; MIT, official tree-sitter org; private to `graph/js_parse.py`; ADR-0007)
-- Persistent structured storage: SQLite
+- Persistent structured storage: SQLite (stdlib `sqlite3`; run traces since v0.6.0, schema version 1, ADR-0011; no new dependency)
 - Embeddings: Sentence Transformers
 - Embedding model and version: TBD
 
@@ -113,6 +113,12 @@ uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fix
 uv run cognitive-mesh run tests/fixtures/plans/cycle.json --root tests/fixtures/dep_app       # exit 6, "dependency cycle among steps: a, b"
 uv run cognitive-mesh run tests/fixtures/plans/nope.json --root tests/fixtures/dep_app        # exit 6, "cannot read the plan file"
 uv run cognitive-mesh run tests/fixtures/plans/ok.json --root does-not-exist                  # exit 3
+uv run cognitive-mesh run tests/fixtures/plans/ok.json --root tests/fixtures/dep_app --trace-db FILE   # exit 0, prints trace: RUN_ID
+uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app --trace-db FILE   # exit 7, recorded as failed
+uv run cognitive-mesh traces list --db FILE [--json]    # exit 0 (newest first)
+uv run cognitive-mesh traces show RUN_ID --db FILE [--json]   # exit 0; in a new process too
+uv run cognitive-mesh traces show nope --db FILE                # exit 9, "no run has the id"
+uv run cognitive-mesh traces list --db missing.sqlite3          # exit 8, "the trace database does not exist"; creates nothing
 ```
 The v0.1.0 commands also passed in a fresh `git clone` of its feature branch; the `ingest` commands were run only in the working tree (not yet in a fresh clone or CI).
 The `dep_app` `graph` commands were run 2026-10-17 in the working tree on branch `feature/v0.3.0-dependency-graph` (not in a fresh clone; CI runs the test suite, not these CLI calls).
@@ -120,6 +126,7 @@ The `js_app` graph commands were run 2026-10-17 in the working tree on branch `f
 The `--format` graph commands were run 2026-10-17 in the working tree on branch `feature/v0.3.2-graph-visualization` (not yet in a fresh clone or CI); the HTML output was also opened in headless Edge. No dependency was added in v0.3.2.
 The `agents` commands were run 2026-10-17 in the working tree on branch `feature/v0.4.0-agent-architecture` (not yet in a fresh clone or CI); v0.4.0 added no dependency.
 The `run` commands were run 2026-10-17 in the working tree on branch `feature/v0.5.0-orchestrator` (not yet in a fresh clone or CI); v0.5.0 added no dependency.
+The `--trace-db` and `traces` commands were run 2026-10-17 in the working tree on branch `feature/v0.6.0-trace-store` with the database in a scratch directory (not yet in a fresh clone or CI); v0.6.0 added no dependency.
 Note: the "no config: exit 2" check needs a working directory without a local `.env`.
 
 Do not document unverified commands as working commands.

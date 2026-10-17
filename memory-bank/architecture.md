@@ -42,6 +42,9 @@ while tracking their source, validity, confidence, and conflicts.
   Only the protocol and error types exist (v0.4.0, `src/cognitive_mesh/providers/`); no Groq or Ollama client yet.
 - Episodic Trace Store
   Preserve task executions, model/provider details, tool activity, outputs, and outcomes.
+  Implemented in v0.6.0 as `src/cognitive_mesh/traces/` (ADR-0011): SQLite via stdlib `sqlite3` (private to
+  `store.py`), runs/steps/attempts, redaction before storing, `interrupted` for runs that never finished.
+  Opt-in (`run --trace-db`); traces are raw records and nothing retrieves them yet.
 - Memory Validation
   Evaluate whether an experience is eligible for promotion into reusable knowledge.
 - Vector Retrieval
