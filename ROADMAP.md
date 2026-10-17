@@ -65,7 +65,7 @@ Implemented 2026-10-17 on `feature/v0.5.0-orchestrator`; its DETAILED_ROADMAP Te
 
 ### v0.6.0 — Episodic Trace Store
 
-Implemented 2026-10-17 on `feature/v0.6.0-trace-store`; its DETAILED_ROADMAP Test/Expected items pass locally. Not merged, CI not yet run, not tagged. See ADR-0011.
+Implemented 2026-10-17 on `feature/v0.6.0-trace-store`; its DETAILED_ROADMAP Test/Expected items pass locally. Merged to main and pushed with user approval; CI result on the merge not yet recorded; not tagged. See ADR-0011.
 
 - `cognitive_mesh.traces`: SQLite (stdlib `sqlite3`, no new dependency) tables `runs`, `steps`, `attempts`; stable run ids; every attempt keeps its agent task id, agent id, result and model/provider info.
 - A run is committed as `running` before it starts and finished in one transaction, so a crash or a rolled-back write reads back as `interrupted`; `succeeded | failed | incomplete` are recomputed from the steps on read and a disagreeing or malformed record raises instead of being trusted.
