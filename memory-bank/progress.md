@@ -24,6 +24,6 @@
 
 ## In progress
 
-- `docs/record-ci-39022644447` was merged to main (`2306aa2`) and pushed with user approval. v0.4.0 was merged to main and pushed at session end (CI result pending, check `gh run list`). Not tagged. Nothing else in flight.
+- `docs/record-ci-39022644447` was merged to main (`2306aa2`) and pushed with user approval. v0.4.0 was merged to main and pushed at session end; CI run 39023604187 on that merge passed (checked with `gh run list`, 2026-10-17). Not tagged (tag awaits user approval). Nothing else in flight.
 - Old branches (incl. `feature/v0.3.1-js-dynamic-imports`, pushed) are kept; local branches are never deleted.
 - Old branch `feature/v0.2.0-application-ingestion` is kept (local branches are never deleted).

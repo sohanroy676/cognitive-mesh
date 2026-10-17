@@ -18,7 +18,7 @@ specialized agents, and keeps traceable memory of what it did and why.
 | v0.3.0 | Dependency graph with evidence on every edge, unresolved items kept visible | Done, tagged; CI run 39010744225 passed |
 | v0.3.1 | JS/TS imports and literal dynamic imports in the graph; computed ones stay unresolved | Done, tagged `v0.3.1`; CI run 39012713238 passed |
 | v0.3.2 | Graph visualization: Mermaid text or self-contained HTML/SVG, with evidence and visible truncation | Done; merged to main, CI run 39021177652 passed |
-| v0.4.0 | Agent architecture: common interface, two roles, capability declarations, explicit failure results, provider protocol (fake clients only) | Criteria pass locally; merged to main, CI result not yet recorded, not tagged |
+| v0.4.0 | Agent architecture: common interface, two roles, capability declarations, explicit failure results, provider protocol (fake clients only) | Criteria pass locally; merged to main; CI run 39023604187 on the merge passed (2026-10-17); not tagged |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
