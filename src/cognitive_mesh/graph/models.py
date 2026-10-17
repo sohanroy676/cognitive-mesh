@@ -16,7 +16,7 @@ class GraphError(Exception):
 class NodeKind(StrEnum):
     COMPONENT = "component"  # a directory holding a supported manifest
     PACKAGE = "package"  # an external dependency declared in a manifest
-    MODULE = "module"  # an ingested Python source file
+    MODULE = "module"  # an ingested Python or JS/TS source file
     STDLIB = "stdlib"  # an import matching the running interpreter's stdlib module names
     UNRESOLVED = "unresolved"  # something referenced that could not be resolved; never guessed
 
@@ -35,6 +35,8 @@ class GraphDiagnosticCode(StrEnum):
     SKIPPED_ENTRY = "skipped_entry"
     AMBIGUOUS_IMPORT = "ambiguous_import"
     TRANSITIVE_UNKNOWN = "transitive_unknown"
+    COMPUTED_IMPORT = "computed_import"
+    JS_RESOLUTION_LIMITED = "js_resolution_limited"
 
 
 Severity = Literal["info", "warning", "error"]

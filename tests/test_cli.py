@@ -17,6 +17,7 @@ from cognitive_mesh.cli import (
 SECRET = "gsk_test_secret_value_123"  # noqa: S105 - fake value for tests
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_app"
 DEP_FIXTURE = Path(__file__).parent / "fixtures" / "dep_app"
+JS_FIXTURE = Path(__file__).parent / "fixtures" / "js_app"
 
 
 def test_main_succeeds_with_valid_config(
@@ -159,3 +160,20 @@ def test_graph_missing_root_exits_3(tmp_path: Path, capsys: pytest.CaptureFixtur
 def test_graph_needs_no_provider_config(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["graph", str(FIXTURE)]) == EXIT_OK
     assert "no_manifest" not in capsys.readouterr().out  # sample_app has manifests
+
+
+def test_graph_js_summary_shows_unresolved_and_limits(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["graph", str(JS_FIXTURE)]) == EXIT_OK
+    out = capsys.readouterr().out
+    assert "unresolved: unresolved:dynamic:src/index.ts:9" in out
+    assert "computed_import" in out and "js_resolution_limited" in out
+    assert "nope" not in out
+
+
+def test_graph_js_json_and_transitive_deps(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["graph", str(JS_FIXTURE), "--json"]) == EXIT_OK
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["edges"] and all(e["evidence"] for e in payload["edges"])
+    node = "module:src/index.ts"
+    assert main(["graph", str(JS_FIXTURE), "--deps-of", node, "--transitive"]) == EXIT_OK
+    assert "stdlib:node:fs" in capsys.readouterr().out  # index -> util -> node:fs
