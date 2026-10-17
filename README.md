@@ -6,11 +6,11 @@ specialized agents, and keeps traceable memory of what it did and why.
 
 > **Status: early development.** Only the foundation, application ingestion, a dependency
 > graph, the agent interfaces, (v0.5.0) a basic orchestrator, (v0.6.0) a SQLite store for run
-> traces and (v0.6.1) a real Ollama client exist. There is no Groq client and no retrieval of past
-> experience yet.
+> traces, (v0.6.1) a real Ollama client and (v0.6.2) a Groq client exist. The Groq client has not
+> yet been run successfully against the real API, and there is no retrieval of past experience yet.
 > This README is updated with every version; the roadmap is not evidence that a feature exists.
 
-## What works today (v0.6.1)
+## What works today (v0.6.2)
 
 | Version | Capability | Status |
 |---|---|---|
@@ -23,10 +23,11 @@ specialized agents, and keeps traceable memory of what it did and why.
 | v0.5.0 | Orchestrator: validated task plans, dependency ordering, capability-based assignment, explicit failed/blocked/incomplete results, bounded retries, run budget, `run` command | Done, tagged `v0.5.0`; CI runs 39024871768 and 39025436259 passed |
 | v0.6.0 | Episodic trace store: SQLite persistence of orchestrator runs (steps, attempts, ids, model info, timestamps), redaction before storing, success/failed/incomplete/interrupted states, `run --trace-db`, `traces list/show` | Done, tagged `v0.6.0`; CI runs 39026432280 and 39028485876 passed |
 | v0.6.1 | Real Ollama client (stdlib HTTP, hard total deadline, every failure mapped to a provider error kind), `COGMESH_OLLAMA_MODEL` / `COGMESH_MODEL_TIMEOUT_S`, `run` uses it only for plans with a model step | Criteria pass locally (including a real `llama3.2` run); merged to main and pushed; CI run 39029734411 on the merge passed; not tagged |
+| v0.6.2 | Real Groq client (`qwen/qwen3.8-27b` by default, preview model; reasoning off; shared error mapping with the Ollama client; key never in errors/traces/output), `COGMESH_GROQ_MODEL` / `COGMESH_GROQ_REASONING_EFFORT` | Tests and fake-key CLI checks pass locally; **no successful call against the real API yet** (needs your key); not merged, not tagged |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
-`docs/adr/0008-dependency-graph-visualization.md`, `docs/adr/0009-agent-architecture.md`, `docs/adr/0010-orchestrator.md`, `docs/adr/0011-episodic-trace-store.md`, `docs/adr/0012-ollama-client.md`.
+`docs/adr/0008-dependency-graph-visualization.md`, `docs/adr/0009-agent-architecture.md`, `docs/adr/0010-orchestrator.md`, `docs/adr/0011-episodic-trace-store.md`, `docs/adr/0012-ollama-client.md`, `docs/adr/0013-groq-client.md`.
 
 ### Known limitations
 - Local directories only; results are in memory, except run traces recorded with `--trace-db` (v0.6.0).
@@ -58,13 +59,21 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
   retention or size limits, one writer assumed, no schema migrations (version 1), no per-attempt
   timing, no tool activity beyond agent attempts. Run `traces` against files you trust: they are
   read as data and validated, but they are not authenticated.
-- Ollama client (v0.6.1): only `COGMESH_PROVIDER=ollama` has a client; `groq` exits 2 with a clear
-  message until v0.6.2. Only `run` calls a model, and only for plans with a model step
+- Ollama client (v0.6.1): `COGMESH_PROVIDER=ollama`. Only `run` calls a model, and only for plans with a model step
   (`explain_file`). The contents of the explained file are sent to the configured Ollama server, so
   point `COGMESH_OLLAMA_BASE_URL` only at a server you trust. No streaming, proxies, redirects or
   connection reuse. A missing model (HTTP 404) is not retried; run `ollama pull <model>`. Model
   output stays `model_unverified`. Verified against one local Ollama with `llama3.2` only; the
   opt-in live test is `RUN_LIVE_OLLAMA=1 uv run pytest -m live`.
+- Groq client (v0.6.2): `COGMESH_PROVIDER=groq` with `GROQ_API_KEY`; default model `qwen/qwen3.8-27b`
+  (`COGMESH_GROQ_MODEL`), a Groq **preview** model that may be retired; reasoning is turned off
+  (`COGMESH_GROQ_REASONING_EFFORT=none`). The endpoint is fixed (HTTPS to api.groq.com), so the key can
+  only be sent there. The contents of the explained file are sent to Groq, a third party. The key is
+  rejected if it has spaces, line breaks or non-ASCII characters, and never appears in errors, traces or
+  output. A reply containing `<think>` is rejected, not cleaned up. HTTP 429 and 498 are retried only
+  within the plan's bounded policy; `Retry-After` is not read. No streaming or proxy. **Not verified:** a
+  successful call against the real API (only a real HTTP 401 from a fake key, and a faked transport);
+  the opt-in live test is `RUN_LIVE_GROQ=1 RUN_LIVE_GROQ_KEY=... uv run pytest -m live`.
 - Ingested files are treated as data and are never executed.
 
 ## Setup and usage
@@ -109,7 +118,7 @@ secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and
 
 ## Roadmap (summary)
 
-Next: v0.6.2 real Groq client (planned, not started), then a review of the known items (lockfile
+Next: a review of the known items (lockfile
 ingestion, secret detection, viewer, trace-store, provider and orchestrator limits) before v0.7.0 semantic
 retrieval (v0.6.1 Ollama client is merged; tag pending), v0.8.0 experience graph, v0.9.0
 evidence-aware retrieval, v1.0.0 end-to-end prototype. See `ROADMAP.md`.

@@ -40,7 +40,7 @@ while tracking their source, validity, confidence, and conflicts.
 - Model Provider Interface
   Route model requests to configured providers, including Groq and Ollama where available.
   Protocol and error types (v0.4.0) plus a real Ollama client (v0.6.1, ADR-0012: `providers/ollama.py`, stdlib transport
-  `providers/http.py`, `providers/factory.py`). No Groq client yet; planned for v0.6.2 (ADR-0013), before v0.7.0.
+  `providers/http.py`, `providers/factory.py`). Groq client in v0.6.2 (ADR-0013: `providers/groq.py`, shared mapping `providers/errors.py`).
 - Episodic Trace Store
   Preserve task executions, model/provider details, tool activity, outputs, and outcomes.
   Implemented in v0.6.0 as `src/cognitive_mesh/traces/` (ADR-0011): SQLite via stdlib `sqlite3` (private to
