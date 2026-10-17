@@ -6,11 +6,11 @@ specialized agents, and keeps traceable memory of what it did and why.
 
 > **Status: early development.** Only the foundation, application ingestion, a dependency
 > graph, the agent interfaces, (v0.5.0) a basic orchestrator, (v0.6.0) a SQLite store for run
-> traces, (v0.6.1) a real Ollama client, (v0.6.2) a Groq client, (v0.7.0) semantic search over stored traces and (v0.8.0) an experience graph exist. Retrieved experience is not yet used by any
+> traces, (v0.6.1) a real Ollama client, (v0.6.2) a Groq client, (v0.7.0) semantic search over stored traces and (v0.8.0) an experience graph and (v0.9.0) evidence-aware recall exist. Retrieved experience is not yet used by any
 > agent or task.
 > This README is updated with every version; the roadmap is not evidence that a feature exists.
 
-## What works today (v0.8.0)
+## What works today (v0.9.0)
 
 | Version | Capability | Status |
 |---|---|---|
@@ -26,6 +26,7 @@ specialized agents, and keeps traceable memory of what it did and why.
 | v0.6.2 | Real Groq client (`qwen/qwen3.8-27b` by default, preview model; reasoning off; shared error mapping with the Ollama client; key never in errors/traces/output), `COGMESH_GROQ_MODEL` / `COGMESH_GROQ_REASONING_EFFORT` | Criteria pass locally, including a real Groq run (`explain_file` succeeded, `model_unverified`) and the opt-in live test; merged to main and pushed; CI run 39031027771 on the merge passed; not tagged |
 | v0.7.0 | Semantic memory retrieval: final attempts of finished runs are embedded (`all-MiniLM-L6-v2`, pinned revision) into a ChromaDB index; `memory index` / `memory search`; every hit is re-checked against its trace row; an index from another model is refused | Criteria pass locally, including a real-model run; merged to main and pushed; CI runs 39043661141 and 39043771776 passed; tagged `v0.7.0` |
 | v0.8.0 | Experience graph: runs, steps, final attempts, entities and claims from deterministic outputs, each edge with a source reference; persisted in its own SQLite file with a content hash; `experience build\|show\|claims\|check`; elements whose trace row is missing, changed or unreadable are marked and hidden unless asked for | Criteria pass locally, including a run of the real CLI from an empty directory; merged to main and pushed; CI runs 39053270212 and 39053504333 passed; tagged `v0.8.0` (tag run 39053616562 passed) |
+| v0.9.0 | Evidence-aware retrieval: `recall` follows vector hits into the experience graph and reports each claim with a status (`validated`, `supported`, `stale`, `conflicting`, `unsupported`), the observations and reviews behind it, and both sides of any conflict; raw and unconfirmed experiences are listed separately; `experience review` records a person's verdict; needs no model provider | Criteria pass locally, including a run of the real CLI with the real embedding model; on branch `feature/v0.9.0-evidence-aware-retrieval`, not merged or tagged |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
@@ -96,7 +97,20 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
   observation is kept. Elements whose trace row is gone, changed or unreadable stay in the file, are marked,
   and are hidden unless `--include-unverified` is given. The file is refused if its hash, schema or edges do
   not check out. Not verified: very large trace databases (the whole graph is built in memory), concurrent
-  builders, macOS, a fresh clone. There is no conflict detection, validation or confidence yet (v0.9.0).
+  builders, macOS, a fresh clone.
+- Evidence-aware retrieval (v0.9.0, ADR-0016): there is no confidence number. Each claim gets one status with a
+  fixed meaning, computed on every call per code version (source fingerprint) from observations whose trace
+  row still checks out, reviews, and, with `--root DIR`, a re-derivation of the claim from the current source.
+  `validated` means the claim holds for that one code version by a stated method (the same analyzer derives it
+  again, or a person confirmed it); it is **not** proof of truth, and the re-derivation is not independent of
+  the analyzer that produced the claim. A complete listing that lacks a claim contradicts it: the same code
+  version gives `conflicting`, another version is shown as a difference across versions. Truncated listings
+  never contradict. Without `--root` currency is `unknown`. Similarity, repetition and model output never change
+  a status; model-written and failed experiences stay in a separate raw group. Reviews live in their own
+  append-only SQLite file; `--by` is an unauthenticated label. The graph file has format 2: rebuild older files
+  with `experience build`. The graph does not record which application a run analysed, so equal node ids from
+  different applications merge and differ only by fingerprint. Only two kinds of claim exist. Not verified:
+  very large traces, concurrent reviewers, macOS, a fresh clone, CI.
 - Ingested files are treated as data and are never executed.
 
 ## Setup and usage
@@ -130,16 +144,19 @@ uv run cognitive-mesh experience build --db FILE --graph FILE [--json]   # needs
 uv run cognitive-mesh experience claims --db FILE --graph FILE [--include-unverified] [--json]
 uv run cognitive-mesh experience show NODE_ID --db FILE --graph FILE [--transitive] [--incoming] [--include-unverified] [--json]
 uv run cognitive-mesh experience check --db FILE --graph FILE [--json]
+uv run cognitive-mesh experience claims --db FILE --graph FILE [--reviews FILE] [--root DIR] [--json]   # adds evidence status
+uv run cognitive-mesh experience review CLAIM_ID --verdict confirmed|rejected --note TEXT --by NAME --root DIR --graph FILE --reviews FILE [--json]
+uv run cognitive-mesh recall "QUERY" --db FILE --index DIR --graph FILE [--reviews FILE] [--root DIR] [--k N] [--min-similarity X] [--json]   # needs no provider
 ```
 
 Exit codes: 0 ok, 2 configuration or usage error, 3 unusable ingestion root, 4 unknown graph node,
-5 output file could not be written, 6 invalid or unreadable plan, 7 task failed or incomplete, 8 trace store error or malformed trace, 9 unknown trace run id, 11 memory index missing, unusable or built with another model, 12 experience graph file missing or unusable, 13 unknown experience graph node, 14 `experience check` found trace sources that no longer match.
+5 output file could not be written, 6 invalid or unreadable plan, 7 task failed or incomplete, 8 trace store error or malformed trace, 9 unknown trace run id, 11 memory index missing, unusable or built with another model, 12 experience graph file missing or unusable, 13 unknown experience graph node, 14 graph sources not confirmed (`experience check`), 15 reviews file missing or unusable, or a review that was refused, 14 `experience check` found trace sources that no longer match.
 Configuration comes from the environment or an ignored `.env` (copy `.env.example`); never commit
 secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and run in a fresh venv on Windows; not published, not run in CI). The package version is derived from git tags (hatch-vcs): a build at tag `vX.Y.Z` is `X.Y.Z`, later commits are `X.Y.(Z+1).devN`, and a checkout without tags is `0.1.devN`.
 
 ## Project layout
 
-- `src/cognitive_mesh/` - `config`, `cli`, `ingestion/`, `agents/` (interface, contracts, roles, registry), `orchestrator/` (plans, ordering, runner), `traces/` (SQLite trace store, recorder), `memory/` (eligible documents, embedder, ChromaDB index), `providers/` (model client protocol, Ollama client, stdlib HTTP transport), `graph/` (JS/TS parsing isolated in `graph/js_parse.py`; visualization in `graph/view.py`, `render_mermaid.py`, `render_html.py`)
+- `src/cognitive_mesh/` - `config`, `cli`, `ingestion/`, `agents/` (interface, contracts, roles, registry), `orchestrator/` (plans, ordering, runner), `traces/` (SQLite trace store, recorder), `memory/` (eligible documents, embedder, ChromaDB index), `retrieval/` (evidence-aware recall), `providers/` (model client protocol, Ollama client, stdlib HTTP transport), `graph/` (JS/TS parsing isolated in `graph/js_parse.py`; visualization in `graph/view.py`, `render_mermaid.py`, `render_html.py`)
 - `tests/` - pytest suite; fixtures in `tests/fixtures/` (`sample_app`, `dep_app`, `js_app`)
 - `docs/adr/` - architecture decision records; `docs/DETAILED_ROADMAP.md` - per-version criteria
 - `memory-bank/` - agent-facing project record (brief, architecture, progress, active context)
@@ -147,7 +164,7 @@ secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and
 
 ## Roadmap (summary)
 
-v0.7.0 (semantic retrieval) and v0.8.0 (experience graph) are merged and tagged. Next: v0.9.0 evidence-aware retrieval, v1.0.0 end-to-end prototype. See `ROADMAP.md`.
+v0.7.0 (semantic retrieval) and v0.8.0 (experience graph) are merged and tagged. v0.9.0 (evidence-aware retrieval) is implemented on a feature branch and awaits review. Next: v1.0.0 end-to-end prototype. See `ROADMAP.md`.
 
 ## Principles
 

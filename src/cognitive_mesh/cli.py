@@ -46,7 +46,12 @@ from cognitive_mesh.traces import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from cognitive_mesh.experience import ExperienceGraph, SourceReport
+    from cognitive_mesh.experience.assess import ClaimAssessment
+    from cognitive_mesh.experience.current import CurrentSource
+    from cognitive_mesh.experience.reviews import Review
     from cognitive_mesh.experience.store import LoadedGraph
     from cognitive_mesh.memory import Embedder
 
@@ -64,6 +69,7 @@ EXIT_MEMORY_ERROR = 11
 EXIT_EXPERIENCE_ERROR = 12
 EXIT_EXPERIENCE_NODE_NOT_FOUND = 13
 EXIT_EXPERIENCE_SOURCES = 14
+EXIT_REVIEW_STORE_ERROR = 15
 MAX_PLAN_BYTES = 256 * 1024
 DEFAULT_MIN_SIMILARITY = 0.2  # from one live run on 3 documents (ADR-0014); a rough starting point
 
@@ -134,6 +140,26 @@ def _build_parser() -> argparse.ArgumentParser:
         cmd.add_argument("--db", type=Path, required=True, metavar="FILE", help="trace database")
         cmd.add_argument("--index", type=Path, required=True, metavar="DIR", help="index directory")
         cmd.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
+    recall = sub.add_parser(
+        "recall", help="find past experience by meaning, with the evidence behind each claim"
+    )
+    recall.add_argument("query", help="what to look for, in plain words")
+    recall.add_argument("--db", type=Path, required=True, metavar="FILE", help="trace database")
+    recall.add_argument("--index", type=Path, required=True, metavar="DIR", help="index directory")
+    recall.add_argument("--graph", type=Path, required=True, metavar="FILE", help="graph file")
+    recall.add_argument("--reviews", type=Path, metavar="FILE", help="reviews file (optional)")
+    recall.add_argument(
+        "--root", type=Path, metavar="DIR", help="application directory: check claims against it"
+    )
+    recall.add_argument("--k", type=_positive_int, default=5, help="at most this many hits")
+    recall.add_argument(
+        "--min-similarity",
+        type=float,
+        default=DEFAULT_MIN_SIMILARITY,
+        metavar="X",
+        help="drop hits below this cosine similarity, 0 to 1",
+    )
+    recall.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
     experience = sub.add_parser("experience", help="build and query the experience graph")
     exp_sub = experience.add_subparsers(dest="experience_command", required=True)
     exp_build = exp_sub.add_parser("build", help="build the graph file from the trace database")
@@ -143,6 +169,28 @@ def _build_parser() -> argparse.ArgumentParser:
     exp_show.add_argument("--incoming", action="store_true", help="follow edges backwards")
     exp_claims = exp_sub.add_parser("claims", help="list claims with their evidence counts")
     exp_check = exp_sub.add_parser("check", help="verify the graph file and re-check its sources")
+    exp_claims.add_argument(
+        "--reviews", type=Path, metavar="FILE", help="reviews file: include people's verdicts"
+    )
+    exp_claims.add_argument(
+        "--root",
+        type=Path,
+        metavar="DIR",
+        help="application directory: check claims against it now",
+    )
+    exp_review = exp_sub.add_parser("review", help="record a person's verdict on a claim")
+    exp_review.add_argument("claim_id", help="a claim id, e.g. claim:HASH")
+    exp_review.add_argument("--verdict", choices=("confirmed", "rejected"), required=True)
+    exp_review.add_argument("--note", required=True, help="why; stored as data, secrets redacted")
+    exp_review.add_argument("--by", required=True, metavar="NAME", help="unauthenticated label")
+    exp_review.add_argument(
+        "--root", type=Path, required=True, metavar="DIR", help="the application as reviewed"
+    )
+    exp_review.add_argument("--graph", type=Path, required=True, metavar="FILE", help="graph file")
+    exp_review.add_argument(
+        "--reviews", type=Path, required=True, metavar="FILE", help="reviews file (created)"
+    )
+    exp_review.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
     for cmd in (exp_show, exp_claims):
         cmd.add_argument(
             "--include-unverified",
@@ -566,17 +614,88 @@ def _run_memory(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def _run_experience(args: argparse.Namespace) -> int:
-    from cognitive_mesh.experience import ExperienceGraphError, ExperienceNodeNotFoundError
+def _run_recall(args: argparse.Namespace) -> int:
+    return _guarded(lambda: _recall(args))
 
+
+def _recall(args: argparse.Namespace) -> int:
+    """Needs no model provider and reads no config; only the embedding model is loaded."""
+    from cognitive_mesh.experience import store as graph_store
+    from cognitive_mesh.memory import MemoryIndex
+    from cognitive_mesh.retrieval import recall
+
+    loaded = graph_store.load(args.graph)
+    reviews, current = _evidence_inputs(args)
+    with TraceStore.open_existing(args.db) as store:
+        index = MemoryIndex.open_existing(args.index, _make_embedder())
+        found = recall(
+            args.query,
+            index,
+            store,
+            loaded.snapshot,
+            reviews=reviews,
+            current=current,
+            k=args.k,
+            min_similarity=args.min_similarity,
+        )
+    if args.as_json:
+        print(json.dumps(found.model_dump(mode="json"), indent=2))
+        return EXIT_OK
+    if current is None:
+        print("no --root given: whether claims are current is unknown")
+    else:
+        print(f"checked against the application at code version {current.fingerprint[:12]}")
+    if found.claims:
+        print(f"claims ({len(found.claims)}):")
+    for item in found.claims:
+        a = item.assessment
+        print(f"  [{a.status.value}] {_printable(a.name)}")
+        for v in item.retrieved_via:
+            print(f"    retrieved via {_printable(v.doc_id)} (similarity {v.similarity:.3f})")
+        _print_assessment(a)
+    if found.experiences_without_claims:
+        print(f"raw experiences without claims ({len(found.experiences_without_claims)}):")
+    for raw in found.experiences_without_claims:
+        print(
+            f"  [{raw.kind}] {raw.similarity:.3f}  {_printable(raw.run_id)} "
+            f"step={_printable(raw.step_id)} attempt={raw.attempt_no} {_printable(raw.capability)}"
+        )
+        print(f"    {raw.label}")
+    if found.unconfirmed:
+        print(f"not confirmed ({len(found.unconfirmed)}), never offered as support:")
+    for miss in found.unconfirmed:
+        print(
+            f"  {miss.similarity:.3f}  {_printable(miss.run_id)} step={_printable(miss.step_id)} "
+            f"attempt={miss.attempt_no}  NOT CONFIRMED ({miss.reason})"
+        )
+    if found.message:
+        print(found.message)
+    if found.dropped_weak:
+        print(f"{found.dropped_weak} weak match(es) below {found.min_similarity} dropped")
+    for note in found.notes:
+        print(note)
+    return EXIT_OK
+
+
+def _run_experience(args: argparse.Namespace) -> int:
     handlers = {
         "build": _experience_build,
         "show": _experience_show,
         "claims": _experience_claims,
         "check": _experience_check,
+        "review": _experience_review,
     }
+    return _guarded(lambda: handlers[args.experience_command](args))
+
+
+def _guarded(action: "Callable[[], int]") -> int:
+    """Run a graph/evidence command and map its known failures to exit codes."""
+    from cognitive_mesh.experience import ExperienceGraphError, ExperienceNodeNotFoundError
+    from cognitive_mesh.experience.reviews import ReviewStoreError
+    from cognitive_mesh.memory import MemoryIndexError
+
     try:
-        return handlers[args.experience_command](args)
+        return action()
     except TraceStoreError as exc:
         print(_printable(str(exc)), file=sys.stderr)
         return EXIT_TRACE_STORE_ERROR
@@ -586,6 +705,104 @@ def _run_experience(args: argparse.Namespace) -> int:
     except ExperienceNodeNotFoundError as exc:
         print(_printable(str(exc)), file=sys.stderr)
         return EXIT_EXPERIENCE_NODE_NOT_FOUND
+    except ReviewStoreError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_REVIEW_STORE_ERROR
+    except IngestionError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_INGESTION_ERROR
+    except MemoryIndexError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_MEMORY_ERROR
+    except ValueError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+
+
+def _evidence_inputs(
+    args: argparse.Namespace,
+) -> "tuple[list[Review], CurrentSource | None]":
+    """Optional reviews and current source for evidence status. Failures raise to `_guarded`."""
+    from cognitive_mesh.experience.current import observe_current
+    from cognitive_mesh.experience.reviews import ReviewStore
+
+    reviews: list[Review] = []
+    if args.reviews is not None:
+        with ReviewStore.open_existing(args.reviews) as review_store:
+            reviews = review_store.list_reviews()
+    current = observe_current(args.root) if args.root is not None else None
+    return reviews, current
+
+
+def _fp(fingerprint: str | None) -> str:
+    return fingerprint[:12] if fingerprint else "unrecorded"
+
+
+def _print_assessment(a: "ClaimAssessment", indent: str = "    ") -> None:
+    """Everything behind a status: both sides, the reviews, and what the status means."""
+    c = a.counts
+    print(
+        f"{indent}support: {c.supporting_ok} confirmed, {c.supporting_not_ok} not confirmed, "
+        f"{c.distinct_fingerprints} code version(s); against: {c.contradicting_same_version} "
+        f"same version, {c.contradicting_other_version} other or unrecorded version"
+    )
+    for s in a.supporting:
+        print(
+            f"{indent}supported by {_printable(s.doc_id or s.attempt_id)} "
+            f"version={_fp(s.fingerprint)} source={s.source.value}"
+        )
+    for x in a.contradicting:
+        kind = "same version" if x.same_version else "other or unrecorded version"
+        print(
+            f"{indent}contradicted by {_printable(x.doc_id or x.attempt_id)} "
+            f"(complete listing without it) version={_fp(x.fingerprint)} {kind}"
+        )
+    for r in a.reviews:
+        where = "current" if r.fingerprint == a.current_fingerprint else "other version"
+        print(
+            f"{indent}review #{r.id} {r.verdict.value} ({where}, version={_fp(r.fingerprint)}) "
+            f"by {_printable(r.reviewer)}: {_printable(r.note)}"
+        )
+    if a.rederivation is not None:
+        print(f"{indent}re-derived from the current source: {a.rederivation.holding.value}")
+        for e in a.rederivation.evidence:
+            line = f":{e.line}" if e.line else ""
+            print(f"{indent}  {_printable(e.path)}{line} ({e.rule}) sha256={e.sha256[:12]}")
+    if a.validated_by:
+        print(f"{indent}validated by: {', '.join(a.validated_by)}")
+    print(f"{indent}{a.status.value}: {a.meaning}")
+
+
+def _experience_review(args: argparse.Namespace) -> int:
+    from cognitive_mesh.experience import ExperienceNodeNotFoundError, NodeKind
+    from cognitive_mesh.experience.current import observe_current
+    from cognitive_mesh.experience.reviews import ReviewStore, Verdict
+
+    graph = _load_graph(args.graph)
+    node = graph.node(args.claim_id)
+    if node.kind is not NodeKind.CLAIM:
+        raise ExperienceNodeNotFoundError("the node is not a claim")
+    current = observe_current(args.root)
+    with ReviewStore.create(args.reviews) as review_store:
+        review = review_store.add(
+            node.id, current.fingerprint, Verdict(args.verdict), args.note, args.by
+        )
+    if args.as_json:
+        print(json.dumps(review.model_dump(mode="json"), indent=2))
+    else:
+        print(
+            f"review #{review.id} recorded: {review.verdict.value} {_printable(node.name)} "
+            f"for code version {review.fingerprint[:12]}"
+        )
+        print("a review is a person's assertion, unauthenticated; it does not prove the claim")
+    return EXIT_OK
+
+
+def _load_graph(path: Path) -> "ExperienceGraph":
+    from cognitive_mesh.experience import ExperienceGraph
+    from cognitive_mesh.experience import store as graph_store
+
+    return ExperienceGraph(graph_store.load(path).snapshot)
 
 
 def _experience_open(
@@ -670,9 +887,14 @@ def _experience_show(args: argparse.Namespace) -> int:
 
 
 def _experience_claims(args: argparse.Namespace) -> int:
-    from cognitive_mesh.experience.models import CLAIM_NOTE, SourceStatus
+    from cognitive_mesh.experience.assess import STATUS_MEANING, assess_claims, orphaned_reviews
+    from cognitive_mesh.experience.models import CLAIM_NOTE, REPETITION_NOTE, SourceStatus
 
     _, graph, report = _experience_open(args)
+    reviews, current = _evidence_inputs(args)
+    assessed = assess_claims(graph, report, reviews, current)
+    orphans = orphaned_reviews(graph, reviews)
+    details = args.reviews is not None or args.root is not None
     rows = []
     versions: list[int] = []
     hidden = 0
@@ -696,25 +918,44 @@ def _experience_claims(args: argparse.Namespace) -> int:
                 "observations": len(evidence),
                 "still_confirmed": report.claim_support[claim.id],
                 "source_fingerprints": prints,
+                "evidence_status": assessed[claim.id].status.value,
+                "assessment": assessed[claim.id].model_dump(mode="json"),
             }
         )
         versions.append(len(prints))
+    shown = {a.status for a in assessed.values() if a.claim_id in {r["id"] for r in rows}}
+    meanings = {s.value: STATUS_MEANING[s] for s in sorted(shown, key=lambda s: s.value)}
     if args.as_json:
-        print(
-            json.dumps({"claims": rows, "hidden_unverified": hidden, "note": CLAIM_NOTE}, indent=2)
-        )
+        payload = {
+            "claims": rows,
+            "hidden_unverified": hidden,
+            "current_fingerprint": current.fingerprint if current else None,
+            "orphaned_reviews": [r.model_dump(mode="json") for r in orphans],
+            "status_meanings": meanings,
+            "note": CLAIM_NOTE,
+        }
+        print(json.dumps(payload, indent=2))
         return EXIT_OK
     for row, n_versions in zip(rows, versions, strict=True):
+        a = assessed[str(row["id"])]
         print(
             f"{row['status']}  observed {row['observations']}x "
             f"({row['still_confirmed']} still confirmed, {n_versions} "
-            f"code version(s))  {_printable(str(row['name']))}"
+            f"code version(s))  {_printable(str(row['name']))}  [{a.status.value}]"
         )
+        if details or a.status.value == "conflicting":
+            _print_assessment(a)
     if hidden:
         print(f"{hidden} claim(s) hidden because their trace source is not confirmed")
     if not rows and not hidden:
         print("no claims")
-    print(CLAIM_NOTE)
+    for r in orphans:
+        print(f"orphaned review #{r.id}: its claim is not in the graph ({_printable(r.claim_id)})")
+    if current is None:
+        print("no --root given: whether claims are current is unknown")
+    for label, meaning in meanings.items():
+        print(f"{label}: {meaning}")
+    print(REPETITION_NOTE if details else CLAIM_NOTE)
     return EXIT_OK
 
 
@@ -767,6 +1008,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_memory(args)
     if args.command == "experience":
         return _run_experience(args)
+    if args.command == "recall":
+        return _run_recall(args)
     if args.command == "agents":
         return _run_agents(args.as_json)
     if args.command == "graph":

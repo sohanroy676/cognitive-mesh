@@ -50,6 +50,11 @@ while tracking their source, validity, confidence, and conflicts.
   Opt-in (`run --trace-db`); traces are raw records and nothing retrieves them yet.
 - Memory Validation
   Evaluate whether an experience is eligible for promotion into reusable knowledge.
+  Implemented in v0.9.0 (ADR-0016) as `experience/assess.py` (pure status rules), `current.py` (re-derive a
+  claim from the application as it is now) and `reviews.py` (append-only SQLite file of people's verdicts).
+  A claim is never promoted by storing it: its status (`validated`, `supported`, `stale`, `conflicting`,
+  `unsupported`) is computed per code version on every call. Similarity, repetition and model output never
+  validate.
 - Vector Retrieval
   Use ChromaDB and embeddings to find semantically relevant past experiences.
   Implemented in v0.7.0 (merged, tagged) as `src/cognitive_mesh/memory/` (ADR-0014): the final attempt of each
@@ -60,10 +65,13 @@ while tracking their source, validity, confidence, and conflicts.
   Use NetworkX to represent claims, entities, relationships, provenance, and conflicts.
   Experiences, entities and unvalidated claims are implemented in v0.8.0 (merged, tagged) as
   `src/cognitive_mesh/experience/` (ADR-0015): built from the trace database, persisted in a separate SQLite
-  file with a content hash, sources re-checked on load. Conflicts, confidence and validation are not
-  implemented (v0.9.0).
+  file with a content hash, sources re-checked on load. v0.9.0 (ADR-0016) adds listing coverage (graph
+  format 2); claim statuses, conflicts and reviews are computed on top of it (see Memory Validation).
 - Context Assembly
   Combine retrieved evidence according to relevance, confidence, validity, and conflict status.
+  Partly implemented in v0.9.0 as `src/cognitive_mesh/retrieval/` (`recall`): vector hits are followed into
+  the graph; claims, raw experiences and unconfirmed hits are separate groups with the supporting and
+  contradicting records listed. It needs no model provider. No agent or task consumes it yet (v1.0.0).
 - Outcome Evaluation
   Evaluate task results and feed new evidence into memory and model-performance records.
 

@@ -6,7 +6,7 @@ only from successful steps whose output is deterministic; model output never bec
 """
 
 import hashlib
-from typing import Final
+from typing import Final, Literal
 
 from pydantic import ValidationError
 
@@ -143,7 +143,16 @@ def _add_run(acc: _Accumulator, trace: RunTrace, diagnostics: list[ExperienceDia
                 ref=ref.model_copy(update={"attempt_no": None, "text_sha256": None}),
             )
         )
-        acc.node(ExpNode(id=attempt_node, kind=NodeKind.ATTEMPT, name=doc.doc_id, ref=ref))
+        result = final.result
+        acc.node(
+            ExpNode(
+                id=attempt_node,
+                kind=NodeKind.ATTEMPT,
+                name=doc.doc_id,
+                ref=ref,
+                coverage=_coverage(step.capability, result),
+            )
+        )
         acc.edge(
             run_node,
             step_node,
@@ -157,9 +166,27 @@ def _add_run(acc: _Accumulator, trace: RunTrace, diagnostics: list[ExperienceDia
         agent = f"agent:{_clip(final.agent_id)}"
         acc.node(ExpNode(id=agent, kind=NodeKind.AGENT, name=final.agent_id))
         acc.edge(attempt_node, agent, EdgeKind.RAN_BY, ref)
-        result = final.result
         if isinstance(result, AgentSuccess) and result.basis is Basis.DETERMINISTIC:
             _add_claims(acc, trace, step.capability, result, attempt_node, ref, diagnostics)
+
+
+def _coverage(capability: str, result: object) -> Literal["complete", "truncated"] | None:
+    """Whether a deterministic listing was cut off (ADR-0016); None if it says nothing on absence.
+
+    An output that does not match its schema gets None here; `_add_claims` reports it.
+    """
+    if not isinstance(result, AgentSuccess) or result.basis is not Basis.DETERMINISTIC:
+        return None
+    try:
+        if capability == "dependencies_of":
+            truncated = DependenciesOfOutput.model_validate(result.output).truncated
+        elif capability == "unresolved_report":
+            truncated = UnresolvedReportOutput.model_validate(result.output).truncated
+        else:
+            return None
+    except ValidationError:
+        return None
+    return "truncated" if truncated else "complete"
 
 
 def _target(acc: _Accumulator, node_id: str) -> str:
