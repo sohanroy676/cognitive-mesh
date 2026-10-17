@@ -20,7 +20,7 @@ specialized agents, and keeps traceable memory of what it did and why.
 | v0.3.2 | Graph visualization: Mermaid text or self-contained HTML/SVG, with evidence and visible truncation | Done; merged to main, CI run 39021177652 passed |
 | v0.4.0 | Agent architecture: common interface, two roles, capability declarations, explicit failure results, provider protocol (fake clients only) | Criteria pass locally; merged to main; Done, tagged `v0.4.0`; CI runs 39023604187 and 39024302873 passed |
 | v0.5.0 | Orchestrator: validated task plans, dependency ordering, capability-based assignment, explicit failed/blocked/incomplete results, bounded retries, run budget, `run` command | Done, tagged `v0.5.0`; CI runs 39024871768 and 39025436259 passed |
-| v0.6.0 | Episodic trace store: SQLite persistence of orchestrator runs (steps, attempts, ids, model info, timestamps), redaction before storing, success/failed/incomplete/interrupted states, `run --trace-db`, `traces list/show` | Criteria pass locally; merged to main and pushed; CI result on the merge not yet recorded; not tagged |
+| v0.6.0 | Episodic trace store: SQLite persistence of orchestrator runs (steps, attempts, ids, model info, timestamps), redaction before storing, success/failed/incomplete/interrupted states, `run --trace-db`, `traces list/show` | Criteria pass locally; merged to main and pushed; CI run 39026432280 on the merge passed; not tagged |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
@@ -100,7 +100,8 @@ secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and
 
 ## Roadmap (summary)
 
-Next: v0.7.0 semantic retrieval (v0.6.0 trace store is merged, CI result and tag pending), v0.8.0 experience graph, v0.9.0
+Next: v0.6.1 real Ollama client and v0.6.2 real Groq client (both planned, not started), then v0.7.0 semantic
+retrieval (v0.6.0 trace store is merged, CI passed, tag pending), v0.8.0 experience graph, v0.9.0
 evidence-aware retrieval, v1.0.0 end-to-end prototype. See `ROADMAP.md`.
 
 ## Principles
