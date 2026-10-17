@@ -7,6 +7,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Added
 - **traces:** Add versioned schema migrations to the trace store
+- **providers:** Require opt-in before sending content to Groq
 
 ### Documentation
 - Record CI-on-tags and trace-store migrations

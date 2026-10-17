@@ -56,3 +56,14 @@ secrets by file name only and treated only `.py` as source. This ADR replaces th
 - Lockfiles are excluded as generated; v0.3.0 may need to revisit that for dependency resolution.
 - Ingested records are in-memory only; persistence arrives with the trace store (v0.6.0).
 - Only local directories are supported. No archives, git URLs or remote sources.
+
+## Amendment 2026-10-17: more secret rules and an entropy check
+Accepted by the user before coding. Still best effort, not exhaustive.
+- New format rules: `google_api_key`, `stripe_key`, `npm_token`, `jwt`, and `url_credentials` (only the
+  password in `scheme://user:password@host` is replaced).
+- New `high_entropy_token`: an unbroken run of 32 or more base64/URL-safe characters with lower case,
+  upper case and a digit, Shannon entropy of at least 4.2 bits per character, and no alphabet-like run of
+  six consecutive characters. Hex-only runs (hashes) are never flagged. Named rules win over it.
+- Known costs: it can redact an innocent random id or a path component (seen once in this repository's
+  own `.claude` settings), and it misses short, low-entropy or hex-only secrets.
+- Reports still hold only the rule name and line, never the value.
