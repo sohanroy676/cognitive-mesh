@@ -17,6 +17,7 @@ GAP_Y = 76
 MARGIN = 40
 PER_ROW = 10
 _LABEL_CLIP = 30
+_SWEEPS = 6  # alternating down/up passes of the crossing reduction
 
 _CSS = """
 body{font-family:sans-serif;margin:16px;background:#ffffff;color:#111827}
@@ -77,20 +78,75 @@ def _fmt(value: object) -> str:
     return str(value)
 
 
+def _neighbors(edges: tuple[ViewEdge, ...]) -> dict[str, list[str]]:
+    near: dict[str, list[str]] = {}
+    for e in edges:
+        if e.source_key != e.target_key:
+            near.setdefault(e.source_key, []).append(e.target_key)
+            near.setdefault(e.target_key, []).append(e.source_key)
+    return near
+
+
+def order_layers(
+    layers: tuple[tuple[str, ...], ...], edges: tuple[ViewEdge, ...]
+) -> list[list[str]]:
+    """Reorder nodes inside each layer to cut edge crossings (barycenter sweeps, deterministic).
+
+    Layer membership never changes, only the order within a layer. Ties keep the incoming order.
+    """
+    order = [list(layer) for layer in layers]
+    near = _neighbors(edges)
+    index = {key: i for layer in order for i, key in enumerate(layer)}
+    where = {key: n for n, layer in enumerate(order) for key in layer}
+    for sweep in range(_SWEEPS):
+        sequence = range(1, len(order)) if sweep % 2 == 0 else range(len(order) - 2, -1, -1)
+        for n in sequence:
+            ref = n - 1 if sweep % 2 == 0 else n + 1
+
+            def center(key: str, ref: int = ref) -> float:
+                pulls = [index[k] for k in near.get(key, []) if where[k] == ref]
+                return sum(pulls) / len(pulls) if pulls else float(index[key])
+
+            order[n].sort(key=lambda key: (center(key), index[key]))
+            for i, key in enumerate(order[n]):
+                index[key] = i
+    return order
+
+
+def crossings(order: list[list[str]], edges: tuple[ViewEdge, ...]) -> int:
+    """Edge crossings between adjacent layers (a measure of how readable the picture is)."""
+    where = {key: (n, i) for n, layer in enumerate(order) for i, key in enumerate(layer)}
+    between: dict[int, list[tuple[int, int]]] = {}
+    for e in edges:
+        (ln, li), (rn, ri) = where[e.source_key], where[e.target_key]
+        if abs(ln - rn) == 1:
+            top, bottom = (li, ri) if ln < rn else (ri, li)
+            between.setdefault(min(ln, rn), []).append((top, bottom))
+    total = 0
+    for pairs in between.values():
+        for i, (a1, b1) in enumerate(pairs):
+            for a2, b2 in pairs[i + 1 :]:
+                if (a1 - a2) * (b1 - b2) < 0:
+                    total += 1
+    return total
+
+
 def _positions(view: GraphView) -> tuple[dict[str, tuple[int, int]], int, int]:
     """Top-left corner of every node box, plus canvas width and height."""
     pos: dict[str, tuple[int, int]] = {}
-    row = 0
-    widest = 1
-    for layer in view.layers:
+    chunks: list[list[str]] = []
+    for layer in order_layers(view.layers, view.edges):
         for start in range(0, len(layer), PER_ROW):
-            chunk = layer[start : start + PER_ROW]
-            widest = max(widest, len(chunk))
-            for col, key in enumerate(chunk):
-                pos[key] = (MARGIN + col * (BOX_W + GAP_X), MARGIN + row * (BOX_H + GAP_Y))
-            row += 1
+            chunks.append(layer[start : start + PER_ROW])
+    widest = max((len(c) for c in chunks), default=1)
+    step = BOX_W + GAP_X
+    for row, chunk in enumerate(chunks):
+        shift = (widest - len(chunk)) * step // 2  # center short rows under the widest one
+        for col, key in enumerate(chunk):
+            pos[key] = (MARGIN + shift + col * step, MARGIN + row * (BOX_H + GAP_Y))
+    rows = len(chunks)
     width = 2 * MARGIN + widest * BOX_W + (widest - 1) * GAP_X + 60  # room for self-loops
-    height = 2 * MARGIN + max(row, 1) * BOX_H + max(row - 1, 0) * GAP_Y
+    height = 2 * MARGIN + max(rows, 1) * BOX_H + max(rows - 1, 0) * GAP_Y
     return pos, width, height
 
 

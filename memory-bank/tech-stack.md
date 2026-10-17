@@ -104,6 +104,7 @@ uv run cognitive-mesh graph tests/fixtures/js_app --deps-of module:src/index.ts 
 uv run cognitive-mesh graph tests/fixtures/js_app --deps-of nope   # exit 4
 uv run cognitive-mesh graph tests/fixtures/dep_app --format mermaid          # exit 0, flowchart text
 uv run cognitive-mesh graph tests/fixtures/js_app --format html --output FILE   # exit 0, writes ASCII/LF HTML
+uv run cognitive-mesh graph tests/fixtures/js_app --format html --output FILE   # re-run 2026-10-17 after the layout change; screenshot in headless Chrome and Edge (both Chromium) reviewed
 uv run cognitive-mesh graph tests/fixtures/dep_app --format html --max-nodes 3  # exit 0, truncation banner + stderr notice
 uv run cognitive-mesh graph tests/fixtures/dep_app --format html --json         # exit 2 (usage error)
 uv run cognitive-mesh graph tests/fixtures/dep_app --format html --output missing/dir/x.html   # exit 5
