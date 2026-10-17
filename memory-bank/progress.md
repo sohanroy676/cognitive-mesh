@@ -23,6 +23,6 @@
 
 ## In progress
 
-- `chore/changelog-git-cliff` awaits push/merge approval. v0.3.2 is done and tagged. Plan v0.4.0 Agent Architecture (ADR-0009) only when the user asks.
+- Nothing in flight. v0.3.2 is done and tagged; `chore/changelog-git-cliff` was merged to main and pushed. Next: confirm CI on main, then plan v0.4.0 Agent Architecture (ADR-0009) in plan mode when the user starts that session.
 - Old branches (incl. `feature/v0.3.1-js-dynamic-imports`, pushed) are kept; local branches are never deleted.
 - Old branch `feature/v0.2.0-application-ingestion` is kept (local branches are never deleted).
