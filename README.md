@@ -33,8 +33,8 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 - JS/TS support adds native dependencies (tree-sitter and two grammars).
 - Visualization (v0.3.2): the HTML layout is naive (edges can cross or overlap on dense graphs). Large
   graphs are truncated with a visible notice (defaults: HTML 300 nodes / 1000 edges, Mermaid 100 / 200),
-  and cycle members are kept before unresolved items. Mermaid output was not checked in any Mermaid
-  renderer; the HTML was viewed only in headless Edge.
+  and cycle members are kept before unresolved items. Mermaid output rendered correctly in mermaid-cli 12.0.0 (one-off manual check, not part of the test
+  suite or CI; other renderers unchecked); the HTML was viewed only in headless Edge.
 - Ingested files are treated as data and are never executed.
 
 ## Setup and usage
@@ -47,6 +47,7 @@ uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy
+uv run git-cliff -o CHANGELOG.md   # regenerate CHANGELOG.md from Conventional Commits; CI fails if stale
 ```
 
 Commands below were run successfully (see `memory-bank/tech-stack.md` for the verified list):
@@ -61,7 +62,7 @@ uv run cognitive-mesh graph PATH --format mermaid|html [--output FILE] [--max-no
 Exit codes: 0 ok, 2 configuration or usage error, 3 unusable ingestion root, 4 unknown graph node,
 5 output file could not be written.
 Configuration comes from the environment or an ignored `.env` (copy `.env.example`); never commit
-secrets. Packaging/build commands have not been run and are TBD.
+secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and run in a fresh venv on Windows; not published, not run in CI). The package version is derived from git tags (hatch-vcs): a build at tag `vX.Y.Z` is `X.Y.Z`, later commits are `X.Y.(Z+1).devN`, and a checkout without tags is `0.1.devN`.
 
 ## Project layout
 

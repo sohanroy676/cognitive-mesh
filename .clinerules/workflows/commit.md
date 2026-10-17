@@ -12,5 +12,7 @@ Steps:
    Ensure the summary line makes sense standalone to someone reading only the changelog later,
    not just someone reading the diff.
 6. Commit. Do not push without explicit approval.
-7. Regenerate CHANGELOG.md from commit history (e.g. via conventional-changelog or git-cliff) —
-   do not hand-write changelog entries.
+7. Regenerate CHANGELOG.md with `uv run git-cliff -o CHANGELOG.md` (git-cliff) — do not hand-write changelog entries —
+   and commit it as `chore(changelog): regenerate`. Do this last: any later commit that is not a
+   merge or `chore(changelog)` makes the file stale and CI fails. At release closeout, use
+   `--tag vX.Y.Z` before the tag exists.

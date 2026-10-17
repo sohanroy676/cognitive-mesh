@@ -59,6 +59,14 @@ jobs:
       - name: Run tests
         run: uv run pytest
 
+      - name: Changelog is up to date
+        run: |
+          uv run git-cliff -o CHANGELOG.md
+          git diff --exit-code CHANGELOG.md || {
+            echo "CHANGELOG.md is stale. Run 'uv run git-cliff -o CHANGELOG.md' and commit it as 'chore(changelog): regenerate'."
+            exit 1
+          }
+
       # Belt-and-suspenders with GitHub's built-in secret scanning.
       # Enable by setting the RUN_SECRET_SCAN repository variable to "true".
       - name: Secret scan

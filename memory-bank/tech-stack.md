@@ -63,11 +63,21 @@ integration credentials.
 - Static type checker: mypy 2.4.0, strict, pydantic plugin; checks `src` and `tests`
 - Commands: `uv run ruff check .`, `uv run ruff format --check .` (drop `--check` to apply), `uv run mypy`
 
+## Changelog
+- Generator: git-cliff 2.14.2 (dev dependency; official orhun/git-cliff), config in `cliff.toml`.
+- Regenerate: `uv run git-cliff -o CHANGELOG.md`; commit as `chore(changelog): regenerate`, as the last commit on a branch. For a release use `--tag vX.Y.Z` before the tag exists.
+- Skipped on purpose: merge commits, `chore(deps)` bumps, `chore(changelog)`, and non-conventional subjects (git-cliff warns "14 commit(s) were skipped"; these are the merge commits).
+- CI step "Changelog is up to date" regenerates and runs `git diff --exit-code CHANGELOG.md`.
+- Verified 2026-10-17 locally: output is deterministic (two runs identical); in a scratch clone, a fresh file gives exit 0 and an added `feat:` commit makes the diff check fail. The CI step itself has not run yet.
+
 ## Build, Run, and Development
 - Install uv (one-time, Windows): `winget install --id=astral-sh.uv -e`
 - Environment setup / install: `uv sync` (CI uses `uv sync --locked`)
 - Application startup: `uv run cognitive-mesh` (also `uv run python -m cognitive_mesh`, exercised by a test)
-- Build or packaging command: TBD (not run)
+- Build: `uv build --out-dir DIR` builds an sdist and a wheel (run 2026-10-17; `dist/` is git-ignored). The wheel installed into a fresh venv and `cognitive-mesh` ran from an empty directory (no config: exit 2; `COGMESH_PROVIDER=ollama`: exit 0; `graph` on a tiny app: exit 0). The sdist holds only the placeholder `.env.example`. Not verified: publishing, other platforms, CI. Versioning: the version comes from git tags via hatch-vcs 0.5.0 (build-time only; MIT, by the hatch author; pulls setuptools-scm from pypa). `pyproject.toml` has `dynamic = ["version"]`, `local_scheme = "no-local-version"`; `cognitive_mesh.__version__` reads `importlib.metadata` (`0+unknown` if not installed). Verified 2026-10-17: a branch build gave `0.3.3.dev10`; in a scratch clone a throwaway tag `v9.9.9` gave exactly `9.9.9` (sdist and wheel); a shallow clone without tags gave `0.1.dev1` with a warning, no failure. An editable install keeps the version computed at `uv sync` time, so re-run `uv sync` after tagging. CI checks out full history, so tags are present; the CI run itself is not yet verified.
+
+### Mermaid check (manual, not in CI)
+Run 2026-10-17 in a scratch directory (nothing added to the repo): `npm install @mermaid-js/mermaid-cli` (12.0.0, MIT, official mermaid-js) with `PUPPETEER_SKIP_DOWNLOAD=1` and a puppeteer config pointing at the installed Edge, then `mmdc -p pp.json -i FILE.mmd -o FILE.svg`. Golden files and a hostile-filename graph rendered (exit 0, node counts matched, no script markup in the SVG, screenshots reviewed). Note: check mmdc's own exit status, not a piped one.
 
 ### Verified commands
 ```
