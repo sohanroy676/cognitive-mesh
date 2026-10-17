@@ -12,13 +12,16 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **graph:** Read uv.lock and package-lock.json for transitive dependencies
 - **orchestrator:** Pass step outputs to later steps and add fallback agents
 - **orchestrator:** Draft a plan from a request with a model
+- **graph:** Reduce edge crossings in the HTML layout
 
 ### Documentation
 - Record CI-on-tags and trace-store migrations
 - Record the pre-v0.7.0 review pass
+- Record lockfiles, data passing, plan drafting and layout
 
 ### Maintenance
 - Run on release tags and check the changelog section
+- **orchestrator:** Cover input references in drafted plans
 
 ## [0.6.2] - 2026-10-17
 
