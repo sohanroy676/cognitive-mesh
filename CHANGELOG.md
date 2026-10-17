@@ -5,9 +5,13 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **traces:** Add SQLite episodic trace store
+
 ### Documentation
 - **adr:** Propose ADR-0011 episodic trace store
 - **adr:** Accept ADR-0011 episodic trace store
+- Record v0.6.0 episodic trace store
 
 ## [0.5.0] - 2026-10-17
 
