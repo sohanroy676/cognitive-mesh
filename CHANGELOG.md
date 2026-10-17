@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.0.0] - 2026-10-17
 
 ### Added
 - **agents:** Add recalled-context pack model
@@ -19,6 +19,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record CI runs and handoff for v0.9.0
 - **adr:** Accept ADR-0017 context supply
 - Record v1.0.0 end-to-end prototype
+- Record v1.0.0 merge and hand off to the next session
 
 ### Maintenance
 - **e2e:** Run the context workflow across separate processes
