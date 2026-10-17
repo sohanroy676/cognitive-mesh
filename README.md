@@ -6,11 +6,11 @@ specialized agents, and keeps traceable memory of what it did and why.
 
 > **Status: early development.** Only the foundation, application ingestion, a dependency
 > graph, the agent interfaces, (v0.5.0) a basic orchestrator, (v0.6.0) a SQLite store for run
-> traces, (v0.6.1) a real Ollama client, (v0.6.2) a Groq client and (v0.7.0) semantic search over stored traces exist. Retrieved experience is not yet used by any
+> traces, (v0.6.1) a real Ollama client, (v0.6.2) a Groq client, (v0.7.0) semantic search over stored traces and (v0.8.0) an experience graph exist. Retrieved experience is not yet used by any
 > agent or task.
 > This README is updated with every version; the roadmap is not evidence that a feature exists.
 
-## What works today (v0.7.0)
+## What works today (v0.8.0)
 
 | Version | Capability | Status |
 |---|---|---|
@@ -25,6 +25,7 @@ specialized agents, and keeps traceable memory of what it did and why.
 | v0.6.1 | Real Ollama client (stdlib HTTP, hard total deadline, every failure mapped to a provider error kind), `COGMESH_OLLAMA_MODEL` / `COGMESH_MODEL_TIMEOUT_S`, `run` uses it only for plans with a model step | Criteria pass locally (including a real `llama3.2` run); merged to main and pushed; CI run 39029734411 on the merge passed; tagged `v0.6.1` (no tag-triggered CI; the tagged merge is covered by run 39031027771) |
 | v0.6.2 | Real Groq client (`qwen/qwen3.8-27b` by default, preview model; reasoning off; shared error mapping with the Ollama client; key never in errors/traces/output), `COGMESH_GROQ_MODEL` / `COGMESH_GROQ_REASONING_EFFORT` | Criteria pass locally, including a real Groq run (`explain_file` succeeded, `model_unverified`) and the opt-in live test; merged to main and pushed; CI run 39031027771 on the merge passed; not tagged |
 | v0.7.0 | Semantic memory retrieval: final attempts of finished runs are embedded (`all-MiniLM-L6-v2`, pinned revision) into a ChromaDB index; `memory index` / `memory search`; every hit is re-checked against its trace row; an index from another model is refused | Criteria pass locally, including a real-model run; merged to main and pushed; CI runs 39043661141 and 39043771776 passed; tagged `v0.7.0` |
+| v0.8.0 | Experience graph: runs, steps, final attempts, entities and claims from deterministic outputs, each edge with a source reference; persisted in its own SQLite file with a content hash; `experience build\|show\|claims\|check`; elements whose trace row is missing, changed or unreadable are marked and hidden unless asked for | Criteria pass locally, including a run of the real CLI from an empty directory; on branch `feature/v0.8.0-experience-graph`, not merged, not tagged |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
@@ -87,6 +88,15 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
   (no `HF_TOKEN` needed). The index holds text derived from traces, so treat its directory like the trace
   database (redaction is pattern-based). Installing now pulls torch (CPU build on Linux) and ChromaDB.
   Not verified: very large traces, concurrent indexers, macOS, a fresh clone (CI ran the tests on Linux; the real model was only run on Windows).
+- Experience graph (v0.8.0, ADR-0015): the graph file is a derived copy of the trace database; rebuild it with
+  `experience build` after new runs. Claims exist only for `dependencies_of` (direct dependencies) and
+  `unresolved_report` outputs of successful deterministic steps; model output and failed steps never become
+  claims, and every claim is `unvalidated`. A claim stated by several runs is one claim with several pieces of
+  evidence: the count shows repetition and is **not** proof, and the code version (source fingerprint) of each
+  observation is kept. Elements whose trace row is gone, changed or unreadable stay in the file, are marked,
+  and are hidden unless `--include-unverified` is given. The file is refused if its hash, schema or edges do
+  not check out. Not verified: very large trace databases (the whole graph is built in memory), concurrent
+  builders, macOS, a fresh clone. There is no conflict detection, validation or confidence yet (v0.9.0).
 - Ingested files are treated as data and are never executed.
 
 ## Setup and usage
@@ -116,10 +126,14 @@ uv run cognitive-mesh traces list --db FILE [--json]
 uv run cognitive-mesh traces show RUN_ID --db FILE [--json]
 uv run cognitive-mesh memory index --db FILE --index DIR [--json]   # needs no provider; first use downloads the model
 uv run cognitive-mesh memory search "QUERY" --db FILE --index DIR [--k N] [--min-similarity X] [--json]
+uv run cognitive-mesh experience build --db FILE --graph FILE [--json]   # needs no provider and does not load the embedding model
+uv run cognitive-mesh experience claims --db FILE --graph FILE [--include-unverified] [--json]
+uv run cognitive-mesh experience show NODE_ID --db FILE --graph FILE [--transitive] [--incoming] [--include-unverified] [--json]
+uv run cognitive-mesh experience check --db FILE --graph FILE [--json]
 ```
 
 Exit codes: 0 ok, 2 configuration or usage error, 3 unusable ingestion root, 4 unknown graph node,
-5 output file could not be written, 6 invalid or unreadable plan, 7 task failed or incomplete, 8 trace store error or malformed trace, 9 unknown trace run id, 11 memory index missing, unusable or built with another model.
+5 output file could not be written, 6 invalid or unreadable plan, 7 task failed or incomplete, 8 trace store error or malformed trace, 9 unknown trace run id, 11 memory index missing, unusable or built with another model, 12 experience graph file missing or unusable, 13 unknown experience graph node, 14 `experience check` found trace sources that no longer match.
 Configuration comes from the environment or an ignored `.env` (copy `.env.example`); never commit
 secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and run in a fresh venv on Windows; not published, not run in CI). The package version is derived from git tags (hatch-vcs): a build at tag `vX.Y.Z` is `X.Y.Z`, later commits are `X.Y.(Z+1).devN`, and a checkout without tags is `0.1.devN`.
 
@@ -133,8 +147,8 @@ secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and
 
 ## Roadmap (summary)
 
-v0.7.0 semantic retrieval is merged to main and tagged `v0.7.0` (CI run 39043661141 passed). Next: v0.8.0 experience graph, v0.9.0
-evidence-aware retrieval, v1.0.0 end-to-end prototype. See `ROADMAP.md`.
+v0.7.0 semantic retrieval is merged and tagged `v0.7.0`. v0.8.0 (experience graph) is implemented on its feature branch and awaits
+merge. Next: v0.9.0 evidence-aware retrieval, v1.0.0 end-to-end prototype. See `ROADMAP.md`.
 
 ## Principles
 

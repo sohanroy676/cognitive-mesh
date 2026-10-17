@@ -73,6 +73,28 @@ Constraints from the project brief and earlier ADRs:
   existing `_printable` helper.
 - **Dependencies.** None added. NetworkX is already a runtime dependency (ADR-0006).
 
+## Amendments (made while implementing, 2026-10-17)
+- **File identity.** A trace database also has `user_version = 1`, so the graph file is marked with
+  `PRAGMA application_id` (`0x434D4547`). `load` and `save` refuse any file without it, and a trace database
+  is never written to.
+- **Hash scope.** The content hash also covers the build diagnostics, so they cannot be removed from the file
+  unnoticed. References on an edge have one canonical order (`ref_key`).
+- **Duplicate edges.** The schema makes `(source, target, kind)` the primary key, so a duplicate edge cannot be
+  stored; repeated evidence is a second row in `edge_refs`. `save` also refuses duplicate nodes and edges.
+- **Extra diagnostics.** `run_not_finished` (an interrupted run adds no nodes) and `unusable_output` (a
+  deterministic output that does not match its schema gives no claims) join `malformed_run` and the three
+  `source_*` codes.
+- **Derived statuses.** Attempts are checked with `memory.documents.verify_source`. A run is `source_missing`,
+  `source_unreadable`, or `source_changed` (it exists but no longer yields documents). A step takes its final
+  attempt's status. A claim is `ok` while at least one attempt that stated it still matches, and the number
+  of matching attempts is reported. Capability, agent and target nodes take the best status among the
+  attempts and claims that point at them.
+- **CLI additions.** `experience show --incoming` follows edges backwards, and `experience check` exits 14 when
+  any source is not `ok` (12 stays for graph file errors, 13 for unknown nodes). `experience build` exits 8 after
+  writing the file when a malformed run was skipped, as `memory index` does.
+- **Lazy import scope.** Only `MemoryIndex` was heavy: `embedder.py` already imports `sentence_transformers`
+  inside its loader. The test covers both modules.
+
 ## Alternatives considered
 - **Tables in the trace database (`MIGRATIONS[1]`).** One file, but the trace database becomes version 2 and
   every existing reader refuses it until upgraded. It also mixes raw records with derived data.
