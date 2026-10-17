@@ -1,0 +1,72 @@
+%% cognitive-mesh dependency graph. Edge A --> B means A depends on B.
+%% Edge numbers (e1, e2, ...) match the evidence comments below; use --format html or --json for full evidence text.
+flowchart TD
+  n0["component: component:."]:::component
+  n1["component: component:web"]:::component
+  n2["module: module:src/dep_app/__init__.py"]:::module
+  n3["module: module:src/dep_app/a.py"]:::module
+  n4["module: module:src/dep_app/b.py"]:::module
+  n5["module: module:src/dep_app/c.py"]:::module
+  n6["module: module:src/dep_app/util.py"]:::module
+  n7["package: pkg:npm:jest"]:::package
+  n8["package: pkg:npm:left-pad"]:::package
+  n9["package: pkg:pypi:flask"]:::package
+  n10["package: pkg:pypi:pytest"]:::package
+  n11["package: pkg:pypi:pyyaml"]:::package
+  n12["package: pkg:pypi:requests"]:::package
+  n13["stdlib: stdlib:json"]:::stdlib
+  n14["stdlib: stdlib:os"]:::stdlib
+  n15["unresolved: unresolved:import:requests"]:::unresolved
+  n16["unresolved: unresolved:import:yaml"]:::unresolved
+  n17["unresolved: unresolved:requirement:-r other.txt"]:::unresolved
+  n18["unresolved: unresolved:requirement:git#43;https://example.invalid/x.git"]:::unresolved
+  n0 -->|"e1 contains"| n2
+  n0 -->|"e2 contains"| n3
+  n0 -->|"e3 contains"| n4
+  n0 -->|"e4 contains"| n5
+  n0 -->|"e5 contains"| n6
+  n0 -->|"e6 declares"| n9
+  n0 -->|"e7 declares"| n10
+  n0 -->|"e8 declares"| n11
+  n0 -->|"e9 declares"| n12
+  n0 -.->|"e10 declares"| n17
+  n0 -.->|"e11 declares"| n18
+  n1 -->|"e12 declares"| n7
+  n1 -->|"e13 declares"| n8
+  n3 ==>|"e14 imports cycle"| n4
+  n3 -->|"e15 imports"| n14
+  n4 ==>|"e16 imports cycle"| n3
+  n4 -->|"e17 imports"| n6
+  n5 -->|"e18 imports"| n6
+  n5 -.->|"e19 imports"| n15
+  n5 -.->|"e20 imports"| n16
+  n6 -->|"e21 imports"| n13
+  classDef component fill:#dbeafe,stroke:#1e40af,stroke-width:2px
+  classDef module fill:#f3f4f6,stroke:#374151
+  classDef package fill:#dcfce7,stroke:#166534
+  classDef stdlib fill:#ede9fe,stroke:#5b21b6
+  classDef unresolved fill:#fef3c7,stroke:#b45309,stroke-width:2px,stroke-dasharray:5 3
+  classDef computed fill:#ffedd5,stroke:#c2410c,stroke-width:2px,stroke-dasharray:2 3
+  classDef notice fill:#fee2e2,stroke:#b91c1c,stroke-width:2px
+%% e1: src/dep_app/__init__.py rule:under_manifest_dir
+%% e2: src/dep_app/a.py rule:under_manifest_dir
+%% e3: src/dep_app/b.py rule:under_manifest_dir
+%% e4: src/dep_app/c.py rule:under_manifest_dir
+%% e5: src/dep_app/util.py rule:under_manifest_dir
+%% e6: pyproject.toml:7 pyproject:project.optional-dependencies
+%% e7: pyproject.toml:10 pyproject:dependency-groups
+%% e8: pyproject.toml:4 pyproject:project.dependencies
+%% e9: pyproject.toml:4 pyproject:project.dependencies (+1 more)
+%% e10: requirements.txt:2 requirements:line
+%% e11: requirements.txt:3 requirements:line
+%% e12: web/package.json:4 package.json:devDependencies
+%% e13: web/package.json:3 package.json:dependencies
+%% e14: src/dep_app/a.py:3 python:import
+%% e15: src/dep_app/a.py:1 python:import
+%% e16: src/dep_app/b.py:1 python:import
+%% e17: src/dep_app/b.py:3 python:import
+%% e18: src/dep_app/c.py:4 python:import
+%% e19: src/dep_app/c.py:1 python:import
+%% e20: src/dep_app/c.py:2 python:import
+%% e21: src/dep_app/util.py:1 python:import
+%% cycle: module:src/dep_app/a.py -> module:src/dep_app/b.py -> module:src/dep_app/a.py
