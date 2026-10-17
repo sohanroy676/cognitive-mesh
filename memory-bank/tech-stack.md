@@ -3,8 +3,8 @@
 ## Status
 v0.1.0 foundation is implemented: tooling, config loading, and a minimal CLI. The commands
 in "Verified commands" below were run successfully on 2026-10-16 (Windows 11, Git Bash,
-uv 0.13.1, CPython 3.12.3). Everything else here (memory stores, Groq client) is still
-planned and unimplemented. v0.6.1 added a real Ollama client (stdlib HTTP, no new dependency; ADR-0012). GitHub Actions CI passed on main (run 38942568274, 2026-10-16).
+uv 0.13.1, CPython 3.12.3). Everything else here is still planned and unimplemented, except
+the v0.7.0 vector index (branch `feature/v0.7.0-semantic-memory`, ChromaDB + Sentence Transformers). v0.6.1 added a real Ollama client (stdlib HTTP, no new dependency; ADR-0012). GitHub Actions CI passed on main (run 38942568274, 2026-10-16).
 
 ## Language and Runtime
 - Language: Python
@@ -31,8 +31,9 @@ Never hardcode credentials in source code or commit secrets.
 - Graph representation and traversal: NetworkX 3.7 (runtime dependency since v0.3.0; `types-networkx` in dev; ADR-0006)
 - JS/TS import parsing: tree-sitter 0.26.0 + tree-sitter-javascript 0.25.0 + tree-sitter-typescript 0.23.2 (runtime dependencies since v0.3.1; MIT, official tree-sitter org; private to `graph/js_parse.py`; ADR-0007)
 - Persistent structured storage: SQLite (stdlib `sqlite3`; run traces since v0.6.0, schema version 1, ADR-0011; no new dependency)
-- Embeddings: Sentence Transformers
-- Embedding model and version: TBD
+- Embeddings: Sentence Transformers 6.1.0 (Apache-2.0), runtime dependency since v0.7.0 on branch `feature/v0.7.0-semantic-memory` (ADR-0014); torch 2.14.1 is a direct dependency so that `[tool.uv.sources]` can take the CPU build from the official PyTorch index on Linux (`uv.lock` has no `nvidia-*`/`cuda` entries; checked 2026-10-17, Linux install itself not run)
+- Embedding model and version: `sentence-transformers/all-MiniLM-L6-v2` at revision `1110a243fdf4706b3f48f1d95db1a4f5529b4d41` (Apache-2.0, 384 dimensions), fixed in `memory/embedder.py`
+- Vector store: chromadb 1.5.9 (Apache-2.0), runtime dependency since v0.7.0, private to `memory/index.py`; telemetry off, no Chroma embedding function, cosine space
 
 SQLite is intended to store structured records and metadata.
 ChromaDB is intended for semantic vector retrieval.
@@ -136,7 +137,12 @@ COGMESH_PROVIDER=groq COGMESH_GROQ_MODEL=no/such-model uv run cognitive-mesh run
 RUN_LIVE_GROQ=1 RUN_LIVE_GROQ_KEY=... uv run pytest -m live tests/test_live_groq.py   # 1 passed; skipped by default and in CI
 COGMESH_PROVIDER=bogus uv run cognitive-mesh run tests/fixtures/plans/ok.json --root tests/fixtures/dep_app   # exit 0: plans without a model step never read config
 RUN_LIVE_OLLAMA=1 uv run pytest -m live   # opt-in real Ollama test, 1 passed; skipped by default and in CI
+RUN_LIVE_EMBEDDINGS=1 uv run pytest -m live tests/test_live_embeddings.py -s   # 1 passed (2026-10-17, real MiniLM download ~90 MB); skipped by default and in CI
+uv run cognitive-mesh memory index --db FILE --index DIR     # empty scratch cwd via uv run --project: exit 0, "4 added"; second run "4 unchanged", model not re-run for unchanged text
+uv run cognitive-mesh memory search "QUERY" --db FILE --index DIR [--k N] [--min-similarity X] [--json]   # exit 0; relevant query ranks the right step first; unrelated query prints "no sufficiently similar experience"
+uv run cognitive-mesh memory search x --db FILE --index missing-dir   # exit 11, "the memory index does not exist"; creates nothing
 ```
+The `memory` commands were run 2026-10-17 on branch `feature/v0.7.0-semantic-memory` from an empty directory against a trace database made by `run ok.json` and `run needs_model.json` (not in a fresh clone or CI). Not run for real: an index built with a different real model (covered by tests with a fake embedder).
 The v0.1.0 commands also passed in a fresh `git clone` of its feature branch; the `ingest` commands were run only in the working tree (not yet in a fresh clone or CI).
 The `dep_app` `graph` commands were run 2026-10-17 in the working tree on branch `feature/v0.3.0-dependency-graph` (not in a fresh clone; CI runs the test suite, not these CLI calls).
 The `js_app` graph commands were run 2026-10-17 in the working tree on branch `feature/v0.3.1-js-dynamic-imports` (not yet in a fresh clone or CI).

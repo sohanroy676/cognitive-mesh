@@ -67,6 +67,16 @@ knowledge (nothing in v0.7.0 promotes anything to "knowledge").
 - **Errors.** `MemoryIndexError` messages are fixed text; they never contain document text, the query, vectors
   or exception text (same rule as ADR-0011/0012).
 
+## Amendment (2026-10-17, during implementation)
+- The optional `COGMESH_MEMORY_MIN_SIMILARITY` setting was dropped: the cut-off is only `--min-similarity`
+  (default 0.2), so the `memory` commands read no configuration at all.
+- The default 0.2 comes from one real-model run (`RUN_LIVE_EMBEDDINGS=1`) on 3 documents: related queries scored
+  0.24 to 0.35, an unrelated query at most 0.04, a loosely related one up to 0.21. It is a rough starting point,
+  not a calibrated value.
+- A run that is malformed in the trace database gives a fourth source check, `source_unreadable`, next to
+  `ok`, `source_missing` and `source_changed`.
+- `torch` is also listed as a direct dependency, because uv applies `[tool.uv.sources]` only to direct ones.
+
 ## Alternatives considered
 - Index table inside the trace database: stronger bookkeeping, but makes `memory index` a writer to the
   authoritative store and needs the first real migration. Rejected for now.

@@ -6,11 +6,12 @@ specialized agents, and keeps traceable memory of what it did and why.
 
 > **Status: early development.** Only the foundation, application ingestion, a dependency
 > graph, the agent interfaces, (v0.5.0) a basic orchestrator, (v0.6.0) a SQLite store for run
-> traces, (v0.6.1) a real Ollama client and (v0.6.2) a Groq client exist. There is no retrieval of
-> past experience yet.
+> traces, (v0.6.1) a real Ollama client, (v0.6.2) a Groq client and (v0.7.0, on a branch, not yet
+> merged) semantic search over stored traces exist. Retrieved experience is not yet used by any
+> agent or task.
 > This README is updated with every version; the roadmap is not evidence that a feature exists.
 
-## What works today (v0.6.2)
+## What works today (v0.6.2 on main; v0.7.0 on a branch)
 
 | Version | Capability | Status |
 |---|---|---|
@@ -24,10 +25,11 @@ specialized agents, and keeps traceable memory of what it did and why.
 | v0.6.0 | Episodic trace store: SQLite persistence of orchestrator runs (steps, attempts, ids, model info, timestamps), redaction before storing, success/failed/incomplete/interrupted states, `run --trace-db`, `traces list/show` | Done, tagged `v0.6.0`; CI runs 39026432280 and 39028485876 passed |
 | v0.6.1 | Real Ollama client (stdlib HTTP, hard total deadline, every failure mapped to a provider error kind), `COGMESH_OLLAMA_MODEL` / `COGMESH_MODEL_TIMEOUT_S`, `run` uses it only for plans with a model step | Criteria pass locally (including a real `llama3.2` run); merged to main and pushed; CI run 39029734411 on the merge passed; tagged `v0.6.1` (no tag-triggered CI; the tagged merge is covered by run 39031027771) |
 | v0.6.2 | Real Groq client (`qwen/qwen3.8-27b` by default, preview model; reasoning off; shared error mapping with the Ollama client; key never in errors/traces/output), `COGMESH_GROQ_MODEL` / `COGMESH_GROQ_REASONING_EFFORT` | Criteria pass locally, including a real Groq run (`explain_file` succeeded, `model_unverified`) and the opt-in live test; merged to main and pushed; CI run 39031027771 on the merge passed; not tagged |
+| v0.7.0 | Semantic memory retrieval: final attempts of finished runs are embedded (`all-MiniLM-L6-v2`, pinned revision) into a ChromaDB index; `memory index` / `memory search`; every hit is re-checked against its trace row; an index from another model is refused | Criteria pass locally, including a real-model run; on branch `feature/v0.7.0-semantic-memory`, not merged, no CI yet, not tagged |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
-`docs/adr/0008-dependency-graph-visualization.md`, `docs/adr/0009-agent-architecture.md`, `docs/adr/0010-orchestrator.md`, `docs/adr/0011-episodic-trace-store.md`, `docs/adr/0012-ollama-client.md`, `docs/adr/0013-groq-client.md`.
+`docs/adr/0008-dependency-graph-visualization.md`, `docs/adr/0009-agent-architecture.md`, `docs/adr/0010-orchestrator.md`, `docs/adr/0011-episodic-trace-store.md`, `docs/adr/0012-ollama-client.md`, `docs/adr/0013-groq-client.md`, `docs/adr/0014-semantic-memory-retrieval.md`.
 
 ### Known limitations
 - Local directories only; results are in memory, except run traces recorded with `--trace-db` (v0.6.0).
@@ -53,7 +55,7 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
   agent marks retryable, at most 5 attempts per step. With no provider configured, `explain_file`
   steps fail as `provider_unavailable`. Run results are persisted only when `--trace-db` is given.
 - Trace store (v0.6.0): recording is opt-in (`run --trace-db FILE`). Traces are raw records, not
-  validated knowledge, and nothing retrieves or reuses them yet. Secrets are redacted by pattern
+  validated knowledge; only `memory search` (v0.7.0) reads them for retrieval, and nothing reuses them. Secrets are redacted by pattern
   before storing, so a stored trace is not a byte-exact replay and detection is not exhaustive.
   The trace holds the resolved source path and file hashes (no hostname or user name). A run is
   committed as `running` first; a crash reads back as `interrupted` with no step data. No
@@ -75,6 +77,17 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
   within the plan's bounded policy; `Retry-After` is not read. No streaming or proxy. Verified
   2026-10-17 against the real API with one key and `qwen/qwen3.8-27b` only (not other models, tiers or
   rate-limit behavior); the opt-in live test is `RUN_LIVE_GROQ=1 RUN_LIVE_GROQ_KEY=... uv run pytest -m live`.
+- Memory search (v0.7.0, ADR-0014): the index is a derived copy of the trace database; build it with
+  `memory index` and rebuild after new runs. Only final attempts of succeeded or failed steps of finished
+  runs are embedded; blocked/not-run steps and interrupted runs are not. Similarity is **not** evidence that
+  a past result was correct, and `model_unverified` text is searchable (hits show their basis). A hit whose
+  trace row is gone, changed or unreadable is listed as not confirmed and never as a result. The default
+  cut-off (cosine 0.2) was picked from one real-model run on 3 documents and is a rough starting point;
+  related queries scored 0.24 to 0.35 and an unrelated one at most 0.04, but a loosely related query still
+  scored 0.21. One embedding model only, English-oriented, ~90 MB downloaded from Hugging Face on first use
+  (no `HF_TOKEN` needed). The index holds text derived from traces, so treat its directory like the trace
+  database (redaction is pattern-based). Installing now pulls torch (CPU build on Linux) and ChromaDB.
+  Not verified: very large traces, concurrent indexers, Linux/macOS, CI, a fresh clone.
 - Ingested files are treated as data and are never executed.
 
 ## Setup and usage
@@ -102,16 +115,18 @@ uv run cognitive-mesh run PLAN.json --root DIR [--json]   # runs a task plan, no
 uv run cognitive-mesh run PLAN.json --root DIR --trace-db FILE   # also records the run (SQLite)
 uv run cognitive-mesh traces list --db FILE [--json]
 uv run cognitive-mesh traces show RUN_ID --db FILE [--json]
+uv run cognitive-mesh memory index --db FILE --index DIR [--json]   # needs no provider; first use downloads the model
+uv run cognitive-mesh memory search "QUERY" --db FILE --index DIR [--k N] [--min-similarity X] [--json]
 ```
 
 Exit codes: 0 ok, 2 configuration or usage error, 3 unusable ingestion root, 4 unknown graph node,
-5 output file could not be written, 6 invalid or unreadable plan, 7 task failed or incomplete, 8 trace store error or malformed trace, 9 unknown trace run id.
+5 output file could not be written, 6 invalid or unreadable plan, 7 task failed or incomplete, 8 trace store error or malformed trace, 9 unknown trace run id, 11 memory index missing, unusable or built with another model.
 Configuration comes from the environment or an ignored `.env` (copy `.env.example`); never commit
 secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and run in a fresh venv on Windows; not published, not run in CI). The package version is derived from git tags (hatch-vcs): a build at tag `vX.Y.Z` is `X.Y.Z`, later commits are `X.Y.(Z+1).devN`, and a checkout without tags is `0.1.devN`.
 
 ## Project layout
 
-- `src/cognitive_mesh/` - `config`, `cli`, `ingestion/`, `agents/` (interface, contracts, roles, registry), `orchestrator/` (plans, ordering, runner), `traces/` (SQLite trace store, recorder), `providers/` (model client protocol, Ollama client, stdlib HTTP transport), `graph/` (JS/TS parsing isolated in `graph/js_parse.py`; visualization in `graph/view.py`, `render_mermaid.py`, `render_html.py`)
+- `src/cognitive_mesh/` - `config`, `cli`, `ingestion/`, `agents/` (interface, contracts, roles, registry), `orchestrator/` (plans, ordering, runner), `traces/` (SQLite trace store, recorder), `memory/` (eligible documents, embedder, ChromaDB index), `providers/` (model client protocol, Ollama client, stdlib HTTP transport), `graph/` (JS/TS parsing isolated in `graph/js_parse.py`; visualization in `graph/view.py`, `render_mermaid.py`, `render_html.py`)
 - `tests/` - pytest suite; fixtures in `tests/fixtures/` (`sample_app`, `dep_app`, `js_app`)
 - `docs/adr/` - architecture decision records; `docs/DETAILED_ROADMAP.md` - per-version criteria
 - `memory-bank/` - agent-facing project record (brief, architecture, progress, active context)
@@ -119,8 +134,7 @@ secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and
 
 ## Roadmap (summary)
 
-Next: v0.7.0 semantic
-retrieval (the pre-v0.7.0 review pass is done and merged locally) (v0.6.1 and v0.6.2 provider clients are merged), v0.8.0 experience graph, v0.9.0
+v0.7.0 semantic retrieval is built on a branch and awaits merge and CI. Next: v0.8.0 experience graph, v0.9.0
 evidence-aware retrieval, v1.0.0 end-to-end prototype. See `ROADMAP.md`.
 
 ## Principles
