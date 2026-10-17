@@ -4,7 +4,7 @@
 v0.1.0 foundation is implemented: tooling, config loading, and a minimal CLI. The commands
 in "Verified commands" below were run successfully on 2026-10-16 (Windows 11, Git Bash,
 uv 0.13.1, CPython 3.12.3). Everything else here is still planned and unimplemented, except
-the v0.7.0 vector index (ChromaDB + Sentence Transformers, merged, tagged `v0.7.0`) and the v0.8.0 experience graph (merged, tagged `v0.8.0`). v0.6.1 added a real Ollama client (stdlib HTTP, no new dependency; ADR-0012). GitHub Actions CI passed on main (run 38942568274, 2026-10-16).
+the v0.7.0 vector index (ChromaDB + Sentence Transformers, merged, tagged `v0.7.0`) and the v0.8.0 experience graph (merged, tagged `v0.8.0`); the v0.9.0 evidence-aware `recall` (ADR-0016) is implemented on branch `feature/v0.9.0-evidence-aware-retrieval` (not merged, no new dependency). v0.6.1 added a real Ollama client (stdlib HTTP, no new dependency; ADR-0012). GitHub Actions CI passed on main (run 38942568274, 2026-10-16).
 
 ## Language and Runtime
 - Language: Python
@@ -30,7 +30,7 @@ Never hardcode credentials in source code or commit secrets.
 - Vector database: ChromaDB
 - Graph representation and traversal: NetworkX 3.7 (runtime dependency since v0.3.0; `types-networkx` in dev; ADR-0006). v0.8.0 (ADR-0015) uses it again, private to `experience/graph.py`, and stores the experience graph in its own SQLite file (stdlib `sqlite3`, `PRAGMA application_id`, no new dependency)
 - JS/TS import parsing: tree-sitter 0.26.0 + tree-sitter-javascript 0.25.0 + tree-sitter-typescript 0.23.2 (runtime dependencies since v0.3.1; MIT, official tree-sitter org; private to `graph/js_parse.py`; ADR-0007)
-- Persistent structured storage: SQLite (stdlib `sqlite3`; run traces since v0.6.0, schema version 1, ADR-0011; no new dependency)
+- Persistent structured storage: SQLite (stdlib `sqlite3`; run traces since v0.6.0, schema version 1, ADR-0011; no new dependency). v0.9.0 adds a separate append-only reviews file (`experience/reviews.py`, ADR-0016, own schema version 1, `application_id` `CMER`); the experience graph file is format 2
 - Embeddings: Sentence Transformers 6.1.0 (Apache-2.0), runtime dependency since v0.7.0 on branch `feature/v0.7.0-semantic-memory` (ADR-0014); torch 2.14.1 is a direct dependency so that `[tool.uv.sources]` can take the CPU build from the official PyTorch index on Linux (`uv.lock` has no `nvidia-*`/`cuda` entries; checked 2026-10-17, Linux install verified by CI run 39043661141 on 2026-10-17: torch CPU, 4 s with `uv sync --locked`)
 - Embedding model and version: `sentence-transformers/all-MiniLM-L6-v2` at revision `1110a243fdf4706b3f48f1d95db1a4f5529b4d41` (Apache-2.0, 384 dimensions), fixed in `memory/embedder.py`
 - Vector store: chromadb 1.5.9 (Apache-2.0), runtime dependency since v0.7.0, private to `memory/index.py`; telemetry off, no Chroma embedding function, cosine space
@@ -148,7 +148,16 @@ uv run cognitive-mesh experience check --db T --graph G     # exit 0, "content h
 uv run cognitive-mesh experience check --db T2 --graph G    # T2 = copy of T with one run deleted: exit 14, source_missing=5, diagnostics on stderr; claims then show "1 still confirmed"
 uv run cognitive-mesh experience claims --db T --graph G3   # G3 = copy of G with one claim name edited: exit 12, "the stored content hash does not match the graph content"
 uv run cognitive-mesh experience show run:ID --db T --graph G2   # G2 = node record set to an invalid value: exit 12, "malformed record"
+# v0.9.0, empty scratch directory via uv run --project, real MiniLM (T: ok.json run twice, a.py edited to import util instead of b, ok.json run again, needs_model.json; IDX: 8 added; G: 40 nodes, 67 edges, 7 claims)
+uv run cognitive-mesh recall "dependencies of module a.py" --db T --index IDX --graph G   # exit 0; claims "supported", "no --root given: whether claims are current is unknown", the other-version listing shown as "contradicted by ... other or unrecorded version"
+uv run cognitive-mesh recall "dependencies of module a.py" --db T --index IDX --graph G --root APP --k 3   # exit 0; the removed import is "stale", the kept and the new one "validated" (re-derived, path:line and hash shown)
+uv run cognitive-mesh experience review CLAIM_ID --verdict rejected --note "TEXT" --by NAME --root APP --graph G --reviews R   # exit 0, "review #1 recorded ... unauthenticated"
+uv run cognitive-mesh recall ... --root APP --reviews R           # new process: the reviewed claim is [conflicting] (output checked; exit status not captured)
+uv run cognitive-mesh experience claims --db T --graph G --root APP --reviews R   # [conflicting] with the review and both sides, [validated], [stale] (output checked; exit status not captured)
+uv run cognitive-mesh recall ... --db T2 --index IDX --graph G    # T2 = copy of T with one run deleted: exit 0, counts show "1 not confirmed"
+uv run cognitive-mesh recall "zebra quantum pastry" --db T --index IDX --graph G   # prints "no sufficiently similar experience" and "5 weak match(es) below 0.2 dropped" (exit status not captured)
 ```
+The v0.9.0 commands above were run 2026-10-17 on branch `feature/v0.9.0-evidence-aware-retrieval` (not in a fresh clone or CI). Exit codes 3, 8, 11, 12, 13 and 15 for `recall` and `experience review` (missing graph, reviews file, root, index, database; unknown or non-claim node; refused note) and the format-1 graph refusal are covered by `tests/test_cli_recall.py` through `main()`, not run in the real CLI. Not run: `--include-unverified` with `--reviews`, very large traces, concurrent reviewers.
 The `experience` commands were run 2026-10-17 on branch `feature/v0.8.0-experience-graph` from an empty directory (not in a fresh clone or CI). Not run: `show --incoming` and `--include-unverified` outside the tests, very large traces.
 The `memory` commands were run 2026-10-17 on branch `feature/v0.7.0-semantic-memory` from an empty directory against a trace database made by `run ok.json` and `run needs_model.json` (not in a fresh clone or CI). Not run for real: an index built with a different real model (covered by tests with a fake embedder).
 The v0.1.0 commands also passed in a fresh `git clone` of its feature branch; the `ingest` commands were run only in the working tree (not yet in a fresh clone or CI).

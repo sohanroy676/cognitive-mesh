@@ -86,6 +86,20 @@ Constraints from the project brief and earlier ADRs:
   `recall` command keeps the two meanings apart.
 - **Letting model output validate or contradict.** Model text is data, and its confidence is not evidence.
 
+## Amendments made while implementing (2026-10-17)
+- `experience review` reads only the graph file, the reviews file and `--root`; it needs no `--db`.
+- `experience claims` keeps its v0.8.0 line and appends the evidence status in brackets; with `--root` or
+  `--reviews` it also prints the observations, reviews and re-derivation behind each status. In those outputs
+  the repetition-only note replaces the v0.8.0 note "claims are unvalidated", which would contradict a
+  `validated` status.
+- A confirming review or a holding re-derivation counts as support for the version it names, and a rejecting
+  review or a refuted re-derivation as contradiction, so a rejection of a claim that still re-derives is
+  `conflicting`, not `validated`.
+- Limit found: the graph does not record which application a run analysed (`source_root` is not copied into
+  it), so claims about equal node ids from different applications merge and differ only by fingerprint.
+- Hits the index verified but the graph does not know (a run newer than `experience build`) are listed as
+  `not_in_graph` under unconfirmed, with a hint to rebuild.
+
 ## Consequences
 - Retrieval answers are inspectable: every claim lists the attempts and reviews it rests on, and every
   status follows a table-driven rule with a test.
