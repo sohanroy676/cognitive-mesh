@@ -1,0 +1,11 @@
+{
+  "task_id": "session2",
+  "steps": [
+    {"step_id": "cmp", "capability": "compare_with_recalled"},
+    {
+      "step_id": "deps",
+      "capability": "dependencies_of",
+      "inputs": {"node_id": "module:src/shopdemo/cart.py"}
+    }
+  ]
+}
