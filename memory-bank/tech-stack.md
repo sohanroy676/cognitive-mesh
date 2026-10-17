@@ -102,6 +102,7 @@ uv run cognitive-mesh graph tests/fixtures/js_app               # exit 0, 7 unre
 uv run cognitive-mesh graph tests/fixtures/js_app --json        # exit 0
 uv run cognitive-mesh graph tests/fixtures/js_app --deps-of module:src/index.ts --transitive   # exit 0
 uv run cognitive-mesh graph tests/fixtures/js_app --deps-of nope   # exit 4
+uv run cognitive-mesh graph tests/fixtures/lock_app --deps-of component:. --transitive   # exit 0, reaches locked packages (depth 2) from uv.lock and package-lock.json (run 2026-10-17)
 uv run cognitive-mesh graph tests/fixtures/dep_app --format mermaid          # exit 0, flowchart text
 uv run cognitive-mesh graph tests/fixtures/js_app --format html --output FILE   # exit 0, writes ASCII/LF HTML
 uv run cognitive-mesh graph tests/fixtures/dep_app --format html --max-nodes 3  # exit 0, truncation banner + stderr notice

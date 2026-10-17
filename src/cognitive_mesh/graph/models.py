@@ -25,6 +25,7 @@ class EdgeKind(StrEnum):
     DECLARES = "declares"  # component -> package (or unresolved requirement)
     IMPORTS = "imports"  # module -> module | stdlib | unresolved
     CONTAINS = "contains"  # component -> module, by directory only
+    REQUIRES = "requires"  # locked package -> locked package, from a lockfile
 
 
 class GraphDiagnosticCode(StrEnum):

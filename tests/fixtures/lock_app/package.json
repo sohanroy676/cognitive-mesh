@@ -1,0 +1,5 @@
+{
+  "name": "lock-web",
+  "version": "1.0.0",
+  "dependencies": { "left-widget": "^1.0.0" }
+}

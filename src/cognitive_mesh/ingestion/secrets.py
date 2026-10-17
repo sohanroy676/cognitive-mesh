@@ -68,12 +68,21 @@ def _has_sequence(value: str, length: int = 6) -> bool:
     return False
 
 
+_INTEGRITY_PREFIX = re.compile(
+    r"sha(?:256|384|512)-"
+)  # subresource-integrity hashes, as in lockfiles
+
+
 def _looks_random(value: str) -> bool:
-    return not _has_sequence(value) and (
-        any(c.islower() for c in value)
-        and any(c.isupper() for c in value)
-        and any(c.isdigit() for c in value)
-        and _entropy(value) >= _MIN_ENTROPY_BITS
+    return (
+        not _INTEGRITY_PREFIX.match(value)
+        and not _has_sequence(value)
+        and (
+            any(c.islower() for c in value)
+            and any(c.isupper() for c in value)
+            and any(c.isdigit() for c in value)
+            and _entropy(value) >= _MIN_ENTROPY_BITS
+        )
     )
 
 

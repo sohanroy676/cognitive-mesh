@@ -57,6 +57,7 @@ def _check_python(text: str) -> None:
 _CHECKERS: dict[str, tuple[str, Callable[[str], object]]] = {
     ".json": ("JSON", json.loads),
     ".toml": ("TOML", tomllib.loads),
+    ".lock": ("TOML", tomllib.loads),  # only uv.lock is classified; it is TOML
     ".ini": ("INI", _check_ini),
     ".cfg": ("INI", _check_ini),
     ".py": ("Python", _check_python),

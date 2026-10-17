@@ -58,10 +58,18 @@ def test_non_sensitive_names(name: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "name", ["uv.lock", "package-lock.json", "a.pyc", "app.min.js", "a.js.map"]
+    "name", ["poetry.lock", "yarn.lock", "Cargo.lock", "a.pyc", "app.min.js", "a.js.map"]
 )
 def test_generated_names(name: str) -> None:
     assert generated_rule(name) is not None
+
+
+@pytest.mark.parametrize("name", ["uv.lock", "package-lock.json"])
+def test_read_lockfiles_are_manifests_not_generated(name: str) -> None:
+    assert generated_rule(name) is None
+    cls = classify(name)
+    assert cls is not None
+    assert cls.kind is FileKind.MANIFEST
 
 
 @pytest.mark.parametrize("name", [".git", "node_modules", ".venv", "__pycache__", "x.egg-info"])
