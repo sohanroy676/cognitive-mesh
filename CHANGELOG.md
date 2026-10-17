@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
+## [Unreleased]
+
+### Added
+- **providers:** Add Ollama model client
+
+### Documentation
+- **adr:** Add ADR-0012 Ollama client
+- Record v0.6.1 Ollama client
+
 ## [0.6.0] - 2026-10-17
 
 ### Added
