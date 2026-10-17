@@ -25,6 +25,11 @@ def test_documents_import_is_light() -> None:
     }
 
 
+def test_experience_import_is_light() -> None:
+    statement = "import cognitive_mesh.experience, cognitive_mesh.experience.verify"
+    assert _loaded_after(statement) == {"chromadb": False, "sentence_transformers": False}
+
+
 def test_memory_index_is_still_importable_from_the_package() -> None:
     from cognitive_mesh.memory import MemoryIndex
     from cognitive_mesh.memory.index import MemoryIndex as Direct
