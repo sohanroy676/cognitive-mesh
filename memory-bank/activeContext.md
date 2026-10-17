@@ -19,7 +19,7 @@ v0.3.0 and v0.3.1 are tagged and pushed. v0.3.2 Dependency Graph Visualization i
 - `RUN_SECRET_SCAN=true`; gitleaks runs in CI with `fetch-depth: 0` and passes (full history, no leaks). Detection is still pattern-based.
 - Writing an ~880 KB file and opening it took ~23 s on this Windows machine (inside `open()`, not our code; cause unverified, possibly on-access scanning). Tests use smaller files.
 - Local branches are never deleted by the agent (rule in CLAUDE.md); old branches are kept.
-- `uv build` verified locally (wheel installs and runs in a fresh venv); `pyproject.toml` version is still 0.1.0 vs project v0.3.2: needs a versioning decision from the user.
+- `uv build` verified locally. Version now derives from git tags (hatch-vcs); the branch awaits approval and a CI run. Mermaid output was checked once with mermaid-cli 12.0.0 (manual).
 
 ## Next step
 1. Ask the user to approve pushing/merging `chore/changelog-git-cliff`; then check the CI run.

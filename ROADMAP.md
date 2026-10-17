@@ -41,7 +41,7 @@ Completed 2026-10-17. Merged to main (`e19d5e1`); the first CI run on that merge
 - `cognitive-mesh graph PATH --format mermaid|html [--output FILE] [--max-nodes N] [--max-edges N]` renders the existing `DependencyGraph`; no new dependency, no script, no network loads.
 - Unresolved nodes, computed dynamic imports and cycles are visually distinct; evidence is reachable per edge (tooltip + table in HTML, comments in Mermaid); truncation shows a visible notice.
 - Node names and evidence are escaped; output is ASCII and deterministic; text and `--json` output are unchanged (diffed against saved baselines).
-- Known limitations: naive layout (edges can cross); cycle members outrank unresolved items when truncating; Mermaid output unchecked in a real Mermaid renderer; HTML viewed only in headless Edge.
+- Known limitations: naive layout (edges can cross); cycle members outrank unresolved items when truncating; Mermaid output checked once in mermaid-cli 12.0.0 (manual, not in CI), other renderers unchecked; HTML viewed only in headless Edge.
 
 ## Next — Planned, Not Started
 
