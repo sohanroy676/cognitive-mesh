@@ -58,7 +58,8 @@ success.
     `model_unverified` with the file's source reference as evidence.
 - **Registry (`agents/registry.py`).** `AgentRegistry` registers, gets, lists specs (sorted) and
   finds agents by capability. `AgentRegistryError` (duplicate or unknown id) is the only exception
-  the package raises. `default_registry(model_client=None)` builds both agents; with no client,
+  raised while running; a malformed agent definition (no capability, duplicate capability names)
+  raises `ValueError` at construction, which is a programming error. `default_registry(model_client=None)` builds both agents; with no client,
   `code_explainer` returns provider_unavailable.
 - **CLI:** `cognitive-mesh agents [--json]` lists roles, capabilities and schemas from the registry.
   It needs no configuration and makes no calls.
