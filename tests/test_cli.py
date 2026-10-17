@@ -10,6 +10,7 @@ from cognitive_mesh.cli import (
     EXIT_GRAPH_ERROR,
     EXIT_INGESTION_ERROR,
     EXIT_OK,
+    EXIT_OUTPUT_ERROR,
     _printable,
     main,
 )
@@ -177,3 +178,102 @@ def test_graph_js_json_and_transitive_deps(capsys: pytest.CaptureFixture[str]) -
     node = "module:src/index.ts"
     assert main(["graph", str(JS_FIXTURE), "--deps-of", node, "--transitive"]) == EXIT_OK
     assert "stdlib:node:fs" in capsys.readouterr().out  # index -> util -> node:fs
+
+
+# --- graph --format (v0.3.2) ------------------------------------------------------------------
+
+
+def test_graph_text_output_is_unchanged_by_visualization(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    expected = (Path(__file__).parent / "fixtures" / "expected" / "dep_app.txt").read_text(
+        encoding="utf-8"
+    )
+    assert main(["graph", str(DEP_FIXTURE)]) == EXIT_OK
+    assert capsys.readouterr().out.replace("\r\n", "\n") == expected
+
+
+def test_graph_format_mermaid_to_stdout(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["graph", str(DEP_FIXTURE), "--format", "mermaid"]) == EXIT_OK
+    out = capsys.readouterr()
+    assert out.out.startswith("%% cognitive-mesh") and "flowchart TD" in out.out
+    assert "==>" in out.out and "-.->" in out.out
+    assert out.err == ""
+
+
+def test_graph_format_html_to_stdout(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["graph", str(JS_FIXTURE), "--format", "html"]) == EXIT_OK
+    out = capsys.readouterr().out
+    assert out.startswith("<!doctype html>") and "<svg" in out and "<script" not in out
+
+
+def test_graph_format_output_writes_ascii_lf_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target = tmp_path / "g.html"
+    assert main(["graph", str(DEP_FIXTURE), "--format", "html", "--output", str(target)]) == 0
+    data = target.read_bytes()
+    assert data.isascii() and b"\r" not in data and data.startswith(b"<!doctype html>")
+    out = capsys.readouterr().out
+    assert "wrote html graph" in out and "<svg" not in out
+
+
+def test_graph_output_is_identical_across_runs(tmp_path: Path) -> None:
+    first, second = tmp_path / "a.html", tmp_path / "b.html"
+    for target in (first, second):
+        assert main(["graph", str(JS_FIXTURE), "--format", "html", "--output", str(target)]) == 0
+    assert first.read_bytes() == second.read_bytes()
+
+
+def test_graph_output_to_missing_directory_exits_5(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target = tmp_path / "nope" / "g.html"
+    args = ["graph", str(DEP_FIXTURE), "--format", "html", "--output", str(target)]
+    assert main(args) == EXIT_OUTPUT_ERROR
+    assert "cannot write output" in capsys.readouterr().err
+    assert not target.parent.exists()
+
+
+def test_graph_output_to_a_directory_exits_5(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    args = ["graph", str(DEP_FIXTURE), "--format", "mermaid", "--output", str(tmp_path)]
+    assert main(args) == EXIT_OUTPUT_ERROR
+    assert "cannot write output" in capsys.readouterr().err
+
+
+def test_graph_format_truncation_notice_on_stderr(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["graph", str(DEP_FIXTURE), "--format", "html", "--max-nodes", "3"]) == EXIT_OK
+    out = capsys.readouterr()
+    assert "TRUNCATED: showing 3 of 19 nodes" in out.err
+    assert "showing 3 of 19 nodes" in out.out  # banner in the page itself
+
+
+def test_graph_format_missing_root_exits_3(tmp_path: Path) -> None:
+    assert main(["graph", str(tmp_path / "missing"), "--format", "html"]) == EXIT_INGESTION_ERROR
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        ["--format", "html", "--json"],
+        ["--format", "html", "--deps-of", "x"],
+        ["--format", "html", "--transitive"],
+        ["--output", "x.html"],
+        ["--max-nodes", "5"],
+        ["--max-edges", "5"],
+        ["--format", "svg"],
+        ["--format", "html", "--max-nodes", "0"],
+        ["--format", "html", "--max-edges", "-1"],
+        ["--format", "html", "--max-nodes", "many"],
+    ],
+)
+def test_graph_format_usage_errors_exit_2(
+    extra: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as exc:
+        main(["graph", str(DEP_FIXTURE), *extra])
+    assert exc.value.code == EXIT_CONFIG_ERROR
+    out = capsys.readouterr()
+    assert out.out == "" and out.err

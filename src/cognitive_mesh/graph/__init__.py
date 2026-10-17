@@ -12,8 +12,18 @@ from cognitive_mesh.graph.models import (
     NodeKind,
     Reached,
 )
+from cognitive_mesh.graph.render_html import render_html
+from cognitive_mesh.graph.render_mermaid import render_mermaid
+from cognitive_mesh.graph.view import (
+    DEFAULT_MAX_EDGES,
+    DEFAULT_MAX_NODES,
+    GraphView,
+    build_view,
+)
 
 __all__ = [
+    "DEFAULT_MAX_EDGES",
+    "DEFAULT_MAX_NODES",
     "DependencyGraph",
     "Edge",
     "EdgeKind",
@@ -21,8 +31,12 @@ __all__ = [
     "GraphDiagnostic",
     "GraphDiagnosticCode",
     "GraphError",
+    "GraphView",
     "Node",
     "NodeKind",
     "Reached",
     "build_dependency_graph",
+    "build_view",
+    "render_html",
+    "render_mermaid",
 ]

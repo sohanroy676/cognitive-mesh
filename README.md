@@ -8,17 +8,19 @@ specialized agents, and keeps traceable memory of what it did and why.
 > graph exist. There are no model-provider calls, agents, orchestrator or persistent memory yet.
 > This README is updated with every version; the roadmap is not evidence that a feature exists.
 
-## What works today (v0.3.1)
+## What works today (v0.3.2 on a branch, not yet merged)
 
 | Version | Capability | Status |
 |---|---|---|
 | v0.1.0 | Project foundation: uv, ruff, mypy (strict), pytest, config loading, minimal CLI | Done, tagged |
 | v0.2.0 | Read-only application ingestion with source references, diagnostics and secret redaction | Done, tagged |
 | v0.3.0 | Dependency graph with evidence on every edge, unresolved items kept visible | Done, tagged; CI run 39010744225 passed |
-| v0.3.1 | JS/TS imports and literal dynamic imports in the graph; computed ones stay unresolved | Done; merged to main, CI run 39012713238 passed |
+| v0.3.1 | JS/TS imports and literal dynamic imports in the graph; computed ones stay unresolved | Done, tagged; CI run 39012713238 passed |
+| v0.3.2 | Graph visualization: Mermaid text or self-contained HTML/SVG, with evidence and visible truncation | Implemented on `feature/v0.3.2-graph-visualization` (commit `c6d49b8`); not merged, CI on main not yet run |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
-`docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`.
+`docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
+`docs/adr/0008-dependency-graph-visualization.md`.
 
 ### Known limitations
 - Local directories only; results are in memory (nothing is persisted yet).
@@ -29,6 +31,10 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
   package.json `exports`, `.js` to `.ts` remapping and `.mjs`/`.cjs` files are not modelled; bare
   specifiers (`react`) stay unresolved. Computed dynamic imports (Python and JS) are unresolved.
 - JS/TS support adds native dependencies (tree-sitter and two grammars).
+- Visualization (v0.3.2): the HTML layout is naive (edges can cross or overlap on dense graphs). Large
+  graphs are truncated with a visible notice (defaults: HTML 300 nodes / 1000 edges, Mermaid 100 / 200),
+  and cycle members are kept before unresolved items. Mermaid output was not checked in any Mermaid
+  renderer; the HTML was viewed only in headless Edge.
 - Ingested files are treated as data and are never executed.
 
 ## Setup and usage
@@ -49,15 +55,17 @@ Commands below were run successfully (see `memory-bank/tech-stack.md` for the ve
 COGMESH_PROVIDER=ollama uv run cognitive-mesh           # validates configuration, exit 0
 uv run cognitive-mesh ingest PATH [--json] [--include-content]
 uv run cognitive-mesh graph PATH [--json] [--deps-of NODE_ID [--transitive]]
+uv run cognitive-mesh graph PATH --format mermaid|html [--output FILE] [--max-nodes N] [--max-edges N]
 ```
 
-Exit codes: 0 ok, 2 configuration error, 3 unusable ingestion root, 4 unknown graph node.
+Exit codes: 0 ok, 2 configuration or usage error, 3 unusable ingestion root, 4 unknown graph node,
+5 output file could not be written.
 Configuration comes from the environment or an ignored `.env` (copy `.env.example`); never commit
 secrets. Packaging/build commands have not been run and are TBD.
 
 ## Project layout
 
-- `src/cognitive_mesh/` - `config`, `cli`, `ingestion/`, `graph/` (JS/TS parsing isolated in `graph/js_parse.py`)
+- `src/cognitive_mesh/` - `config`, `cli`, `ingestion/`, `graph/` (JS/TS parsing isolated in `graph/js_parse.py`; visualization in `graph/view.py`, `render_mermaid.py`, `render_html.py`)
 - `tests/` - pytest suite; fixtures in `tests/fixtures/` (`sample_app`, `dep_app`, `js_app`)
 - `docs/adr/` - architecture decision records; `docs/DETAILED_ROADMAP.md` - per-version criteria
 - `memory-bank/` - agent-facing project record (brief, architecture, progress, active context)
@@ -65,7 +73,7 @@ secrets. Packaging/build commands have not been run and are TBD.
 
 ## Roadmap (summary)
 
-Next: v0.3.2 dependency graph visualization (planned only), then v0.4.0 agent architecture, v0.5.0
+Next: merge v0.3.2 (awaiting review), then v0.4.0 agent architecture (planned only), v0.5.0
 orchestrator, v0.6.0 trace store, v0.7.0 semantic retrieval, v0.8.0 experience graph, v0.9.0
 evidence-aware retrieval, v1.0.0 end-to-end prototype. See `ROADMAP.md`.
 

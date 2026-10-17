@@ -8,13 +8,23 @@ from pathlib import Path
 
 from cognitive_mesh import __version__
 from cognitive_mesh.config import ConfigError, load_settings
-from cognitive_mesh.graph import DependencyGraph, GraphError, build_dependency_graph
+from cognitive_mesh.graph import (
+    DEFAULT_MAX_EDGES,
+    DEFAULT_MAX_NODES,
+    DependencyGraph,
+    GraphError,
+    build_dependency_graph,
+    build_view,
+    render_html,
+    render_mermaid,
+)
 from cognitive_mesh.ingestion import IngestionError, IngestionResult, ingest_application
 
 EXIT_OK = 0
 EXIT_CONFIG_ERROR = 2
 EXIT_INGESTION_ERROR = 3
 EXIT_GRAPH_ERROR = 4
+EXIT_OUTPUT_ERROR = 5
 
 
 def _printable(text: str) -> str:
@@ -36,7 +46,23 @@ def _build_parser() -> argparse.ArgumentParser:
     graph.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
     graph.add_argument("--deps-of", metavar="NODE_ID", help="list what NODE_ID depends on")
     graph.add_argument("--transitive", action="store_true", help="with --deps-of, follow indirect")
+    graph.add_argument(
+        "--format", choices=["mermaid", "html"], dest="fmt", help="render a diagram instead"
+    )
+    graph.add_argument("--output", type=Path, metavar="FILE", help="with --format, write to FILE")
+    graph.add_argument("--max-nodes", type=_positive_int, help="with --format, node limit")
+    graph.add_argument("--max-edges", type=_positive_int, help="with --format, edge limit")
     return parser
+
+
+def _positive_int(text: str) -> int:
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not an integer: {_printable(text)!r}") from None
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return value
 
 
 def _print_ingestion(result: IngestionResult) -> None:
@@ -119,15 +145,48 @@ def _run_graph(path: Path, as_json: bool, deps_of: str | None, transitive: bool)
     return EXIT_OK
 
 
+def _run_graph_view(
+    path: Path, fmt: str, output: Path | None, max_nodes: int | None, max_edges: int | None
+) -> int:
+    try:
+        graph = build_dependency_graph(ingest_application(path))
+    except IngestionError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_INGESTION_ERROR
+    view = build_view(
+        graph, max_nodes or DEFAULT_MAX_NODES[fmt], max_edges or DEFAULT_MAX_EDGES[fmt]
+    )
+    text = render_html(view) if fmt == "html" else render_mermaid(view)
+    if view.truncation.truncated:
+        print(view.truncation.notice(), file=sys.stderr)
+    if output is None:
+        print(text, end="")
+        return EXIT_OK
+    try:
+        output.write_text(text, encoding="ascii", newline="\n")
+    except OSError as exc:
+        print(_printable(f"cannot write output: {exc}"), file=sys.stderr)
+        return EXIT_OUTPUT_ERROR
+    print(f"wrote {fmt} graph to {_printable(str(output))}")
+    return EXIT_OK
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """With no subcommand, validate configuration. `ingest` and `graph` need no provider config.
 
     Neither path makes provider network calls.
     """
-    args = _build_parser().parse_args(argv)
+    parser = _build_parser()
+    args = parser.parse_args(argv)
     if args.command == "ingest":
         return _run_ingest(args.path, args.as_json, args.include_content)
     if args.command == "graph":
+        if args.fmt is not None:
+            if args.as_json or args.deps_of is not None or args.transitive:
+                parser.error("--format cannot be combined with --json, --deps-of or --transitive")
+            return _run_graph_view(args.path, args.fmt, args.output, args.max_nodes, args.max_edges)
+        if args.output is not None or args.max_nodes is not None or args.max_edges is not None:
+            parser.error("--output, --max-nodes and --max-edges require --format")
         return _run_graph(args.path, args.as_json, args.deps_of, args.transitive)
     try:
         settings = load_settings()

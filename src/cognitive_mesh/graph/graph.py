@@ -135,6 +135,31 @@ class DependencyGraph:
             found.append(tuple(cycle[pivot:] + cycle[:pivot]))
         return sorted(found), truncated
 
+    def cyclic_components(self) -> list[tuple[str, ...]]:
+        """Strongly connected components that contain a cycle (size > 1, or a self-loop).
+
+        Unlike `cycles()` this is linear time and has no limit, so it never truncates.
+        """
+        simple: nx.DiGraph[str] = nx.DiGraph(self._g)
+        found = [
+            tuple(sorted(comp))
+            for comp in nx.strongly_connected_components(simple)
+            if len(comp) > 1 or any(simple.has_edge(n, n) for n in comp)
+        ]
+        return sorted(found)
+
+    def layers(self) -> list[list[str]]:
+        """Node ids grouped by depth: dependents first, dependencies after.
+
+        Layers are the topological generations of the cycle-condensed graph, so members of one
+        cycle share a layer. Each layer is sorted by id.
+        """
+        dag = nx.condensation(nx.DiGraph(self._g))
+        return [
+            sorted(n for comp in generation for n in dag.nodes[comp]["members"])
+            for generation in nx.topological_generations(dag)
+        ]
+
     def evidence_for(self, source: str, target: str, kind: EdgeKind) -> tuple[Evidence, ...]:
         self.node(source)
         self.node(target)

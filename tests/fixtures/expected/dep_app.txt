@@ -1,0 +1,11 @@
+nodes: {'component': 2, 'module': 5, 'package': 6, 'stdlib': 2, 'unresolved': 4}
+edges: {'contains': 5, 'declares': 8, 'imports': 8}
+  unresolved: unresolved:import:requests
+  unresolved: unresolved:import:yaml
+  unresolved: unresolved:requirement:-r other.txt
+  unresolved: unresolved:requirement:git+https://example.invalid/x.git
+  cycle: module:src/dep_app/a.py -> module:src/dep_app/b.py -> module:src/dep_app/a.py
+diagnostics: 3
+  [warning] unparseable_requirement requirements.txt: line 2: option or URL line not followed; recorded as unresolved
+  [warning] unparseable_requirement requirements.txt: line 3: option or URL line not followed; recorded as unresolved
+  [info] transitive_unknown .: lockfiles are excluded from ingestion: dependencies of declared packages are unknown, not absent
