@@ -31,7 +31,7 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 
 ### Known limitations
 - Local directories only; results are in memory, except run traces recorded with `--trace-db` (v0.6.0).
-- Secret detection is pattern-based and not exhaustive.
+- Secret detection is pattern- and entropy-based and not exhaustive (it can miss short, low-entropy or hex-only secrets and can redact an innocent random id). Sending file contents to Groq needs `COGMESH_ALLOW_REMOTE_CONTENT=true`.
 - The graph covers declared direct dependencies, Python imports and (v0.3.1) JS/TS imports. Lockfiles
   are excluded, so dependencies of declared packages are reported as unknown, not absent.
 - JS/TS imports resolve only to ingested files by relative path. Bundler aliases, tsconfig `paths`,
