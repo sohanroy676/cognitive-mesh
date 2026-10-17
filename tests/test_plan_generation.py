@@ -4,8 +4,9 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import BaseModel
 
-from cognitive_mesh.agents import default_registry
+from cognitive_mesh.agents import Agent, AgentRegistry, Capability, Handled, default_registry
 from cognitive_mesh.cli import (
     EXIT_CONFIG_ERROR,
     EXIT_OK,
@@ -238,3 +239,76 @@ def test_groq_needs_the_remote_opt_in_for_planning_too(
     monkeypatch.setenv("GROQ_API_KEY", "gsk_fakefakefakefake")
     assert main(["plan", "x"]) == EXIT_CONFIG_ERROR
     assert "COGMESH_ALLOW_REMOTE_CONTENT" in capsys.readouterr().err
+
+
+# -- input references ---------------------------------------------------------------------------
+
+
+class _Nothing(BaseModel):
+    pass
+
+
+class _Made(BaseModel):
+    value: str
+
+
+class _Wanted(BaseModel):
+    text: str
+
+
+def _refs_registry() -> AgentRegistry:
+    class Maker(Agent):
+        id = "maker"
+        role = "test"
+        description = "makes a value"
+
+        def __init__(self) -> None:
+            super().__init__(
+                [Capability("make", "m", _Nothing, _Made, lambda i, c: Handled(_Made(value="v")))]
+            )
+
+    class Taker(Agent):
+        id = "taker"
+        role = "test"
+        description = "takes a value"
+
+        def __init__(self) -> None:
+            super().__init__(
+                [Capability("take", "t", _Wanted, _Made, lambda i, c: Handled(_Made(value=i.text)))]
+            )
+
+    registry = AgentRegistry()
+    registry.register(Maker())
+    registry.register(Taker())
+    return registry
+
+
+def _refs_reply(field: str) -> dict[str, object]:
+    return {
+        "steps": [
+            {"step_id": "a", "capability": "make"},
+            {
+                "step_id": "b",
+                "capability": "take",
+                "depends_on": ["a"],
+                "input_refs": {"text": {"step_id": "a", "field": field}},
+            },
+        ]
+    }
+
+
+def test_a_drafted_plan_may_use_input_references() -> None:
+    plan, _ = generate_plan("x", _refs_registry(), FakeClient(_refs_reply("value")))
+    assert plan.steps[1].input_refs["text"].field == "value"
+
+
+def test_a_drafted_reference_to_a_field_that_does_not_exist_is_rejected() -> None:
+    with pytest.raises(PlanGenerationError, match="does not declare"):
+        generate_plan("x", _refs_registry(), FakeClient(_refs_reply("nope")))
+
+
+def test_the_prompt_tells_the_model_about_references() -> None:
+    client = FakeClient(_refs_reply("value"))
+    generate_plan("x", _refs_registry(), client)
+    assert "input_refs" in client.requests[0].system
+    assert json.loads(client.requests[0].prompt)["capabilities"][0]["output_fields"] == ["value"]
