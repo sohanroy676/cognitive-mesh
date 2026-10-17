@@ -470,6 +470,31 @@ def _run_plan(plan_path: Path, root: Path, as_json: bool, trace_db: Path | None)
     return EXIT_OK if run.status is TaskStatus.SUCCEEDED else EXIT_TASK_NOT_SUCCEEDED
 
 
+def _print_offered_context(trace: RunTrace) -> None:
+    """What past experience the run was given (ADR-0017); nothing is printed for plain runs."""
+    pack = trace.recalled
+    if pack is None:
+        return
+    withheld = pack.withheld
+    print(
+        f"  offered context: {len(pack.claims)} claim(s), {len(pack.raw)} raw trace(s); withheld "
+        f"{withheld.unconfirmed} unconfirmed, {withheld.not_applicable} not applicable, "
+        f"{withheld.over_limit} over the size limit"
+    )
+    if pack.empty:
+        print(f"    {_printable(pack.message)}")
+    for claim in pack.claims:
+        label = f"[{_printable(claim.status)}] {_printable(claim.name)}"
+        print(f"    {label}  {_printable(claim.claim_id)}")
+    for raw in pack.raw:
+        print(
+            f"    [raw: {_printable(raw.kind)}] run {_printable(raw.run_id)} "
+            f"step {_printable(raw.step_id)} {_printable(raw.capability)}"
+        )
+    if pack.claims or pack.raw:
+        print("    none of this is verified truth; statuses say how well a claim is backed")
+
+
 def _print_trace(trace: RunTrace) -> None:
     print(f"run {_printable(trace.run_id)}: {trace.status.value}  task={_printable(trace.task_id)}")
     finished = f"  finished {trace.finished_at.isoformat()}" if trace.finished_at else ""
@@ -486,6 +511,7 @@ def _print_trace(trace: RunTrace) -> None:
     )
     if trace.redactions:
         print("  redacted: " + ", ".join(_printable(r) for r in trace.redactions))
+    _print_offered_context(trace)
     if trace.status is TraceStatus.INTERRUPTED:
         print("  the run never finished; no step data was stored")
     for step in trace.steps:

@@ -2,10 +2,11 @@
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, JsonValue
+from pydantic import BaseModel, ConfigDict, JsonValue, model_validator
 
-from cognitive_mesh.agents import AgentResult
+from cognitive_mesh.agents import AgentResult, RecalledContext
 from cognitive_mesh.orchestrator import StepRecord, StepStatus, TaskRun, TaskStatus
 
 
@@ -74,6 +75,15 @@ class RunTrace(_Frozen):
     redactions: tuple[str, ...] = ()  # rule names only, never values
     plan: dict[str, JsonValue]
     steps: tuple[StepTrace, ...] = ()
+    # What past experience this run was offered (ADR-0017). None: a plain `run`, or an older run.
+    recalled: RecalledContext | None = None
+    request_length: int | None = None
+
+    @model_validator(mode="after")
+    def _context_and_request_go_together(self) -> Self:
+        if (self.recalled is None) != (self.request_length is None):
+            raise ValueError("recalled context and request length are recorded together")
+        return self
 
     def to_task_run(self) -> TaskRun:
         """Rebuild the run so its status is recomputed from the steps, not trusted from storage."""
