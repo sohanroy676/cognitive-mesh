@@ -19,6 +19,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record the pre-v0.7.0 review pass
 - Record lockfiles, data passing, plan drafting and layout
 - Hand off after the pre-v0.7.0 review pass
+- Record CI run 39033918355 and the v0.7.0 design
 
 ### Maintenance
 - Run on release tags and check the changelog section
