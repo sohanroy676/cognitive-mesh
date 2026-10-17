@@ -56,3 +56,27 @@ Plans, step inputs and agent outputs are untrusted data.
 - The task status cannot disagree with its steps.
 - A hung provider call can exceed the run budget; only the clients' own timeouts bound it.
 - Steps cannot consume earlier outputs yet; useful multi-step pipelines wait for a later ADR.
+
+## Amendment 2026-10-17: input references and fallback agents
+Accepted by the user before coding (the fallback design below was narrowed while implementing, see the
+last bullet).
+- **Input references.** A step may have `input_refs: {input name: {step_id, field}}`, filled at run time
+  from the validated `output` of an earlier step. Rules, all checked before anything runs: the name is a
+  plain identifier and not also a literal input; the referenced step is in `depends_on`; the field is
+  declared in the output schema of every agent that supports the upstream capability. At run time a
+  field that the upstream result lacks fails the step as `invalid_reference` (message names ids and the
+  field only). The resolved value goes through the agent's normal strict input validation, so a value of
+  the wrong type is an ordinary `invalid_input` failure.
+- **Provenance.** `StepRecord.input_sources` lists each resolved input with the producing step, field,
+  `basis` and model, so model-written data (`model_unverified`) stays visible downstream. Passing a value
+  on does not upgrade it. Traces do not store `input_sources` yet; the plan (with the references) and the
+  upstream attempts are stored, so the flow can be reconstructed.
+- **Fallback agents.** Agents supporting a capability are ordered by id (registry order). If an agent
+  returns a failure result and is out of retries (or the failure is not retryable), the next agent is
+  tried, up to `MAX_AGENTS_PER_STEP` (3) in total, each with its own retry budget. Attempt ids keep the
+  step-wide count (`task.step.N`). A step that raised, returned an invalid result or ran out of run
+  budget does not fall back: that is a defect or a deadline, not a normal failure. The step's `agent_id`
+  is the last agent tried, and the trace store now checks that only the last attempt matches it.
+- **Narrowed on purpose:** the approved wording was "fallback capabilities". A different capability can
+  have a different output shape and would break the attempt checks in traces, so fallback is to another
+  agent of the same capability.

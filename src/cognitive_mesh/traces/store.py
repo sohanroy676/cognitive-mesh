@@ -447,7 +447,6 @@ def _build_step(
             or result.capability != s["capability"]
             or a["result_status"] != result.status
             or (a["model_provider"], a["model_name"], a["basis"]) != _result_columns(result)
-            or (s["agent_id"] is not None and s["agent_id"] != result.agent_id)
         ):
             raise fail("an attempt does not match its step or task")
         attempts.append(
@@ -455,6 +454,9 @@ def _build_step(
                 attempt_no=n, agent_task_id=expected_task, agent_id=result.agent_id, result=result
             )
         )
+    # A fallback agent may have taken over, so only the last attempt must match the step's agent.
+    if attempts and s["agent_id"] is not None and s["agent_id"] != attempts[-1].agent_id:
+        raise fail("an attempt does not match its step or task")
     if len(attempts) > s["attempt_count"]:
         raise fail("a step has more attempts than its attempt count")
     if any(isinstance(a.result, AgentSuccess) for a in attempts[:-1]):

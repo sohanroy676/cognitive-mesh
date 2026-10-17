@@ -1,5 +1,6 @@
 """Plan validation and dependency ordering. Nothing runs if the plan is invalid (ADR-0010)."""
 
+import re
 from dataclasses import dataclass
 
 from cognitive_mesh.agents import AgentRegistry
@@ -36,7 +37,41 @@ def plan_task(plan: TaskPlan, registry: AgentRegistry) -> ValidatedPlan:
                 f"step {step.step_id!r} needs capability {step.capability!r}, "
                 "which no registered agent declares"
             )
+    by_id = {s.step_id: s for s in steps}
+    for step in steps:
+        _check_refs(step, by_id, registry)
     return ValidatedPlan(task_id=plan.task_id, order=_topological_order(steps))
+
+
+_INPUT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+
+
+def _output_fields(registry: AgentRegistry, capability: str) -> set[str] | None:
+    """Output field names every candidate agent declares, or None if a schema has no properties."""
+    fields: list[set[str]] = []
+    for agent in registry.find(capability):
+        for cap in agent.spec().capabilities:
+            props = cap.output_schema.get("properties")
+            if cap.name == capability and isinstance(props, dict):
+                fields.append(set(props))
+    return set.intersection(*fields) if fields else None
+
+
+def _check_refs(step: PlanStep, by_id: dict[str, PlanStep], registry: AgentRegistry) -> None:
+    for name, ref in sorted(step.input_refs.items()):
+        where = f"step {step.step_id!r} input {name!r}"
+        if not _INPUT_NAME.match(name):
+            raise PlanError(f"step {step.step_id!r} has an input reference with an invalid name")
+        if name in step.inputs:
+            raise PlanError(f"{where} is given both as a literal and as a reference")
+        if ref.step_id not in step.depends_on:
+            raise PlanError(f"{where} references step {ref.step_id!r}, which it does not depend on")
+        fields = _output_fields(registry, by_id[ref.step_id].capability)
+        if fields is not None and ref.field not in fields:
+            raise PlanError(
+                f"{where} references field {ref.field!r}, which step {ref.step_id!r} "
+                "does not declare in its output"
+            )
 
 
 def _topological_order(steps: tuple[PlanStep, ...]) -> tuple[PlanStep, ...]:

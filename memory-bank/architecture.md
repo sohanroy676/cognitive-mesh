@@ -36,7 +36,8 @@ while tracking their source, validity, confidence, and conflicts.
 - Custom Orchestrator
   Assign tasks, coordinate execution, manage results, and handle failures.
   Implemented in v0.5.0 as `src/cognitive_mesh/orchestrator/` (ADR-0010): sequential, assignment by
-  capability, bounded retries, run budget, task status derived from step statuses. In-memory only.
+  capability, bounded retries, run budget, task status derived from step statuses. Amended: `input_refs` pass earlier
+  step outputs to later steps, and up to two fallback agents (same capability) take over after a failure result.
 - Model Provider Interface
   Route model requests to configured providers, including Groq and Ollama where available.
   Protocol and error types (v0.4.0) plus a real Ollama client (v0.6.1, ADR-0012: `providers/ollama.py`, stdlib transport
