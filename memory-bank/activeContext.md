@@ -3,9 +3,10 @@
 <!-- Update this at the end of every session. This is the first thing to read when resuming. -->
 
 ## Current focus
-v0.3.0 is tagged. v0.3.1 (JS/TS + dynamic imports) is merged to main and pushed (`0d16c4a`), CI green (run 39012713238), not tagged. Dependabot PRs #1, #3, #4 are merged; no PRs are open. v0.3.2 Dependency Graph Visualization is next, planned only (inserted before v0.4.0 at the user's request); v0.4.0 is planned after it.
+v0.3.0 and v0.3.1 are tagged and pushed. v0.3.2 Dependency Graph Visualization is implemented and committed on `feature/v0.3.2-graph-visualization` (`c6d49b8`), not pushed or merged; it awaits the user's review. v0.4.0 is planned after it and not started.
 
 ## Recent decisions
+- ADR-0008 (accepted by the user): Mermaid and self-contained HTML/SVG from one `GraphView`; no new dependency, no script or network loads; escaped, ASCII, deterministic output; visible truncation (HTML 300/1000, Mermaid 100/200); `--format` is exclusive with `--json`/`--deps-of`; exit 5 for write errors.
 - ADR-0007 (accepted by the user): tree-sitter for JS/TS, private to `graph/js_parse.py`; syntax-node matching only; computed dynamic imports are `unresolved:dynamic:*` + `computed_import`; bare/aliased JS specifiers stay unresolved; no `.js`->`.ts` remap.
 - ADR-0006: edge `A -> B` = A depends on B; every edge has evidence; unresolved/ambiguous things are `unresolved` nodes + diagnostics, imports never linked to packages by name; lockfiles stay excluded, so transitive external deps are reported unknown; NetworkX private behind pydantic models.
 - ADR-0005: local directories only; classification by name/extension; never executed (parse-only stdlib checks); sensitive names never opened; content secret scan with redaction; symlinks not followed.
@@ -14,12 +15,12 @@ v0.3.0 is tagged. v0.3.1 (JS/TS + dynamic imports) is merged to main and pushed 
 - CHANGELOG generation deliberately not set up (not requested).
 
 ## Blockers / open questions
-- Pushes and merges always need explicit user approval. Tagging v0.3.1 needs approval.
-- gitleaks-action@v3 was merged but never exercised in CI (step is gated on `RUN_SECRET_SCAN`); enabling that repo variable would test it.
+- Pushes and merges always need explicit user approval (v0.3.2 is unpushed).
+- `RUN_SECRET_SCAN` is now `true`, so gitleaks-action@v3 will run for the first time on the next push; the shallow checkout may need `fetch-depth: 0`, and real findings must be reported, not hidden.
 - Writing an ~880 KB file and opening it took ~23 s on this Windows machine (inside `open()`, not our code; cause unverified, possibly on-access scanning). Tests use smaller files.
 - Local branches are never deleted by the agent (rule in CLAUDE.md); old branches are kept.
 - Build/packaging command is untested (TBD).
 
 ## Next step
-1. Ask about tagging v0.3.1, then plan and build v0.3.2 visualization (ADR-0008 for the format) via `/new-feature` after the user approves the plan.
-2. Only after v0.3.2 is merged: plan v0.4.0 Agent Architecture (see docs/DETAILED_ROADMAP.md). Lockfile ingestion (for transitive dependencies) was deliberately deferred in ADR-0006.
+1. User reviews v0.3.2; on approval push the branch (first gitleaks run), check CI, merge, then mark v0.3.2 done in ROADMAP.md/README.md after CI on main is green.
+2. Only after v0.3.2 is merged and the user asks: plan v0.4.0 Agent Architecture (see docs/DETAILED_ROADMAP.md). Lockfile ingestion (for transitive dependencies) was deliberately deferred in ADR-0006.

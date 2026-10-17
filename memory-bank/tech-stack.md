@@ -90,10 +90,16 @@ uv run cognitive-mesh graph tests/fixtures/js_app               # exit 0, 7 unre
 uv run cognitive-mesh graph tests/fixtures/js_app --json        # exit 0
 uv run cognitive-mesh graph tests/fixtures/js_app --deps-of module:src/index.ts --transitive   # exit 0
 uv run cognitive-mesh graph tests/fixtures/js_app --deps-of nope   # exit 4
+uv run cognitive-mesh graph tests/fixtures/dep_app --format mermaid          # exit 0, flowchart text
+uv run cognitive-mesh graph tests/fixtures/js_app --format html --output FILE   # exit 0, writes ASCII/LF HTML
+uv run cognitive-mesh graph tests/fixtures/dep_app --format html --max-nodes 3  # exit 0, truncation banner + stderr notice
+uv run cognitive-mesh graph tests/fixtures/dep_app --format html --json         # exit 2 (usage error)
+uv run cognitive-mesh graph tests/fixtures/dep_app --format html --output missing/dir/x.html   # exit 5
 ```
 The v0.1.0 commands also passed in a fresh `git clone` of its feature branch; the `ingest` commands were run only in the working tree (not yet in a fresh clone or CI).
 The `dep_app` `graph` commands were run 2026-10-17 in the working tree on branch `feature/v0.3.0-dependency-graph` (not in a fresh clone; CI runs the test suite, not these CLI calls).
 The `js_app` graph commands were run 2026-10-17 in the working tree on branch `feature/v0.3.1-js-dynamic-imports` (not yet in a fresh clone or CI).
+The `--format` graph commands were run 2026-10-17 in the working tree on branch `feature/v0.3.2-graph-visualization` (not yet in a fresh clone or CI); the HTML output was also opened in headless Edge. No dependency was added in v0.3.2.
 Note: the "no config: exit 2" check needs a working directory without a local `.env`.
 
 Do not document unverified commands as working commands.

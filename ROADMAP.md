@@ -26,22 +26,24 @@ Completed 2026-10-17. Merged to main (`d172312`); GitHub Actions CI run 39010744
 - Test dependency links against known sample applications (`tests/fixtures/dep_app`).
 - Known limitations: declared direct dependencies and Python imports only; lockfiles excluded so transitive external dependencies are unknown; JS/TS imports and dynamic imports not analysed (addressed in v0.3.1); in-memory only.
 
-## Now — v0.3.1: JS/TS and Dynamic Import Analysis (done, next: v0.3.2)
+### v0.3.1 — JS/TS and Dynamic Import Analysis
 
-Status: done 2026-10-17. Merged to main (`0d16c4a`); GitHub Actions CI run 39012713238 passed. Not tagged. See ADR-0007.
+Completed 2026-10-17. Merged to main (`0d16c4a`); GitHub Actions CI run 39012713238 passed. Tagged `v0.3.1` (2026-10-17). See ADR-0007.
 
 - JS/TS `import` / `export ... from` / `require()` / literal `import()` / type-only imports become evidence-backed edges (tree-sitter, private to `graph/js_parse.py`).
 - Python `importlib.import_module` / `__import__` with a literal argument become edges; computed ones become `unresolved` nodes plus a `computed_import` diagnostic.
 - Known limitations: bundler aliases, tsconfig `paths`, package.json `exports`, `.js` to `.ts` remapping and `.mjs`/`.cjs` files are not modelled; bare specifiers stay unresolved; in-memory only.
 
-## Next — Planned, Not Started
+## Now — v0.3.2: Dependency Graph Visualization (implemented on a branch, awaiting review and merge)
 
-### v0.3.2 — Dependency Graph Visualization
-- Render the existing `DependencyGraph` (v0.3.0/v0.3.1) so a person can see it, e.g. `cognitive-mesh graph PATH --format ...`. Output format (Mermaid text, self-contained HTML/SVG, or similar) and any new dependency are decided in ADR-0008 before coding; prefer no new dependency.
-- Show unresolved nodes, computed dynamic imports, cycles and diagnostics distinctly, and keep evidence (file, line, rule) reachable from each edge.
-- Treat all node names and evidence text as untrusted data: escape them in the output; no script execution, no network or CDN loads.
-- Read-only: the visualization adds no new analysis and does not change graph results.
-- Planned only; nothing implemented.
+Status: implemented 2026-10-17 on `feature/v0.3.2-graph-visualization` (`c6d49b8`); local verification passed (253 tests, ruff, mypy). Not merged; not done until merged and CI on main is green. See ADR-0008.
+
+- `cognitive-mesh graph PATH --format mermaid|html [--output FILE] [--max-nodes N] [--max-edges N]` renders the existing `DependencyGraph`; no new dependency, no script, no network loads.
+- Unresolved nodes, computed dynamic imports and cycles are visually distinct; evidence is reachable per edge (tooltip + table in HTML, comments in Mermaid); truncation shows a visible notice.
+- Node names and evidence are escaped; output is ASCII and deterministic; text and `--json` output are unchanged (diffed against saved baselines).
+- Known limitations: naive layout (edges can cross); cycle members outrank unresolved items when truncating; Mermaid output unchecked in a real Mermaid renderer; HTML viewed only in headless Edge.
+
+## Next — Planned, Not Started
 
 ### v0.4.0 — Agent Architecture (planned after v0.3.2)
 - Define agent interfaces, responsibilities, and capability descriptions.
