@@ -34,6 +34,7 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0008-dependency-graph-visualization.md`, `docs/adr/0009-agent-architecture.md`, `docs/adr/0010-orchestrator.md`, `docs/adr/0011-episodic-trace-store.md`, `docs/adr/0012-ollama-client.md`, `docs/adr/0013-groq-client.md`, `docs/adr/0014-semantic-memory-retrieval.md`, `docs/adr/0015-experience-graph.md`, `docs/adr/0016-evidence-aware-retrieval.md`, `docs/adr/0017-context-supply.md`.
 
 ### Known limitations
+- Scale and identity (checked 2026-10-18, synthetic traces, see `memory-bank/progress.md`): `recall` and `task` rebuild the whole experience graph on every call, so they grow with the number of recorded runs (about 15 s at 5,000 runs, about 66 s and 2.4 GB peak at 20,000, fake embedder). The relevance gate cannot tell two applications apart when they share a directory name and module paths, so they share context (pinned by `tests/test_e2e_identity_limit.py`; a foreign claim is still re-derived and never `validated` for code that lacks it); identity is planned with v1.3.0.
 - Local directories only; results are in memory, except run traces recorded with `--trace-db` (v0.6.0).
 - Secret detection is pattern- and entropy-based and not exhaustive (it can miss short, low-entropy or hex-only secrets and can redact an innocent random id). Sending file contents to Groq needs `COGMESH_ALLOW_REMOTE_CONTENT=true`.
 - The graph covers declared direct dependencies, Python imports and (v0.3.1) JS/TS imports. Only `uv.lock` and

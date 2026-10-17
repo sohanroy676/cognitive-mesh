@@ -7,6 +7,11 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - Record CI runs and handoff for v1.0.0
+- Record the v1.0.0 verification pass
+- Record the remaining v1.0.0 verification items
+
+### Maintenance
+- **e2e:** Pin that same-named applications share context
 
 ### Fixed
 - **traces:** Tolerate parallel creation of a new trace database
