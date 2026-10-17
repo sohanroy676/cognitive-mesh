@@ -170,7 +170,8 @@ def test_file_content_is_sent_as_one_json_string_and_cannot_steer_handling() -> 
     assert isinstance(result, AgentSuccess)
     prompt = client.requests[0].prompt
     payload = json.loads(prompt)
-    assert set(payload) == {"path", "language", "content"}
+    assert set(payload) == {"path", "language", "content", "prior_context"}
+    assert payload["prior_context"]["empty"] is True  # no pack given: the explicit empty marker
     assert payload["content"] == injection
     assert "\n" not in prompt  # JSON-escaped, single line
     assert "untrusted" in client.requests[0].system

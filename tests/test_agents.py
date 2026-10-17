@@ -33,6 +33,7 @@ HOSTILE = "SECRET-MARKER-<script>\x1b[31m"
 VALID_INPUTS: dict[str, dict[str, object]] = {
     "dependencies_of": {"node_id": "module:src/dep_app/a.py"},
     "unresolved_report": {},
+    "compare_with_recalled": {},
     "explain_file": {"path": "pyproject.toml"},
 }
 
