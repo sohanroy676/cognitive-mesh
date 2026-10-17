@@ -3,7 +3,7 @@
 <!-- Update this at the end of every session. This is the first thing to read when resuming. -->
 
 ## Current focus
-v0.1.0 to v0.4.0 are done and tagged (`v0.4.0` pushed; CI runs 39023604187 and 39024302873 passed). Tooling work after v0.3.2 (git-cliff changelog with a CI freshness check, `uv build` verified, git-tag versioning via hatch-vcs, one-off Mermaid renderer check) was merged to main from `chore/changelog-git-cliff` and pushed with user approval; its CI run 39022644447 passed. No PRs open. v0.5.0 Basic Orchestrator is implemented on `feature/v0.5.0-orchestrator` (ADR-0010; criteria pass locally; not merged, not pushed, not tagged, CI not yet run). v0.6.0 Episodic Trace Store is next, planned only.
+v0.1.0 to v0.4.0 are done and tagged (`v0.4.0` pushed; CI runs 39023604187 and 39024302873 passed). Tooling work after v0.3.2 (git-cliff changelog with a CI freshness check, `uv build` verified, git-tag versioning via hatch-vcs, one-off Mermaid renderer check) was merged to main from `chore/changelog-git-cliff` and pushed with user approval; its CI run 39022644447 passed. No PRs open. v0.5.0 Basic Orchestrator is implemented and merged to main (branch `feature/v0.5.0-orchestrator`, ADR-0010; criteria pass locally; pushed with user approval at session end; CI result on the merge not yet recorded; not tagged). v0.6.0 Episodic Trace Store is next, planned only.
 
 ## Recent decisions
 - ADR-0010 (accepted by the user): sequential orchestrator; plans validated before running; assignment by `registry.find(cap)[0]`; steps `succeeded|failed|blocked|not_run`; task status derived from steps; retry only `retryable` agent failures (default 2, cap 5); invalid results and raised exceptions fail the step and are not retried; run budget checked before each attempt (no watchdog); `depends_on` is ordering only; `run` CLI exits 6/7.
@@ -24,6 +24,6 @@ v0.1.0 to v0.4.0 are done and tagged (`v0.4.0` pushed; CI runs 39023604187 and 3
 - `uv build` verified locally. Version now derives from git tags (hatch-vcs); the branch awaits approval and a CI run. Mermaid output was checked once with mermaid-cli 12.0.0 (manual).
 
 ## Next step
-1. Ask the user to approve merging `feature/v0.5.0-orchestrator` to main and pushing (summary first); then confirm CI on the merge, record it on a docs/ branch (changelog regenerate last), and ask before tagging `v0.5.0` (annotated; `git-cliff --tag v0.5.0` first; `uv sync --reinstall-package cognitive-mesh` after tagging).
+1. Check `gh run list` for the v0.5.0 merge, record the result in progress.md, activeContext.md, README.md and ROADMAP.md on a docs/ branch (changelog regenerate last), and ask before tagging `v0.5.0` (annotated; `git-cliff --tag v0.5.0` first; `uv sync --reinstall-package cognitive-mesh` after tagging).
 2. Then plan v0.6.0 Episodic Trace Store (docs/DETAILED_ROADMAP.md; next ADR is 0011). `TaskRun`/`StepRecord`/`AgentResult` are the records it would persist.
 3. Known items: no real provider client (Groq/Ollama); clients must honor `timeout_s`; lockfile ingestion deferred (ADR-0006); secret detection is pattern-based; orchestrator has no data passing between steps or fallback agent (ADR-0010).

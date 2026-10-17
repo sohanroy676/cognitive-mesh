@@ -55,7 +55,7 @@ Implemented 2026-10-17 on `feature/v0.4.0-agent-architecture`; its DETAILED_ROAD
 
 ### v0.5.0 — Basic Orchestrator and Task Planning
 
-Implemented 2026-10-17 on `feature/v0.5.0-orchestrator`; its DETAILED_ROADMAP Test/Expected items pass locally. Not merged, not tagged, CI not yet run. See ADR-0010.
+Implemented 2026-10-17 on `feature/v0.5.0-orchestrator`; its DETAILED_ROADMAP Test/Expected items pass locally. Merged to main at session end; CI result on the merge not yet recorded; not tagged. See ADR-0010.
 
 - `TaskPlan`/`PlanStep` models; `plan_task` validates (unique ids, existing dependencies, no cycles, capability has an agent) and orders steps before anything runs.
 - `Orchestrator.run` executes sequentially, assigns by `AgentRegistry.find`, and returns a `TaskRun` whose status is derived from its steps (`succeeded` only if every step succeeded; `failed`; `incomplete`). Steps are `succeeded | failed | blocked | not_run`.

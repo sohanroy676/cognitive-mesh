@@ -26,6 +26,6 @@
 
 ## In progress
 
-- `feature/v0.5.0-orchestrator`: implemented and committed locally; awaiting the user's approval to merge and push. Nothing else in flight.
+- `feature/v0.5.0-orchestrator` was merged to main and pushed with user approval at session end; CI result on that merge is recorded next session (`gh run list`). Not tagged. Nothing else in flight.
 - Old branches (incl. `feature/v0.3.1-js-dynamic-imports`, pushed) are kept; local branches are never deleted.
 - Old branch `feature/v0.2.0-application-ingestion` is kept (local branches are never deleted).
