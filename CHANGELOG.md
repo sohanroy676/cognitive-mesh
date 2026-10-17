@@ -5,8 +5,15 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **experience:** Record listing coverage in graph format 2
+- **experience:** Add claim status, reviews and re-derivation
+- **retrieval:** Add recall command and experience review
+
 ### Documentation
 - Record CI runs for v0.8.0
+- **adr:** Add ADR-0016 evidence-aware retrieval
+- Record v0.9.0 evidence-aware retrieval
 
 ## [0.8.0] - 2026-10-17
 
