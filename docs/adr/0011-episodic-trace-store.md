@@ -73,7 +73,22 @@ redacted before storing; per-step timestamps come from an injected clock.
 - A crash is visible as `interrupted` rather than lost or misreported; no per-step detail is kept for an
   interrupted run.
 - Redaction means a stored trace is not a byte-exact replay.
-- No retention or size limits, a single writer assumed, no migrations beyond `user_version = 1`, and no
+- No retention or size limits, a single writer assumed, migrations only as described in the amendment below (none exist yet), and no
   per-attempt timing.
 - Traces are raw records. Retrieval (v0.7.0) and validation before reuse (v1.1.0) are separate, later
   decisions.
+
+## Amendment 2026-10-17: schema migrations
+Accepted by the user before coding. Version 1 stays the baseline schema.
+- `MIGRATIONS[n]` is a SQL script that upgrades a version-n database to n + 1; `SCHEMA_VERSION` is
+  derived (`1 + len(MIGRATIONS)`). Scripts are append-only once released. There are none yet.
+- A writer (`TraceStore.create`, used by `run --trace-db`) applies the missing scripts in order. Each step
+  is one `BEGIN IMMEDIATE` transaction that also bumps `user_version`, so a failing script leaves that
+  step undone and the version unchanged. Steps already completed stay (a later failure does not undo an
+  earlier step). A gap in `MIGRATIONS` is an error, not a guess.
+- A database newer than the program is refused and left untouched. There is no downgrade.
+- Readers (`TraceStore.open_existing`, used by `traces list/show`) never modify the file. An older database
+  is reported with "run with --trace-db to upgrade it" (exit 8).
+- No automatic backup is made before upgrading. Two writers migrating at once is not supported (single
+  writer assumption); the second fails with a store error instead of corrupting the file.
+- Retention and size limits remain out of scope.

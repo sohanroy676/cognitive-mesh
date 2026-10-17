@@ -32,8 +32,13 @@ from cognitive_mesh.traces.models import (
     TraceStoreError,
 )
 
-SCHEMA_VERSION = 1
+# Migrations (ADR-0011 amendment): MIGRATIONS[n] upgrades a version-n database to n + 1. Each script
+# is plain statements (no BEGIN/COMMIT/user_version); the runner wraps it with the version bump in
+# one transaction. Version 1 is the baseline `_SCHEMA`. Scripts are append-only once released.
+MIGRATIONS: dict[int, str] = {}
+SCHEMA_VERSION = 1 + len(MIGRATIONS)
 _RESULT = TypeAdapter(AgentResult)
+_BASELINE_VERSION = 1
 _FINISHED = frozenset({TraceStatus.SUCCEEDED, TraceStatus.FAILED, TraceStatus.INCOMPLETE})
 
 _SCHEMA = """
@@ -115,8 +120,12 @@ class TraceStore:
                 if conn.execute("SELECT count(*) FROM sqlite_master").fetchone()[0]:
                     raise TraceStoreError("the file is a database but not a trace database")
                 conn.executescript(_SCHEMA)
-            elif version != SCHEMA_VERSION:
-                raise TraceStoreError(f"unsupported trace database version {version}")
+                version = _BASELINE_VERSION
+            if version > _target_version():
+                raise TraceStoreError(
+                    f"the trace database has version {version}, newer than this program supports"
+                )
+            _migrate(conn, version)
             conn.execute("PRAGMA foreign_keys = ON")
         except sqlite3.Error:
             conn.close()
@@ -135,7 +144,12 @@ class TraceStore:
         try:
             conn.execute("PRAGMA query_only = ON")
             version = _user_version(conn)
-            if version != SCHEMA_VERSION:
+            if 0 < version < _target_version():
+                raise TraceStoreError(
+                    f"the trace database has an older version ({version}); "
+                    "run with --trace-db to upgrade it"
+                )
+            if version != _target_version():
                 raise TraceStoreError(
                     f"not a trace database, or an unsupported version ({version})"
                 )
@@ -313,6 +327,26 @@ def _connect(path: Path) -> sqlite3.Connection:
         raise TraceStoreError("cannot open the trace database (sqlite error)") from None
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def _target_version() -> int:
+    return _BASELINE_VERSION + len(MIGRATIONS)
+
+
+def _migrate(conn: sqlite3.Connection, version: int) -> None:
+    """Apply MIGRATIONS from `version` up to the target; each step is one atomic transaction."""
+    while version < _target_version():
+        script = MIGRATIONS.get(version)
+        if script is None:
+            raise TraceStoreError(f"no migration from trace database version {version}")
+        try:
+            conn.executescript(
+                f"BEGIN IMMEDIATE;\n{script}\nPRAGMA user_version = {version + 1};\nCOMMIT;"
+            )
+        except sqlite3.Error:
+            _rollback(conn)
+            raise TraceStoreError("cannot upgrade the trace database (sqlite error)") from None
+        version += 1
 
 
 def _user_version(conn: sqlite3.Connection) -> int:
