@@ -13,6 +13,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Accept ADR-0011 episodic trace store
 - Record v0.6.0 episodic trace store
 - Hand off after v0.6.0 trace store
+- Plan v0.6.1 ollama and v0.6.2 groq clients
 
 ## [0.5.0] - 2026-10-17
 
