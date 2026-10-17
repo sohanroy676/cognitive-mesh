@@ -24,6 +24,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Accept ADR-0014 semantic memory retrieval
 - Document v0.7.0 semantic memory retrieval
 - Hand off after v0.7.0 semantic memory retrieval
+- Record CI run 39043661141 for v0.7.0
 
 ### Maintenance
 - Run on release tags and check the changelog section
