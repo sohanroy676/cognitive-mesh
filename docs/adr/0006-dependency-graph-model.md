@@ -53,7 +53,7 @@ only the in-memory `IngestionResult` from v0.2.0 (ADR-0005). Lockfiles are exclu
 - Ingest lockfiles to get transitive edges: widens ADR-0005 (new file kind, size limits, per-format
   parsers). Deferred; the graph reports transitive dependencies as unknown instead.
 - Link imports to packages by name match: produces confident-looking wrong edges. Rejected.
-- JS/TS import parsing: needs a real parser dependency. Out of scope; those files are not analysed.
+- JS/TS import parsing: needs a real parser dependency. Deferred to v0.3.1 (ADR-0007).
 - Component per manifest file: duplicates one project when two manifests describe it.
 
 ## Consequences
@@ -63,3 +63,5 @@ only the in-memory `IngestionResult` from v0.2.0 (ADR-0005). Lockfiles are exclu
   modelled, so a missing import edge is not proof of no dependency.
 - Line numbers for TOML/JSON declarations are a best-effort text search and may be `None`.
 - Graph results are in-memory only.
+- Partly superseded by ADR-0007 (v0.3.1): JS/TS imports and literal dynamic imports are now
+  analysed, and computed dynamic imports are reported as unresolved. The other limits above stand.

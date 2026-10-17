@@ -11,8 +11,9 @@ import re
 import sys
 import tomllib
 from pathlib import Path
-from posixpath import dirname
+from posixpath import dirname, join, normpath, splitext
 
+from cognitive_mesh.graph import js_parse
 from cognitive_mesh.graph.models import (
     Edge,
     EdgeKind,
@@ -29,6 +30,9 @@ _REQ_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)\s*(\[[^\]]*\])?\s*(.*)$")
 _SPEC_START = ("<", ">", "=", "!", "~", ";", "@", "(")
 _NPM_SECTIONS = ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies")
 _MAX_ID_TEXT = 200
+_JS_EXTENSIONS = (".ts", ".tsx", ".js", ".jsx")
+_JS_LANGUAGES = frozenset({"javascript", "typescript"})
+_Located = ast.Import | ast.ImportFrom | ast.Call
 
 
 class _Accumulator:
@@ -281,7 +285,7 @@ def _manifests(acc: _Accumulator, result: IngestionResult) -> None:
                 file.ref.path,
                 GraphDiagnosticCode.UNSUPPORTED_MANIFEST,
                 "warning",
-                "manifest type is ingested but its dependencies are not parsed in v0.3.0",
+                "manifest type is ingested but its dependencies are not parsed",
             )
 
 
@@ -324,8 +328,68 @@ class _ModuleIndex:
         return None
 
 
-def _import_statement(node: ast.Import | ast.ImportFrom) -> str:
+def _import_statement(node: _Located) -> str:
     return _clip(ast.unparse(node))
+
+
+def _dynamic_aliases(tree: ast.AST) -> tuple[set[str], set[str]]:
+    """Names bound to the importlib module and to importlib.import_module in this file."""
+    modules: set[str] = set()
+    functions: set[str] = set()
+    for stmt in ast.walk(tree):
+        if isinstance(stmt, ast.Import):
+            for alias in stmt.names:
+                if alias.name == "importlib":
+                    modules.add(alias.asname or "importlib")
+                elif alias.name.startswith("importlib.") and alias.asname is None:
+                    modules.add("importlib")
+        elif isinstance(stmt, ast.ImportFrom) and stmt.module == "importlib" and not stmt.level:
+            functions.update(a.asname or a.name for a in stmt.names if a.name == "import_module")
+    return modules, functions
+
+
+def _is_dynamic_import(call: ast.Call, modules: set[str], functions: set[str]) -> bool:
+    func = call.func
+    if isinstance(func, ast.Name):
+        return func.id == "__import__" or func.id in functions
+    return (
+        isinstance(func, ast.Attribute)
+        and func.attr == "import_module"
+        and isinstance(func.value, ast.Name)
+        and func.value.id in modules
+    )
+
+
+def _link_computed(
+    acc: _Accumulator, file: IngestedFile, source: str, evidence: Evidence, label: str
+) -> None:
+    """A dynamic import whose target is not a plain literal: visible, never guessed."""
+    uid = f"unresolved:dynamic:{file.ref.path}:{evidence.line}"
+    acc.node(Node(id=uid, kind=NodeKind.UNRESOLVED, name=_clip(label), ref=file.ref))
+    acc.edge(source, uid, EdgeKind.IMPORTS, evidence)
+    acc.diag(
+        file.ref.path,
+        GraphDiagnosticCode.COMPUTED_IMPORT,
+        "warning",
+        f"line {evidence.line}: dynamic import target is not a plain literal; recorded as "
+        "unresolved",
+    )
+
+
+def _link_dynamic_python(
+    acc: _Accumulator,
+    file: IngestedFile,
+    source: str,
+    call: ast.Call,
+    index: _ModuleIndex,
+    declared: set[str],
+) -> None:
+    first = call.args[0] if call.args else None
+    literal = first.value if isinstance(first, ast.Constant) else None
+    if isinstance(literal, str) and literal and not literal.startswith("."):
+        _link_absolute(acc, file, source, call, literal, index, declared)
+    else:  # computed, empty, relative or keyword-only: the target cannot be known statically
+        _link_computed(acc, file, source, _evidence(file, call), _import_statement(call))
 
 
 def _python_imports(acc: _Accumulator, result: IngestionResult) -> None:
@@ -353,6 +417,7 @@ def _python_imports(acc: _Accumulator, result: IngestionResult) -> None:
             acc.diag(file.ref.path, GraphDiagnosticCode.PARSE_ERROR, "error", "cannot parse Python")
             continue
         source = f"module:{file.ref.path}"
+        modules, functions = _dynamic_aliases(tree)
         for stmt in ast.walk(tree):
             if isinstance(stmt, ast.Import):
                 for alias in stmt.names:
@@ -362,19 +427,20 @@ def _python_imports(acc: _Accumulator, result: IngestionResult) -> None:
                     _link_relative(acc, file, source, stmt, index)
                 else:
                     _link_from(acc, file, source, stmt, index, declared)
+            elif isinstance(stmt, ast.Call) and _is_dynamic_import(stmt, modules, functions):
+                _link_dynamic_python(acc, file, source, stmt, index, declared)
 
 
-def _evidence(file: IngestedFile, stmt: ast.Import | ast.ImportFrom) -> Evidence:
-    return Evidence(
-        ref=file.ref, line=stmt.lineno, rule="python:import", detail=_import_statement(stmt)
-    )
+def _evidence(file: IngestedFile, stmt: _Located) -> Evidence:
+    rule = "python:dynamic-import" if isinstance(stmt, ast.Call) else "python:import"
+    return Evidence(ref=file.ref, line=stmt.lineno, rule=rule, detail=_import_statement(stmt))
 
 
 def _link_found(
     acc: _Accumulator,
     file: IngestedFile,
     source: str,
-    stmt: ast.Import | ast.ImportFrom,
+    stmt: _Located,
     found: set[str],
     label: str,
 ) -> None:
@@ -395,7 +461,7 @@ def _link_unresolved(
     acc: _Accumulator,
     file: IngestedFile,
     source: str,
-    stmt: ast.Import | ast.ImportFrom,
+    stmt: _Located,
     label: str,
     candidate: str | None = None,
 ) -> None:
@@ -416,7 +482,7 @@ def _link_external(
     acc: _Accumulator,
     file: IngestedFile,
     source: str,
-    stmt: ast.Import | ast.ImportFrom,
+    stmt: _Located,
     dotted: str,
     declared: set[str],
 ) -> None:
@@ -434,7 +500,7 @@ def _link_absolute(
     acc: _Accumulator,
     file: IngestedFile,
     source: str,
-    stmt: ast.Import | ast.ImportFrom,
+    stmt: _Located,
     dotted: str,
     index: _ModuleIndex,
     declared: set[str],
@@ -504,6 +570,123 @@ def _link_relative(
             acc.edge(source, f"module:{target}", EdgeKind.IMPORTS, _evidence(file, stmt))
 
 
+def _js_relative(spec: str, from_path: str, paths: frozenset[str]) -> list[str] | None:
+    """Ingested files a relative specifier can mean, or None if it escapes the root."""
+    joined = normpath(join(dirname(from_path), spec))
+    if joined == ".." or joined.startswith("../") or joined.startswith("/"):
+        return None
+    if joined == ".":
+        candidates = [f"index{ext}" for ext in _JS_EXTENSIONS]
+    else:
+        candidates = [
+            joined,
+            *(joined + ext for ext in _JS_EXTENSIONS),
+            *(f"{joined}/index{ext}" for ext in _JS_EXTENSIONS),
+        ]
+    return list(dict.fromkeys(c for c in candidates if c in paths))
+
+
+def _js_package_name(spec: str) -> str:
+    parts = spec.split("/")
+    return "/".join(parts[:2]) if spec.startswith("@") else parts[0]
+
+
+def _link_js(
+    acc: _Accumulator,
+    file: IngestedFile,
+    source: str,
+    spec: str,
+    evidence: Evidence,
+    paths: frozenset[str],
+    declared: set[str],
+) -> None:
+    if spec in (".", "..") or spec.startswith(("./", "../")):
+        found = _js_relative(spec, file.ref.path, paths)
+        if found and len(found) == 1:
+            acc.edge(source, f"module:{found[0]}", EdgeKind.IMPORTS, evidence)
+            return
+        if found:
+            acc.diag(
+                file.ref.path,
+                GraphDiagnosticCode.AMBIGUOUS_IMPORT,
+                "warning",
+                f"line {evidence.line}: import of {_clip(spec)} matches several files; "
+                "recorded as unresolved",
+            )
+        uid, label, candidate = f"unresolved:import:js:{_clip(spec)}", spec, None
+    elif spec.startswith("node:") and len(spec) > len("node:"):
+        sid = f"stdlib:node:{_clip(spec[5:])}"
+        acc.node(Node(id=sid, kind=NodeKind.STDLIB, name=_clip(spec)))
+        acc.edge(source, sid, EdgeKind.IMPORTS, evidence)
+        return
+    else:
+        name = _js_package_name(spec)
+        candidate = f"pkg:npm:{name}" if f"pkg:npm:{name}" in declared else None
+        uid, label = f"unresolved:import:js:{_clip(name)}", name
+    acc.node(
+        Node(
+            id=uid,
+            kind=NodeKind.UNRESOLVED,
+            name=_clip(label),
+            ref=file.ref,
+            candidate_package=candidate,
+        )
+    )
+    acc.edge(source, uid, EdgeKind.IMPORTS, evidence)
+
+
+def _js_imports(acc: _Accumulator, result: IngestionResult) -> None:
+    jsfiles = [f for f in result.files if f.kind is FileKind.SOURCE and f.language in _JS_LANGUAGES]
+    if not jsfiles:
+        return
+    paths = frozenset(f.ref.path for f in jsfiles)
+    declared = {n.id for n in acc.nodes.values() if n.kind is NodeKind.PACKAGE}
+    for file in jsfiles:
+        acc.node(
+            Node(
+                id=f"module:{file.ref.path}", kind=NodeKind.MODULE, name=file.ref.path, ref=file.ref
+            )
+        )
+    for file in jsfiles:
+        if file.parse_status is ParseStatus.ERROR:
+            acc.diag(
+                file.ref.path,
+                GraphDiagnosticCode.PARSE_ERROR,
+                "error",
+                "ingestion could not parse this source file; no imports taken from it",
+            )
+            continue
+        try:
+            parsed = js_parse.parse_js_imports(splitext(file.ref.path)[1], file.content)
+        except (ValueError, RuntimeError, MemoryError):
+            acc.diag(file.ref.path, GraphDiagnosticCode.PARSE_ERROR, "error", "cannot parse JS/TS")
+            continue
+        if parsed.has_error:
+            acc.diag(
+                file.ref.path,
+                GraphDiagnosticCode.PARSE_ERROR,
+                "warning",
+                "syntax errors in JS/TS; imports taken only from error-free regions",
+            )
+        source = f"module:{file.ref.path}"
+        for item in parsed.imports:
+            evidence = Evidence(
+                ref=file.ref, line=item.line, rule=item.rule, detail=_clip(item.cited)
+            )
+            if not item.specifier:  # computed, or an empty specifier
+                _link_computed(acc, file, source, evidence, item.cited)
+            else:
+                _link_js(acc, file, source, item.specifier, evidence, paths, declared)
+    acc.diag(
+        ".",
+        GraphDiagnosticCode.JS_RESOLUTION_LIMITED,
+        "info",
+        "JS/TS imports are resolved only to ingested files by relative path; bundler aliases, "
+        "tsconfig paths, package.json exports, .js to .ts remapping and .mjs/.cjs files are not "
+        "modelled, so bare and aliased specifiers stay unresolved",
+    )
+
+
 def _contains(acc: _Accumulator) -> None:
     components = {n.id: n for n in acc.nodes.values() if n.kind is NodeKind.COMPONENT}
     dirs = {cid: cid.removeprefix("component:") for cid in components}
@@ -527,6 +710,7 @@ def build(result: IngestionResult) -> tuple[list[Node], list[Edge], list[GraphDi
     acc = _Accumulator()
     _manifests(acc, result)
     _python_imports(acc, result)
+    _js_imports(acc, result)
     _contains(acc)
     acc.diag(
         ".",
