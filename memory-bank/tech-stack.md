@@ -4,7 +4,7 @@
 v0.1.0 foundation is implemented: tooling, config loading, and a minimal CLI. The commands
 in "Verified commands" below were run successfully on 2026-10-16 (Windows 11, Git Bash,
 uv 0.13.1, CPython 3.12.3). Everything else here is still planned and unimplemented, except
-the v0.7.0 vector index (ChromaDB + Sentence Transformers, merged, tagged `v0.7.0`) and the v0.8.0 experience graph (merged, tagged `v0.8.0`); the v0.9.0 evidence-aware `recall` (ADR-0016) is merged and tagged `v0.9.0` (merge `12706e6`; CI runs 39055678848, 39055806280 and, for the tag, 39055934929 passed; no new dependency). v0.6.1 added a real Ollama client (stdlib HTTP, no new dependency; ADR-0012). GitHub Actions CI passed on main (run 38942568274, 2026-10-16). v1.0.0 (ADR-0017: `task`, the context pack, trace schema 2) is implemented on `feature/v1.0.0-end-to-end` and awaits merge; no new dependency, CI not yet run on it.
+the v0.7.0 vector index (ChromaDB + Sentence Transformers, merged, tagged `v0.7.0`) and the v0.8.0 experience graph (merged, tagged `v0.8.0`); the v0.9.0 evidence-aware `recall` (ADR-0016) is merged and tagged `v0.9.0` (merge `12706e6`; CI runs 39055678848, 39055806280 and, for the tag, 39055934929 passed; no new dependency). v0.6.1 added a real Ollama client (stdlib HTTP, no new dependency; ADR-0012). GitHub Actions CI passed on main (run 38942568274, 2026-10-16). v1.0.0 (ADR-0017: `task`, the context pack, trace schema 2) is merged to main (`109f7b8`; CI run 39060264282 passed); no new dependency.
 
 ## Language and Runtime
 - Language: Python
