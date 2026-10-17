@@ -47,6 +47,7 @@ uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy
+uv run git-cliff -o CHANGELOG.md   # regenerate CHANGELOG.md from Conventional Commits; CI fails if stale
 ```
 
 Commands below were run successfully (see `memory-bank/tech-stack.md` for the verified list):

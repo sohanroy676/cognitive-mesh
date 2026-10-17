@@ -37,4 +37,4 @@ Read on demand: `memory-bank/progress.md`, `memory-bank/systemPatterns.md` (fill
 
 ## Known inconsistencies to resolve
 
-- `CHANGELOG.md` is meant to be generated from Conventional Commits, but no generator is configured.
+None currently known.

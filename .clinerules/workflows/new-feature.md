@@ -12,5 +12,5 @@ Steps:
 6. Run lint/format and fix all warnings.
 7. Self-review the diff per 04-code-quality-review.md.
 8. Commit per 02-commit-style.md.
-9. Update `memory-bank/progress.md` and `activeContext.md` with what was done and what's next, and update ROADMAP.md to move this feature out of "Now"/"Next" (CHANGELOG.md itself gets regenerated via the /commit workflow, step 7).
+9. Update `memory-bank/progress.md` and `activeContext.md` with what was done and what's next, and update ROADMAP.md to move this feature out of "Now"/"Next" (after the last commit, regenerate CHANGELOG.md with `uv run git-cliff -o CHANGELOG.md` and commit it as `chore(changelog): regenerate`; see the /commit workflow, step 7).
 10. Summarize the change in plain English for the user, and note it's ready for review/merge (do not push or merge without approval).

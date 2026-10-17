@@ -12,7 +12,7 @@ v0.3.0 and v0.3.1 are tagged and pushed. v0.3.2 Dependency Graph Visualization i
 - ADR-0005: local directories only; classification by name/extension; never executed (parse-only stdlib checks); sensitive names never opened; content secret scan with redaction; symlinks not followed.
 - Redo chosen over restoring `ed71a4f`: adds content-based redaction and common-language source files.
 - v0.2.0 added no dependencies (YAML is `unvalidated`, not parsed); v0.3.0 added NetworkX.
-- CHANGELOG generation deliberately not set up (not requested).
+- CHANGELOG generation set up on branch `chore/changelog-git-cliff` (git-cliff, CI freshness check); not yet merged or pushed. v0.3.2 tagged and the tag pushed (on `e19d5e1`).
 
 ## Blockers / open questions
 - Pushes and merges always need explicit user approval (v0.3.2 was merged and pushed on explicit approval).
@@ -22,5 +22,5 @@ v0.3.0 and v0.3.1 are tagged and pushed. v0.3.2 Dependency Graph Visualization i
 - Build/packaging command is untested (TBD).
 
 ## Next step
-1. Ask the user about tagging v0.3.2 (on merge commit `e19d5e1`).
+1. Ask the user to approve pushing/merging `chore/changelog-git-cliff`; then check the CI run.
 2. Only when the user asks: plan v0.4.0 Agent Architecture (see docs/DETAILED_ROADMAP.md). Lockfile ingestion (for transitive dependencies) was deliberately deferred in ADR-0006.

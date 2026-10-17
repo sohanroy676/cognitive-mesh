@@ -63,6 +63,13 @@ integration credentials.
 - Static type checker: mypy 2.4.0, strict, pydantic plugin; checks `src` and `tests`
 - Commands: `uv run ruff check .`, `uv run ruff format --check .` (drop `--check` to apply), `uv run mypy`
 
+## Changelog
+- Generator: git-cliff 2.14.2 (dev dependency; official orhun/git-cliff), config in `cliff.toml`.
+- Regenerate: `uv run git-cliff -o CHANGELOG.md`; commit as `chore(changelog): regenerate`, as the last commit on a branch. For a release use `--tag vX.Y.Z` before the tag exists.
+- Skipped on purpose: merge commits, `chore(deps)` bumps, `chore(changelog)`, and non-conventional subjects (git-cliff warns "14 commit(s) were skipped"; these are the merge commits).
+- CI step "Changelog is up to date" regenerates and runs `git diff --exit-code CHANGELOG.md`.
+- Verified 2026-10-17 locally: output is deterministic (two runs identical); in a scratch clone, a fresh file gives exit 0 and an added `feat:` commit makes the diff check fail. The CI step itself has not run yet.
+
 ## Build, Run, and Development
 - Install uv (one-time, Windows): `winget install --id=astral-sh.uv -e`
 - Environment setup / install: `uv sync` (CI uses `uv sync --locked`)

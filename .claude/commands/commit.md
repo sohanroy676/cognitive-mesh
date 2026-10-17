@@ -13,4 +13,4 @@ Steps:
 4. Self-review the diff per `.claude/rules/04-code-quality-review.md`.
 5. Stage relevant files by name and write a Conventional Commits message per `.claude/rules/02-commit-style.md`. The summary line must make sense standalone to someone reading only the changelog later.
 6. Commit. Do not push without explicit approval.
-7. Regenerate `CHANGELOG.md` from commit history (e.g. conventional-changelog or git-cliff) — do not hand-write entries. If no such tool is installed yet, tell the user rather than editing by hand.
+7. Regenerate `CHANGELOG.md` with `uv run git-cliff -o CHANGELOG.md` (git-cliff; never hand-write entries) and commit it as `chore(changelog): regenerate`. Do this last: any later commit that is not a merge or `chore(changelog)` makes the file stale and CI fails. At release closeout, use `--tag vX.Y.Z` before the tag exists.

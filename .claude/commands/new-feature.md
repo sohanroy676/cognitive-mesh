@@ -14,5 +14,5 @@ Steps:
 6. Run lint/format and fix all warnings.
 7. Self-review per `.claude/rules/04-code-quality-review.md`.
 8. Commit per `.claude/rules/02-commit-style.md`.
-9. Update `memory-bank/progress.md` and `activeContext.md`, and update `ROADMAP.md` to move the feature out of "Now"/"Next" only if its verification criteria actually passed. `CHANGELOG.md` is regenerated via `/commit`.
+9. Update `memory-bank/progress.md` and `activeContext.md`, and update `ROADMAP.md` to move the feature out of "Now"/"Next" only if its verification criteria actually passed. After the last commit, regenerate `CHANGELOG.md` with `uv run git-cliff -o CHANGELOG.md` and commit it as `chore(changelog): regenerate` (see `/commit` step 7).
 10. Summarize the change in plain English and note it is ready for review/merge. Do not push or merge without approval.
