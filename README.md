@@ -26,7 +26,7 @@ specialized agents, and keeps traceable memory of what it did and why.
 | v0.6.2 | Real Groq client (`qwen/qwen3.8-27b` by default, preview model; reasoning off; shared error mapping with the Ollama client; key never in errors/traces/output), `COGMESH_GROQ_MODEL` / `COGMESH_GROQ_REASONING_EFFORT` | Criteria pass locally, including a real Groq run (`explain_file` succeeded, `model_unverified`) and the opt-in live test; merged to main and pushed; CI run 39031027771 on the merge passed; not tagged |
 | v0.7.0 | Semantic memory retrieval: final attempts of finished runs are embedded (`all-MiniLM-L6-v2`, pinned revision) into a ChromaDB index; `memory index` / `memory search`; every hit is re-checked against its trace row; an index from another model is refused | Criteria pass locally, including a real-model run; merged to main and pushed; CI runs 39043661141 and 39043771776 passed; tagged `v0.7.0` |
 | v0.8.0 | Experience graph: runs, steps, final attempts, entities and claims from deterministic outputs, each edge with a source reference; persisted in its own SQLite file with a content hash; `experience build\|show\|claims\|check`; elements whose trace row is missing, changed or unreadable are marked and hidden unless asked for | Criteria pass locally, including a run of the real CLI from an empty directory; merged to main and pushed; CI runs 39053270212 and 39053504333 passed; tagged `v0.8.0` (tag run 39053616562 passed) |
-| v0.9.0 | Evidence-aware retrieval: `recall` follows vector hits into the experience graph and reports each claim with a status (`validated`, `supported`, `stale`, `conflicting`, `unsupported`), the observations and reviews behind it, and both sides of any conflict; raw and unconfirmed experiences are listed separately; `experience review` records a person's verdict; needs no model provider | Criteria pass locally, including a run of the real CLI with the real embedding model; on branch `feature/v0.9.0-evidence-aware-retrieval`, not merged or tagged |
+| v0.9.0 | Evidence-aware retrieval: `recall` follows vector hits into the experience graph and reports each claim with a status (`validated`, `supported`, `stale`, `conflicting`, `unsupported`), the observations and reviews behind it, and both sides of any conflict; raw and unconfirmed experiences are listed separately; `experience review` records a person's verdict; needs no model provider | Criteria pass locally, including a run of the real CLI with the real embedding model; merged to main (`12706e6`) and pushed; CI run 39055678848 passed; release branch `chore/release-v0.9.0` prepared, tag `v0.9.0` follows its merge |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
@@ -110,7 +110,7 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
   append-only SQLite file; `--by` is an unauthenticated label. The graph file has format 2: rebuild older files
   with `experience build`. The graph does not record which application a run analysed, so equal node ids from
   different applications merge and differ only by fingerprint. Only two kinds of claim exist. Not verified:
-  very large traces, concurrent reviewers, macOS, a fresh clone, CI.
+  very large traces, concurrent reviewers, macOS, a fresh clone (CI ran the tests on Linux; the real CLI runs were Windows only).
 - Ingested files are treated as data and are never executed.
 
 ## Setup and usage
@@ -164,7 +164,7 @@ secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and
 
 ## Roadmap (summary)
 
-v0.7.0 (semantic retrieval) and v0.8.0 (experience graph) are merged and tagged. v0.9.0 (evidence-aware retrieval) is implemented on a feature branch and awaits review. Next: v1.0.0 end-to-end prototype. See `ROADMAP.md`.
+v0.7.0 (semantic retrieval) and v0.8.0 (experience graph) are merged and tagged. v0.9.0 (evidence-aware retrieval) is merged; its release tag follows CI on the release merge. Next: v1.0.0 end-to-end prototype. See `ROADMAP.md`.
 
 ## Principles
 

@@ -4,7 +4,7 @@
 v0.1.0 foundation is implemented: tooling, config loading, and a minimal CLI. The commands
 in "Verified commands" below were run successfully on 2026-10-16 (Windows 11, Git Bash,
 uv 0.13.1, CPython 3.12.3). Everything else here is still planned and unimplemented, except
-the v0.7.0 vector index (ChromaDB + Sentence Transformers, merged, tagged `v0.7.0`) and the v0.8.0 experience graph (merged, tagged `v0.8.0`); the v0.9.0 evidence-aware `recall` (ADR-0016) is implemented on branch `feature/v0.9.0-evidence-aware-retrieval` (not merged, no new dependency). v0.6.1 added a real Ollama client (stdlib HTTP, no new dependency; ADR-0012). GitHub Actions CI passed on main (run 38942568274, 2026-10-16).
+the v0.7.0 vector index (ChromaDB + Sentence Transformers, merged, tagged `v0.7.0`) and the v0.8.0 experience graph (merged, tagged `v0.8.0`); the v0.9.0 evidence-aware `recall` (ADR-0016) is merged to main (merge `12706e6`, CI run 39055678848 passed; no new dependency). v0.6.1 added a real Ollama client (stdlib HTTP, no new dependency; ADR-0012). GitHub Actions CI passed on main (run 38942568274, 2026-10-16).
 
 ## Language and Runtime
 - Language: Python

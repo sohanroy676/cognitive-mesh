@@ -106,7 +106,7 @@ Implemented 2026-10-17 on `feature/v0.6.2-groq-client` (ADR-0013). Unit, CLI and
 - Test relationship traversal and persistence behavior.
 
 ### v0.9.0 — Evidence-Aware Retrieval
-- Status 2026-10-17: implemented on `feature/v0.9.0-evidence-aware-retrieval` (`recall`, `experience review`, ADR-0016); criteria pass locally, including a real-CLI run; not merged, not tagged, CI not yet run.
+- Status 2026-10-17: implemented on `feature/v0.9.0-evidence-aware-retrieval` (`recall`, `experience review`, ADR-0016); criteria pass locally, including a real-CLI run; merged to main (`12706e6`) and pushed; CI run 39055678848 passed; release `v0.9.0` follows.
 - Associate retrieved knowledge with its provenance and supporting records.
 - Represent conflicts, uncertainty, and validity information.
 - Test that retrieval does not silently discard known disagreement.
