@@ -30,6 +30,15 @@ from cognitive_mesh.orchestrator import (
     TaskStatus,
     plan_task,
 )
+from cognitive_mesh.traces import (
+    RunTrace,
+    TraceNotFoundError,
+    TraceRecorder,
+    TraceStatus,
+    TraceStore,
+    TraceStoreError,
+    utc_now,
+)
 
 EXIT_OK = 0
 EXIT_CONFIG_ERROR = 2
@@ -38,6 +47,8 @@ EXIT_GRAPH_ERROR = 4
 EXIT_OUTPUT_ERROR = 5
 EXIT_PLAN_ERROR = 6
 EXIT_TASK_NOT_SUCCEEDED = 7
+EXIT_TRACE_STORE_ERROR = 8
+EXIT_TRACE_NOT_FOUND = 9
 MAX_PLAN_BYTES = 256 * 1024
 
 
@@ -72,6 +83,18 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("plan", type=Path, help="path to the plan JSON file")
     run.add_argument("--root", type=Path, required=True, help="application directory to analyze")
     run.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
+    run.add_argument(
+        "--trace-db", type=Path, metavar="FILE", help="record the run in this SQLite trace database"
+    )
+    traces = sub.add_parser("traces", help="read recorded run traces")
+    traces_sub = traces.add_subparsers(dest="traces_command", required=True)
+    traces_list = traces_sub.add_parser("list", help="list recorded runs")
+    traces_list.add_argument("--db", type=Path, required=True, metavar="FILE")
+    traces_list.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
+    traces_show = traces_sub.add_parser("show", help="show one recorded run")
+    traces_show.add_argument("run_id")
+    traces_show.add_argument("--db", type=Path, required=True, metavar="FILE")
+    traces_show.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
     return parser
 
 
@@ -235,7 +258,22 @@ def _print_run(run: TaskRun) -> None:
             print(f"    failure: {step.failure_kind}: {_printable(step.message or '')}")
 
 
-def _run_plan(plan_path: Path, root: Path, as_json: bool) -> int:
+_NO_TIMES = {"steps": {"__all__": {"started_at", "finished_at"}}}
+
+
+def _emit_run(run: TaskRun, as_json: bool, trace_id: str | None) -> None:
+    if as_json:
+        payload = run.model_dump(mode="json", exclude=None if trace_id else _NO_TIMES)
+        if trace_id:
+            payload["trace_id"] = trace_id
+        print(json.dumps(payload, indent=2))
+        return
+    _print_run(run)
+    if trace_id:
+        print(f"trace: {trace_id}")
+
+
+def _run_plan(plan_path: Path, root: Path, as_json: bool, trace_db: Path | None) -> int:
     registry = default_registry()
     try:
         validated = plan_task(_load_plan(plan_path), registry)
@@ -247,12 +285,112 @@ def _run_plan(plan_path: Path, root: Path, as_json: bool) -> int:
         print(_printable(str(exc)), file=sys.stderr)
         return EXIT_INGESTION_ERROR
     context = AgentContext(ingestion=ingestion, graph=build_dependency_graph(ingestion))
-    run = Orchestrator(registry).run(validated, context)
-    if as_json:
-        print(json.dumps(run.model_dump(mode="json"), indent=2))
-    else:
-        _print_run(run)
+    if trace_db is None:
+        run = Orchestrator(registry).run(validated, context)
+        _emit_run(run, as_json, None)
+        return EXIT_OK if run.status is TaskStatus.SUCCEEDED else EXIT_TASK_NOT_SUCCEEDED
+    try:
+        store = TraceStore.create(trace_db)
+    except TraceStoreError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_TRACE_STORE_ERROR
+    with store:
+        recorder = TraceRecorder(store)
+        try:
+            run_id = recorder.begin(validated, ingestion)
+        except TraceStoreError as exc:  # nothing ran: the user asked for a trace we cannot keep
+            print(_printable(str(exc)), file=sys.stderr)
+            return EXIT_TRACE_STORE_ERROR
+        run = Orchestrator(registry, now=utc_now).run(validated, context)
+        try:
+            recorder.finish(run_id, run)
+        except TraceStoreError as exc:
+            _emit_run(run, as_json, None)
+            print(f"warning: the trace was not saved: {_printable(str(exc))}", file=sys.stderr)
+            return EXIT_TRACE_STORE_ERROR
+    _emit_run(run, as_json, run_id)
     return EXIT_OK if run.status is TaskStatus.SUCCEEDED else EXIT_TASK_NOT_SUCCEEDED
+
+
+def _print_trace(trace: RunTrace) -> None:
+    print(f"run {_printable(trace.run_id)}: {trace.status.value}  task={_printable(trace.task_id)}")
+    finished = f"  finished {trace.finished_at.isoformat()}" if trace.finished_at else ""
+    print(f"  started {trace.started_at.isoformat()}{finished}")
+    if trace.source_root is not None:
+        print(
+            f"  source: {_printable(trace.source_root)}  "
+            f"fingerprint={_printable(trace.source_fingerprint or '')}"
+        )
+    env = trace.environment
+    print(
+        f"  environment: cognitive-mesh {_printable(env.cognitive_mesh_version)}, "
+        f"python {_printable(env.python_version)}, {_printable(env.platform)}"
+    )
+    if trace.redactions:
+        print("  redacted: " + ", ".join(_printable(r) for r in trace.redactions))
+    if trace.status is TraceStatus.INTERRUPTED:
+        print("  the run never finished; no step data was stored")
+    for step in trace.steps:
+        print(
+            f"  {_printable(step.step_id):<20} {step.status.value:<9} {_printable(step.capability)}"
+        )
+        if step.agent_id:
+            print(f"    agent={_printable(step.agent_id)} attempts={step.attempt_count}")
+        if step.blocked_by:
+            print(f"    blocked by: {', '.join(_printable(b) for b in step.blocked_by)}")
+        if step.failure_kind:
+            print(f"    failure: {_printable(step.failure_kind)}: {_printable(step.message or '')}")
+        for attempt in step.attempts:
+            result = attempt.result
+            detail = (
+                f"success basis={result.basis.value}"
+                if result.status == "success"
+                else f"failure {result.kind.value}"
+            )
+            print(
+                f"    attempt {attempt.attempt_no} ({_printable(attempt.agent_task_id)}): {detail}"
+            )
+
+
+def _run_traces_list(db: Path, as_json: bool) -> int:
+    try:
+        with TraceStore.open_existing(db) as store:
+            listing = store.list()
+    except TraceStoreError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_TRACE_STORE_ERROR
+    if as_json:
+        print(json.dumps(listing.model_dump(mode="json"), indent=2))
+    else:
+        for r in listing.runs:
+            print(
+                f"{_printable(r.run_id)}  {r.status.value:<11} {r.started_at.isoformat()}  "
+                f"task={_printable(r.task_id)}  steps={r.step_count}"
+            )
+        if not listing.runs and not listing.malformed:
+            print("no runs recorded")
+    if listing.malformed:
+        ids = ", ".join(_printable(i) for i in listing.malformed)
+        print(f"{len(listing.malformed)} malformed run(s) not shown: {ids}", file=sys.stderr)
+        return EXIT_TRACE_STORE_ERROR
+    return EXIT_OK
+
+
+def _run_traces_show(run_id: str, db: Path, as_json: bool) -> int:
+    try:
+        with TraceStore.open_existing(db) as store:
+            trace = store.get(run_id)
+    except TraceNotFoundError:
+        print(f"no run has the id {_printable(run_id)!r}", file=sys.stderr)
+        return EXIT_TRACE_NOT_FOUND
+    except TraceStoreError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_TRACE_STORE_ERROR
+    if as_json:
+        print(json.dumps(trace.model_dump(mode="json"), indent=2))
+    else:
+        _print_trace(trace)
+    return EXIT_OK
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -265,7 +403,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "ingest":
         return _run_ingest(args.path, args.as_json, args.include_content)
     if args.command == "run":
-        return _run_plan(args.plan, args.root, args.as_json)
+        return _run_plan(args.plan, args.root, args.as_json, args.trace_db)
+    if args.command == "traces":
+        if args.traces_command == "list":
+            return _run_traces_list(args.db, args.as_json)
+        return _run_traces_show(args.run_id, args.db, args.as_json)
     if args.command == "agents":
         return _run_agents(args.as_json)
     if args.command == "graph":

@@ -1,5 +1,6 @@
 """Plan and run records for the orchestrator (ADR-0010)."""
 
+from datetime import datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, computed_field
@@ -69,6 +70,8 @@ class StepRecord(_Frozen):
     failure_kind: str | None = None
     message: str | None = None
     blocked_by: tuple[str, ...] = ()
+    started_at: datetime | None = None  # set only when the orchestrator has a `now` clock
+    finished_at: datetime | None = None
 
 
 class TaskRun(_Frozen):
