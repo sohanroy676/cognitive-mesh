@@ -29,8 +29,10 @@ class AgentRegistry:
         return [a for _, a in sorted(self._agents.items()) if a.supports(capability)]
 
 
-def default_registry(model_client: ModelClient | None = None) -> AgentRegistry:
+def default_registry(
+    model_client: ModelClient | None = None, *, model_timeout_s: float = 30.0
+) -> AgentRegistry:
     registry = AgentRegistry()
     registry.register(DependencyAnalyst())
-    registry.register(CodeExplainer(model_client))
+    registry.register(CodeExplainer(model_client, timeout_s=model_timeout_s))
     return registry
