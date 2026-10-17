@@ -46,6 +46,8 @@ from cognitive_mesh.traces import (
 )
 
 if TYPE_CHECKING:
+    from cognitive_mesh.experience import ExperienceGraph, SourceReport
+    from cognitive_mesh.experience.store import LoadedGraph
     from cognitive_mesh.memory import Embedder
 
 EXIT_OK = 0
@@ -59,6 +61,9 @@ EXIT_TRACE_STORE_ERROR = 8
 EXIT_TRACE_NOT_FOUND = 9
 EXIT_PLAN_GENERATION_ERROR = 10
 EXIT_MEMORY_ERROR = 11
+EXIT_EXPERIENCE_ERROR = 12
+EXIT_EXPERIENCE_NODE_NOT_FOUND = 13
+EXIT_EXPERIENCE_SOURCES = 14
 MAX_PLAN_BYTES = 256 * 1024
 DEFAULT_MIN_SIMILARITY = 0.2  # from one live run on 3 documents (ADR-0014); a rough starting point
 
@@ -128,6 +133,25 @@ def _build_parser() -> argparse.ArgumentParser:
     for cmd in (memory_index, memory_search):
         cmd.add_argument("--db", type=Path, required=True, metavar="FILE", help="trace database")
         cmd.add_argument("--index", type=Path, required=True, metavar="DIR", help="index directory")
+        cmd.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
+    experience = sub.add_parser("experience", help="build and query the experience graph")
+    exp_sub = experience.add_subparsers(dest="experience_command", required=True)
+    exp_build = exp_sub.add_parser("build", help="build the graph file from the trace database")
+    exp_show = exp_sub.add_parser("show", help="show a node and what it connects to")
+    exp_show.add_argument("node", help="a node id, e.g. run:ID or claim:HASH")
+    exp_show.add_argument("--transitive", action="store_true", help="follow edges all the way")
+    exp_show.add_argument("--incoming", action="store_true", help="follow edges backwards")
+    exp_claims = exp_sub.add_parser("claims", help="list claims with their evidence counts")
+    exp_check = exp_sub.add_parser("check", help="verify the graph file and re-check its sources")
+    for cmd in (exp_show, exp_claims):
+        cmd.add_argument(
+            "--include-unverified",
+            action="store_true",
+            help="also show elements whose trace source is missing, changed or unreadable",
+        )
+    for cmd in (exp_build, exp_show, exp_claims, exp_check):
+        cmd.add_argument("--db", type=Path, required=True, metavar="FILE", help="trace database")
+        cmd.add_argument("--graph", type=Path, required=True, metavar="FILE", help="graph file")
         cmd.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
     return parser
 
@@ -542,6 +566,186 @@ def _run_memory(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _run_experience(args: argparse.Namespace) -> int:
+    from cognitive_mesh.experience import ExperienceGraphError, ExperienceNodeNotFoundError
+
+    handlers = {
+        "build": _experience_build,
+        "show": _experience_show,
+        "claims": _experience_claims,
+        "check": _experience_check,
+    }
+    try:
+        return handlers[args.experience_command](args)
+    except TraceStoreError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_TRACE_STORE_ERROR
+    except ExperienceGraphError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_EXPERIENCE_ERROR
+    except ExperienceNodeNotFoundError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_EXPERIENCE_NODE_NOT_FOUND
+
+
+def _experience_open(
+    args: argparse.Namespace,
+) -> "tuple[LoadedGraph, ExperienceGraph, SourceReport]":
+    """Load the graph file (hash and structure checked), then re-check it against the traces."""
+    from cognitive_mesh.experience import ExperienceGraph, check_sources
+    from cognitive_mesh.experience import store as graph_store
+
+    loaded = graph_store.load(args.graph)
+    with TraceStore.open_existing(args.db) as store:
+        report = check_sources(loaded.snapshot, store)
+    return loaded, ExperienceGraph(loaded.snapshot), report
+
+
+def _experience_build(args: argparse.Namespace) -> int:
+    from cognitive_mesh.experience import DiagnosticCode, ExperienceGraph, build_from_traces
+    from cognitive_mesh.experience import store as graph_store
+
+    with TraceStore.open_existing(args.db) as store:
+        snapshot = build_from_traces(store)
+    digest = graph_store.save(args.graph, snapshot)
+    summary = ExperienceGraph(snapshot).summary()
+    claims = summary["nodes"].get("claim", 0)
+    if args.as_json:
+        payload = {
+            "content_sha256": digest,
+            **summary,
+            "diagnostics": [d.model_dump(mode="json") for d in snapshot.diagnostics],
+        }
+        print(json.dumps(payload, indent=2))
+    else:
+        print(
+            f"graph written: {len(snapshot.nodes)} nodes, {len(snapshot.edges)} edges, "
+            f"{claims} claims (all unvalidated)"
+        )
+        print(f"content sha256: {digest}")
+        for d in snapshot.diagnostics:
+            print(f"diagnostic {d.code.value}: run={_printable(d.run_id or '-')} {d.message}")
+    if any(d.code is DiagnosticCode.MALFORMED_RUN for d in snapshot.diagnostics):
+        print("malformed run(s) skipped; see the diagnostics", file=sys.stderr)
+        return EXIT_TRACE_STORE_ERROR
+    return EXIT_OK
+
+
+def _experience_show(args: argparse.Namespace) -> int:
+    _, graph, report = _experience_open(args)
+    node = graph.node(args.node)
+    reached = graph.reachable(node.id, forward=not args.incoming, transitive=args.transitive)
+    shown = [r for r in reached if args.include_unverified or report.is_supported(r.node.id)]
+    hidden = len(reached) - len(shown)
+    if args.as_json:
+        payload = {
+            "node": node.model_dump(mode="json"),
+            "status": report.statuses[node.id].value,
+            "reached": [
+                {
+                    "depth": r.depth,
+                    "status": report.statuses[r.node.id].value,
+                    "node": r.node.model_dump(mode="json"),
+                    "path": [e.model_dump(mode="json") for e in r.path],
+                }
+                for r in shown
+            ],
+            "hidden_unverified": hidden,
+        }
+        print(json.dumps(payload, indent=2))
+        return EXIT_OK
+    print(
+        f"{_printable(node.id)} [{node.kind.value}] {_printable(node.name)} "
+        f"status={report.statuses[node.id].value}"
+    )
+    for r in shown:
+        via = r.path[-1] if not args.incoming else r.path[0]
+        print(
+            f"  depth {r.depth} via {via.kind.value}: {_printable(r.node.id)} "
+            f"[{r.node.kind.value}] status={report.statuses[r.node.id].value}"
+        )
+    if hidden:
+        print(f"{hidden} element(s) hidden because their trace source is not confirmed")
+    return EXIT_OK
+
+
+def _experience_claims(args: argparse.Namespace) -> int:
+    from cognitive_mesh.experience.models import CLAIM_NOTE, SourceStatus
+
+    _, graph, report = _experience_open(args)
+    rows = []
+    versions: list[int] = []
+    hidden = 0
+    for claim in graph.claims():
+        status = report.statuses[claim.id]
+        if status is not SourceStatus.OK and not args.include_unverified:
+            hidden += 1
+            continue
+        evidence = graph.evidence(claim.id)
+        prints = sorted(
+            {r.source_fingerprint for e in evidence for r in e.refs if r.source_fingerprint}
+        )
+        rows.append(
+            {
+                "id": claim.id,
+                "name": claim.name,
+                "predicate": claim.predicate,
+                "detail": claim.detail,
+                "validation": claim.validation,
+                "status": status.value,
+                "observations": len(evidence),
+                "still_confirmed": report.claim_support[claim.id],
+                "source_fingerprints": prints,
+            }
+        )
+        versions.append(len(prints))
+    if args.as_json:
+        print(
+            json.dumps({"claims": rows, "hidden_unverified": hidden, "note": CLAIM_NOTE}, indent=2)
+        )
+        return EXIT_OK
+    for row, n_versions in zip(rows, versions, strict=True):
+        print(
+            f"{row['status']}  observed {row['observations']}x "
+            f"({row['still_confirmed']} still confirmed, {n_versions} "
+            f"code version(s))  {_printable(str(row['name']))}"
+        )
+    if hidden:
+        print(f"{hidden} claim(s) hidden because their trace source is not confirmed")
+    if not rows and not hidden:
+        print("no claims")
+    print(CLAIM_NOTE)
+    return EXIT_OK
+
+
+def _experience_check(args: argparse.Namespace) -> int:
+    loaded, _, report = _experience_open(args)
+    counts: dict[str, int] = {}
+    for status in report.statuses.values():
+        counts[status.value] = counts.get(status.value, 0) + 1
+    if args.as_json:
+        payload = {
+            "content_sha256": loaded.content_sha256,
+            "built_at": loaded.built_at.isoformat(),
+            "statuses": dict(sorted(counts.items())),
+            "build_diagnostics": [d.model_dump(mode="json") for d in loaded.snapshot.diagnostics],
+            "diagnostics": [d.model_dump(mode="json") for d in report.diagnostics],
+        }
+        print(json.dumps(payload, indent=2))
+    else:
+        print(f"graph file OK: content hash matches ({loaded.content_sha256[:12]}...)")
+        print(f"built at {loaded.built_at.isoformat()}")
+        print("sources: " + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+        for d in loaded.snapshot.diagnostics:
+            print(f"build diagnostic {d.code.value}: run={_printable(d.run_id or '-')}")
+        for d in report.diagnostics:
+            print(
+                f"diagnostic {d.code.value}: {_printable(d.node_id or '-')} {d.message}",
+                file=sys.stderr,
+            )
+    return EXIT_OK if report.all_ok else EXIT_EXPERIENCE_SOURCES
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """With no subcommand, validate configuration. Other subcommands need no config.
 
@@ -561,6 +765,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_traces_show(args.run_id, args.db, args.as_json)
     if args.command == "memory":
         return _run_memory(args)
+    if args.command == "experience":
+        return _run_experience(args)
     if args.command == "agents":
         return _run_agents(args.as_json)
     if args.command == "graph":

@@ -13,6 +13,7 @@ from typing import Final, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 FORMAT_VERSION: Final = 1
+CLAIM_NOTE: Final = "claims are unvalidated: repeated observation is not proof of truth"
 
 
 class ExperienceGraphError(Exception):
