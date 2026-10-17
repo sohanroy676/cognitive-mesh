@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     groq_model: str = "qwen/qwen3.8-27b"
     groq_reasoning_effort: Literal["", "none", "default", "low", "medium", "high"] = "none"
     model_timeout_s: float = Field(default=30.0, gt=0, le=600)
+    allow_remote_content: bool = False  # must be true before file content goes to a remote provider
     log_level: str = "INFO"
 
     @field_validator("groq_api_key")

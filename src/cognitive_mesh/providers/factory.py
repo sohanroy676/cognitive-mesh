@@ -12,6 +12,11 @@ def build_model_client(settings: Settings) -> ModelClient:
     if settings.provider == "groq":
         if settings.groq_api_key is None:  # Settings already rejects this; keep the guard explicit
             raise ConfigError("GROQ_API_KEY is required when COGMESH_PROVIDER=groq")
+        if not settings.allow_remote_content:
+            raise ConfigError(
+                "COGMESH_PROVIDER=groq sends file contents to Groq's servers; "
+                "set COGMESH_ALLOW_REMOTE_CONTENT=true to allow it"
+            )
         return GroqClient(
             settings.groq_api_key, settings.groq_model, settings.groq_reasoning_effort
         )

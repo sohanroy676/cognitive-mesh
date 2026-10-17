@@ -85,3 +85,13 @@ the same way.
 - No streaming, proxy, redirect or `Retry-After` support. The shape of the request and reply is from Groq's
   docs only until a real key is used; it is not verified against the live API.
 - Model output stays `model_unverified`.
+
+## Amendment 2026-10-17: remote-content opt-in and 404 hint
+Accepted by the user before coding.
+- `COGMESH_ALLOW_REMOTE_CONTENT` (default `false`) must be `true` before a Groq client is built; otherwise
+  `build_model_client` raises `ConfigError` (exit 2) naming the variable, before any request. Ollama
+  (local) is not affected. The setting says nothing about secrets: redaction still applies.
+- HTTP 404 from either provider keeps kind `other` (not retried) and its fixed message gains a hint that
+  the model name may be unknown or retired. No new error kind.
+- Not done, on purpose: reading `Retry-After`. It would have to cross the `ProviderError`, `AgentFailure`
+  and orchestrator contracts (ADR-0009, ADR-0010); pacing stays with the plan's `backoff_s`.

@@ -135,7 +135,12 @@ def test_no_provider_configured_keeps_the_provider_unavailable_behavior(
         {"COGMESH_PROVIDER": "bogus"},
         {"COGMESH_PROVIDER": "groq"},  # key missing
         {"COGMESH_PROVIDER": "groq", "GROQ_API_KEY": "gsk_fake x"},  # unsafe key characters
-        {"COGMESH_PROVIDER": "groq", "GROQ_API_KEY": "gsk_fake", "COGMESH_GROQ_MODEL": "a b"},
+        {
+            "COGMESH_PROVIDER": "groq",
+            "GROQ_API_KEY": "gsk_fake",
+            "COGMESH_ALLOW_REMOTE_CONTENT": "true",
+            "COGMESH_GROQ_MODEL": "a b",
+        },
         {"COGMESH_PROVIDER": "ollama", "COGMESH_MODEL_TIMEOUT_S": "0"},
         {"COGMESH_MODEL_TIMEOUT_S": "0"},
     ],
@@ -204,7 +209,35 @@ def groq_env(monkeypatch: pytest.MonkeyPatch) -> type[_FakeGroqTransport]:
     monkeypatch.setattr("cognitive_mesh.providers.groq.StdlibTransport", Fake)
     monkeypatch.setenv("COGMESH_PROVIDER", "groq")
     monkeypatch.setenv("GROQ_API_KEY", GROQ_KEY)
+    monkeypatch.setenv("COGMESH_ALLOW_REMOTE_CONTENT", "true")
     return Fake
+
+
+@pytest.mark.parametrize("flag", [None, "false", "0", ""])
+def test_groq_without_the_remote_content_opt_in_sends_nothing(
+    groq_env: type[_FakeGroqTransport],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    flag: str | None,
+) -> None:
+    if flag is None:
+        monkeypatch.delenv("COGMESH_ALLOW_REMOTE_CONTENT")
+    else:
+        monkeypatch.setenv("COGMESH_ALLOW_REMOTE_CONTENT", flag)
+    assert _run() == EXIT_CONFIG_ERROR
+    captured = capsys.readouterr()
+    assert "COGMESH_ALLOW_REMOTE_CONTENT" in captured.err
+    assert GROQ_KEY not in captured.out + captured.err
+    assert groq_env.calls == []  # no request was made
+
+
+def test_the_opt_in_does_not_apply_to_local_ollama(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("COGMESH_PROVIDER", "ollama")
+    monkeypatch.setenv("COGMESH_OLLAMA_BASE_URL", "http://127.0.0.1:1")
+    assert _run() == EXIT_TASK_NOT_SUCCEEDED  # reaches the (unreachable) client, not a config error
+    assert "COGMESH_ALLOW_REMOTE_CONTENT" not in capsys.readouterr().err
 
 
 def test_groq_model_step_succeeds_as_model_unverified(

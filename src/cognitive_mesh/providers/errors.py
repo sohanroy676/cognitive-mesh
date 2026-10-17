@@ -22,7 +22,10 @@ def status_error(provider: str, status: int) -> ProviderError | None:
         return ProviderError(ProviderErrorKind.UNAVAILABLE, message)
     if status in (401, 403):
         return ProviderError(ProviderErrorKind.AUTH, message)
-    if 400 <= status < 500:  # e.g. an unknown model, a rejected request
+    if status == 404:  # for both providers this is almost always the model (retired or not pulled)
+        hint = " (unknown or retired model; check the configured model name)"
+        return ProviderError(ProviderErrorKind.OTHER, message + hint)
+    if 400 <= status < 500:  # e.g. a rejected request
         return ProviderError(ProviderErrorKind.OTHER, message)
     return ProviderError(ProviderErrorKind.BAD_RESPONSE, message)
 
