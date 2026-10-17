@@ -55,20 +55,25 @@ Implemented 2026-10-17 on `feature/v0.4.0-agent-architecture`; its DETAILED_ROAD
 
 ### v0.5.0 — Basic Orchestrator and Task Planning
 
-Implemented 2026-10-17 on `feature/v0.5.0-orchestrator`; its DETAILED_ROADMAP Test/Expected items pass locally. Merged to main; CI run 39024871768 on the merge passed; not tagged. See ADR-0010.
+Implemented 2026-10-17 on `feature/v0.5.0-orchestrator`; its DETAILED_ROADMAP Test/Expected items pass locally. Merged to main; CI run 39024871768 on the merge passed; tagged `v0.5.0` (CI run 39025436259 passed). See ADR-0010.
 
 - `TaskPlan`/`PlanStep` models; `plan_task` validates (unique ids, existing dependencies, no cycles, capability has an agent) and orders steps before anything runs.
 - `Orchestrator.run` executes sequentially, assigns by `AgentRegistry.find`, and returns a `TaskRun` whose status is derived from its steps (`succeeded` only if every step succeeded; `failed`; `incomplete`). Steps are `succeeded | failed | blocked | not_run`.
 - Bounded retries for failures marked `retryable` (default 2 attempts, cap 5); invalid agent results and raised exceptions are failures and are never retried; a run budget is checked before each attempt (no watchdog).
 - `cognitive-mesh run PLAN.json --root DIR [--json]` (exit 6 invalid plan, 7 task not succeeded).
-- Known limitations: no data passing between steps, no fallback agent, no concurrency, hung calls are not interrupted, results not persisted.
-
-## Next — Planned, Not Started
+- Known limitations: no data passing between steps, no fallback agent, no concurrency, hung calls are not interrupted, results not persisted (see v0.6.0).
 
 ### v0.6.0 — Episodic Trace Store
-- Record task executions and their provenance.
-- Persist relevant model/provider details, tool activity, outputs, and outcomes.
-- Test trace integrity and persistence across separate sessions.
+
+Implemented 2026-10-17 on `feature/v0.6.0-trace-store`; its DETAILED_ROADMAP Test/Expected items pass locally. Not merged, CI not yet run, not tagged. See ADR-0011.
+
+- `cognitive_mesh.traces`: SQLite (stdlib `sqlite3`, no new dependency) tables `runs`, `steps`, `attempts`; stable run ids; every attempt keeps its agent task id, agent id, result and model/provider info.
+- A run is committed as `running` before it starts and finished in one transaction, so a crash or a rolled-back write reads back as `interrupted`; `succeeded | failed | incomplete` are recomputed from the steps on read and a disagreeing or malformed record raises instead of being trusted.
+- Secrets are redacted by pattern before storing; rule names are recorded, values never.
+- `run PLAN --root DIR --trace-db FILE`, `traces list --db FILE`, `traces show RUN_ID --db FILE` (exit 8 store error or malformed trace, 9 unknown run id). Orchestrator gained an optional `now` clock for per-step timestamps.
+- Known limitations: opt-in only, raw traces (not validated knowledge, nothing retrieves them yet), no retention limits or migrations, single writer, pattern-based redaction, no tool activity beyond agent attempts.
+
+## Next — Planned, Not Started
 
 ### v0.7.0 — Semantic Memory Retrieval
 - Generate embeddings for eligible stored experiences.
