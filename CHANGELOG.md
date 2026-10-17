@@ -12,6 +12,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Add ADR-0012 Ollama client
 - Record v0.6.1 Ollama client
 - Hand off after v0.6.1
+- Record v0.6.1 CI and v0.6.2 plan
 
 ## [0.6.0] - 2026-10-17
 
