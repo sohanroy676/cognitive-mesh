@@ -1,0 +1,13 @@
+{
+  "task_id": "explain",
+  "steps": [
+    {"step_id": "report", "capability": "unresolved_report"},
+    {
+      "step_id": "explain",
+      "capability": "explain_file",
+      "inputs": {"path": "pyproject.toml"},
+      "depends_on": ["report"]
+    },
+    {"step_id": "after", "capability": "unresolved_report", "depends_on": ["explain"]}
+  ]
+}

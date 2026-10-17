@@ -6,8 +6,10 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from cognitive_mesh import __version__
-from cognitive_mesh.agents import default_registry
+from cognitive_mesh.agents import AgentContext, default_registry
 from cognitive_mesh.config import ConfigError, load_settings
 from cognitive_mesh.graph import (
     DEFAULT_MAX_EDGES,
@@ -20,12 +22,23 @@ from cognitive_mesh.graph import (
     render_mermaid,
 )
 from cognitive_mesh.ingestion import IngestionError, IngestionResult, ingest_application
+from cognitive_mesh.orchestrator import (
+    Orchestrator,
+    PlanError,
+    TaskPlan,
+    TaskRun,
+    TaskStatus,
+    plan_task,
+)
 
 EXIT_OK = 0
 EXIT_CONFIG_ERROR = 2
 EXIT_INGESTION_ERROR = 3
 EXIT_GRAPH_ERROR = 4
 EXIT_OUTPUT_ERROR = 5
+EXIT_PLAN_ERROR = 6
+EXIT_TASK_NOT_SUCCEEDED = 7
+MAX_PLAN_BYTES = 256 * 1024
 
 
 def _printable(text: str) -> str:
@@ -55,6 +68,10 @@ def _build_parser() -> argparse.ArgumentParser:
     graph.add_argument("--max-edges", type=_positive_int, help="with --format, edge limit")
     agents = sub.add_parser("agents", help="list agent roles and their declared capabilities")
     agents.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
+    run = sub.add_parser("run", help="run a task plan (JSON) against a directory")
+    run.add_argument("plan", type=Path, help="path to the plan JSON file")
+    run.add_argument("--root", type=Path, required=True, help="application directory to analyze")
+    run.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
     return parser
 
 
@@ -188,8 +205,58 @@ def _run_agents(as_json: bool) -> int:
     return EXIT_OK
 
 
+def _load_plan(path: Path) -> TaskPlan:
+    try:
+        with path.open("rb") as handle:
+            data = handle.read(MAX_PLAN_BYTES + 1)
+    except OSError:
+        raise PlanError("cannot read the plan file") from None
+    if len(data) > MAX_PLAN_BYTES:
+        raise PlanError(f"the plan file is larger than {MAX_PLAN_BYTES} bytes")
+    try:
+        return TaskPlan.model_validate_json(data, strict=True)
+    except ValidationError as exc:
+        kinds = ", ".join(sorted({str(e["type"]) for e in exc.errors()}))
+        raise PlanError(f"the plan file is not a valid plan ({kinds})") from None
+
+
+def _print_run(run: TaskRun) -> None:
+    print(f"task {run.task_id}: {run.status.value} ({run.total_attempts} attempts)")
+    for step in run.steps:
+        line = f"  {step.step_id:<20} {step.status.value:<9} {step.capability}"
+        if step.agent_id:
+            line += f"  agent={step.agent_id}"
+        if step.attempt_count > 1:
+            line += f"  attempts={step.attempt_count}"
+        print(line)
+        if step.blocked_by:
+            print(f"    blocked by: {', '.join(step.blocked_by)}")
+        if step.failure_kind:
+            print(f"    failure: {step.failure_kind}: {_printable(step.message or '')}")
+
+
+def _run_plan(plan_path: Path, root: Path, as_json: bool) -> int:
+    registry = default_registry()
+    try:
+        validated = plan_task(_load_plan(plan_path), registry)
+        ingestion = ingest_application(root)
+    except PlanError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_PLAN_ERROR
+    except IngestionError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_INGESTION_ERROR
+    context = AgentContext(ingestion=ingestion, graph=build_dependency_graph(ingestion))
+    run = Orchestrator(registry).run(validated, context)
+    if as_json:
+        print(json.dumps(run.model_dump(mode="json"), indent=2))
+    else:
+        _print_run(run)
+    return EXIT_OK if run.status is TaskStatus.SUCCEEDED else EXIT_TASK_NOT_SUCCEEDED
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    """With no subcommand, validate configuration. `ingest`, `graph` and `agents` need no config.
+    """With no subcommand, validate configuration. Other subcommands need no config.
 
     None of these paths makes provider network calls.
     """
@@ -197,6 +264,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "ingest":
         return _run_ingest(args.path, args.as_json, args.include_content)
+    if args.command == "run":
+        return _run_plan(args.plan, args.root, args.as_json)
     if args.command == "agents":
         return _run_agents(args.as_json)
     if args.command == "graph":
