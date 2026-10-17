@@ -30,7 +30,7 @@
 
 ## In progress
 
-- `feature/v0.6.0-trace-store` was merged to main and pushed; CI run 39026432280 on the merge passed. Not tagged. Nothing else in flight.
+- `feature/v0.6.0-trace-store` was merged to main and pushed; CI run 39026432280 on the merge passed. Not tagged. `docs/plan-v0.6.1-v0.6.2` was merged to main and pushed with user approval at session end; its CI result is recorded next session (`gh run list`). Nothing else in flight.
 - Stray local branch `docs/adr-0011-trace-store` (points at old main `5277c2d`, no own commits) was found, not created by this work, and left untouched; the user may delete it.
 - Old branches (incl. `feature/v0.3.1-js-dynamic-imports`, pushed) are kept; local branches are never deleted.
 - Old branch `feature/v0.2.0-application-ingestion` is kept (local branches are never deleted).
