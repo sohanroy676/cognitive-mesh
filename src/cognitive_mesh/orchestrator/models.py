@@ -5,10 +5,11 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, computed_field
 
-from cognitive_mesh.agents import AgentResult
+from cognitive_mesh.agents import AgentResult, Basis, ModelInfo
 
 MAX_STEPS = 100
 MAX_ATTEMPTS_CAP = 5
+MAX_AGENTS_PER_STEP = 3  # the first agent plus at most two fallbacks
 
 _ID = r"^[A-Za-z0-9_-]{1,48}$"
 
@@ -36,16 +37,37 @@ class OrchestratorFailureKind(StrEnum):
     INVALID_RESULT = "invalid_result"
     AGENT_RAISED = "agent_raised"
     NO_AGENT = "no_agent"
+    INVALID_REFERENCE = "invalid_reference"  # an input reference could not be resolved at run time
 
 
 class _Frozen(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
+class InputRef(_Frozen):
+    """An input taken from a named output field of an earlier step this step depends on."""
+
+    step_id: str = Field(pattern=_ID)
+    field: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+
+
+class InputSource(_Frozen):
+    """Where a resolved input came from, including how trustworthy the producing result was."""
+
+    input: str
+    step_id: str
+    field: str
+    basis: Basis
+    model: ModelInfo | None = None
+
+
 class PlanStep(_Frozen):
     step_id: str = Field(pattern=_ID)
     capability: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
     inputs: dict[str, JsonValue] = Field(default_factory=dict)  # literal; untrusted
+    # Inputs filled at run time from an earlier step's output; disjoint from `inputs`, and the
+    # referenced step must also be in `depends_on`.
+    input_refs: dict[str, InputRef] = Field(default_factory=dict)
     depends_on: tuple[str, ...] = ()
     max_attempts: int | None = Field(default=None, ge=1, le=MAX_ATTEMPTS_CAP)
 
@@ -67,6 +89,7 @@ class StepRecord(_Frozen):
     agent_id: str | None = None
     attempt_count: int = 0  # includes attempts whose result was invalid
     attempts: tuple[AgentResult, ...] = ()  # valid results only, in order
+    input_sources: tuple[InputSource, ...] = ()  # resolved `input_refs`; not persisted by traces
     failure_kind: str | None = None
     message: str | None = None
     blocked_by: tuple[str, ...] = ()
