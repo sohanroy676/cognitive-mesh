@@ -31,13 +31,27 @@ def columns(db: Path) -> list[str]:
     return [str(r[1]) for r in sql(db, "PRAGMA table_info(runs)")]
 
 
-@pytest.fixture
-def v1_db(tmp_path: Path) -> Path:
-    """A database written by the current baseline schema, holding one recorded run."""
-    db = tmp_path / "t.sqlite3"
+def _record_ok_run(db: Path) -> None:
     args = ["run", str(FIXTURES / "plans" / "ok.json"), "--root", str(FIXTURES / "dep_app")]
     assert main([*args, "--trace-db", str(db)]) == EXIT_OK
+
+
+@pytest.fixture
+def v1_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A database written by the baseline schema alone (as before ADR-0017), with one run."""
+    db = tmp_path / "t.sqlite3"
+    with monkeypatch.context() as patch:
+        patch.setattr(store_module, "MIGRATIONS", {})
+        _record_ok_run(db)
     assert version(db) == 1
+    return db
+
+
+@pytest.fixture
+def current_db(tmp_path: Path) -> Path:
+    db = tmp_path / "current.sqlite3"
+    _record_ok_run(db)
+    assert version(db) == SCHEMA_VERSION
     return db
 
 
@@ -50,10 +64,11 @@ def test_a_writer_upgrades_an_older_database_and_keeps_its_runs(
     v1_db: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     before = sql(v1_db, "SELECT run_id, status, state FROM runs")
-    monkeypatch.setattr(store_module, "MIGRATIONS", {1: ADD_NOTE})
+    # a later migration stacked on the real one
+    monkeypatch.setattr(store_module, "MIGRATIONS", {**store_module.MIGRATIONS, 2: ADD_NOTE})
     with TraceStore.create(v1_db) as store:
         assert [r.run_id for r in store.list().runs] == [str(before[0][0])]
-    assert version(v1_db) == 2
+    assert version(v1_db) == 3
     assert "note" in columns(v1_db)
     assert sql(v1_db, "SELECT run_id, status, state FROM runs") == before
 
@@ -70,10 +85,30 @@ def test_several_steps_apply_in_order(tmp_path: Path, monkeypatch: pytest.Monkey
     assert {"note", "extra"} <= set(columns(db))
 
 
-def test_a_current_database_is_left_alone(v1_db: Path) -> None:
+def test_a_current_database_is_left_alone(current_db: Path) -> None:
+    before = current_db.read_bytes()
+    TraceStore.create(current_db).close()
+    assert current_db.read_bytes() == before
+
+
+def test_the_real_migration_adds_run_context_and_keeps_old_runs(v1_db: Path) -> None:
+    before = sql(v1_db, "SELECT run_id, status, state FROM runs")
+    assert "run_context" not in str(sql(v1_db, "SELECT name FROM sqlite_master"))
+    with TraceStore.create(v1_db) as store:
+        (summary,) = store.list().runs
+        old = store.get(summary.run_id)
+    assert version(v1_db) == 2 == SCHEMA_VERSION
+    assert sql(v1_db, "SELECT run_id, status, state FROM runs") == before
+    assert sql(v1_db, "SELECT count(*) FROM run_context") == [(0,)]
+    assert old.recalled is None and old.request_length is None  # an older run was offered nothing
+
+
+def test_a_reader_refuses_the_real_v1_database_without_changing_it(v1_db: Path) -> None:
     before = v1_db.read_bytes()
-    TraceStore.create(v1_db).close()
+    with pytest.raises(TraceStoreError, match="older version"):
+        TraceStore.open_existing(v1_db)
     assert v1_db.read_bytes() == before
+    assert version(v1_db) == 1
 
 
 def test_readers_never_upgrade_and_say_what_to_do(
@@ -131,6 +166,6 @@ def test_a_newer_database_is_refused_and_untouched(v1_db: Path) -> None:
 def test_an_upgraded_database_reads_in_a_new_connection(
     v1_db: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(store_module, "MIGRATIONS", {1: ADD_NOTE})
+    monkeypatch.setattr(store_module, "MIGRATIONS", {**store_module.MIGRATIONS, 2: ADD_NOTE})
     TraceStore.create(v1_db).close()
     assert main(["traces", "list", "--db", str(v1_db)]) == EXIT_OK

@@ -86,9 +86,13 @@ def failed_step(run_id: str, step_id: str) -> Step:
     )
 
 
-def make_db(tmp: Path, runs: Mapping[str, tuple[list[Step], str | None]]) -> Path:
+def make_db(
+    tmp: Path,
+    runs: Mapping[str, tuple[list[Step], str | None]],
+    roots: Mapping[str, str] | None = None,
+) -> Path:
     """One trace database. `runs` maps run id to (steps, source fingerprint)."""
     db = tmp / "traces.sqlite3"
     for run_id, (steps, fingerprint) in runs.items():
-        add_run(db, run_id, steps, fingerprint=fingerprint)
+        add_run(db, run_id, steps, fingerprint=fingerprint, source_root=(roots or {}).get(run_id))
     return db

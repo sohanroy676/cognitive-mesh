@@ -3,8 +3,15 @@
 from pydantic import BaseModel, ConfigDict, Field
 
 from cognitive_mesh.agents.base import Agent, AgentFault, Capability, Handled, require_graph
+from cognitive_mesh.agents.context import NO_PRIOR_CONTEXT
 from cognitive_mesh.agents.models import AgentContext, EvidenceRef, FailureKind
 from cognitive_mesh.graph import Edge, GraphError
+from cognitive_mesh.graph.rederive import Holding, Rederivation, rederive
+
+SAME_ANALYZER_NOTE = (
+    "re-derived from the current graph by the same analyzer that made the claim: a repeatable "
+    "check of one code version, not independent proof"
+)
 
 
 class _Strict(BaseModel):
@@ -49,6 +56,24 @@ class UnresolvedReportOutput(_Strict):
     diagnostics_by_code: dict[str, int]
 
 
+class CompareWithRecalledInput(_Strict):
+    limit: int = Field(default=200, ge=1, le=1000)
+
+
+class CompareItem(_Strict):
+    claim_id: str
+    recalled_status: str  # the status the claim had when it was recalled
+    now: str  # holds | refuted | subject_absent, in the current graph
+    evidence: list[EvidenceRef]
+
+
+class CompareWithRecalledOutput(_Strict):
+    note: str
+    total: int
+    truncated: bool
+    items: list[CompareItem]
+
+
 def _evidence(edge: Edge) -> list[EvidenceRef]:
     return [
         EvidenceRef(path=e.ref.path, sha256=e.ref.sha256, line=e.line, rule=e.rule)
@@ -74,6 +99,13 @@ class DependencyAnalyst(Agent):
                     input_model=DependenciesOfInput,
                     output_model=DependenciesOfOutput,
                     handler=self._dependencies_of,
+                ),
+                Capability(
+                    name="compare_with_recalled",
+                    description="Re-check each recalled claim against the current graph; no model.",
+                    input_model=CompareWithRecalledInput,
+                    output_model=CompareWithRecalledOutput,
+                    handler=self._compare_with_recalled,
                 ),
                 Capability(
                     name="unresolved_report",
@@ -117,6 +149,38 @@ class DependencyAnalyst(Agent):
             total=len(found),
             truncated=len(found) > args.limit,
             dependencies=items,
+        )
+        return Handled(output, _unique([ref for item in items for ref in item.evidence]))
+
+    @staticmethod
+    def _compare_with_recalled(args: CompareWithRecalledInput, context: AgentContext) -> Handled:
+        pack = context.recalled
+        if pack is None or not pack.claims:
+            note = pack.message if pack is not None and pack.message else NO_PRIOR_CONTEXT
+            return Handled(CompareWithRecalledOutput(note=note, total=0, truncated=False, items=[]))
+        graph = require_graph(context)
+        items: list[CompareItem] = []
+        for claim in pack.claims[: args.limit]:
+            if claim.predicate is None or claim.subject is None:
+                found = Rederivation(holding=Holding.SUBJECT_ABSENT)
+            else:
+                found = rederive(graph, claim.predicate, claim.subject, claim.object, claim.detail)
+            items.append(
+                CompareItem(
+                    claim_id=claim.claim_id,
+                    recalled_status=claim.status,
+                    now=found.holding.value,
+                    evidence=[
+                        EvidenceRef(path=e.path, sha256=e.sha256, line=e.line, rule=e.rule)
+                        for e in found.evidence
+                    ],
+                )
+            )
+        output = CompareWithRecalledOutput(
+            note=SAME_ANALYZER_NOTE,
+            total=len(pack.claims),
+            truncated=len(pack.claims) > args.limit,
+            items=items,
         )
         return Handled(output, _unique([ref for item in items for ref in item.evidence]))
 

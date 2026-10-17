@@ -86,6 +86,7 @@ def add_run(
     *,
     finish: bool = True,
     fingerprint: str | None = None,
+    source_root: str | None = None,
 ) -> None:
     """Store one run. Each step is (step_id, capability, plan inputs, final result)."""
     task_id = f"{run_id}-task"
@@ -98,6 +99,7 @@ def add_run(
         task_id=task_id,
         status=TraceStatus.INTERRUPTED,
         started_at=T0,
+        source_root=source_root,
         source_fingerprint=fingerprint,
         environment=TraceEnvironment(
             cognitive_mesh_version="test", python_version="3.12", platform="test"

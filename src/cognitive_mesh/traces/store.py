@@ -17,7 +17,7 @@ from typing import Self
 
 from pydantic import TypeAdapter, ValidationError
 
-from cognitive_mesh.agents import AgentResult, AgentSuccess
+from cognitive_mesh.agents import AgentResult, AgentSuccess, RecalledContext
 from cognitive_mesh.orchestrator import StepStatus
 from cognitive_mesh.traces.models import (
     AttemptTrace,
@@ -35,7 +35,17 @@ from cognitive_mesh.traces.models import (
 # Migrations (ADR-0011 amendment): MIGRATIONS[n] upgrades a version-n database to n + 1. Each script
 # is plain statements (no BEGIN/COMMIT/user_version); the runner wraps it with the version bump in
 # one transaction. Version 1 is the baseline `_SCHEMA`. Scripts are append-only once released.
-MIGRATIONS: dict[int, str] = {}
+MIGRATIONS: dict[int, str] = {
+    # 1 -> 2 (ADR-0017): what past experience a run was offered. One row per run that was given a
+    # context pack; older runs and plain `run` calls have none.
+    1: """
+CREATE TABLE run_context (
+    run_id TEXT PRIMARY KEY REFERENCES runs(run_id),
+    context_json TEXT NOT NULL,
+    request_len INTEGER NOT NULL
+);
+""",
+}
 SCHEMA_VERSION = 1 + len(MIGRATIONS)
 _RESULT = TypeAdapter(AgentResult)
 _BASELINE_VERSION = 1
@@ -183,8 +193,10 @@ class TraceStore:
         """Commit the run header as `running`. `header` must be interrupted-status with no steps."""
         if header.status is not TraceStatus.INTERRUPTED or header.steps:
             raise ValueError("a run header must have interrupted status and no steps")
+        conn = self._conn
         try:
-            self._conn.execute(
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
                 "INSERT INTO runs (run_id, task_id, state, status, started_at, finished_at,"
                 " plan_json, source_root, source_fingerprint, env_json, redactions_json)"
                 " VALUES (?, ?, 'running', NULL, ?, NULL, ?, ?, ?, ?, ?)",
@@ -199,7 +211,14 @@ class TraceStore:
                     json.dumps(list(header.redactions)),
                 ),
             )
+            if header.recalled is not None and header.request_length is not None:
+                conn.execute(
+                    "INSERT INTO run_context (run_id, context_json, request_len) VALUES (?, ?, ?)",
+                    (header.run_id, header.recalled.model_dump_json(), header.request_length),
+                )
+            conn.execute("COMMIT")
         except sqlite3.Error:
+            _rollback(conn)
             raise TraceStoreError("cannot record the run (sqlite error)") from None
 
     def finish_run(
@@ -285,9 +304,12 @@ class TraceStore:
             attempts = self._conn.execute(
                 "SELECT * FROM attempts WHERE run_id = ? ORDER BY step_id, attempt_no", (run_id,)
             ).fetchall()
+            context = self._conn.execute(
+                "SELECT * FROM run_context WHERE run_id = ?", (run_id,)
+            ).fetchone()
         except sqlite3.Error:
             raise TraceStoreError("cannot read the trace database (sqlite error)") from None
-        return _build_run(row, steps, attempts)
+        return _build_run(row, steps, attempts, context)
 
     def list(self) -> TraceListing:
         """All readable runs, newest first; unreadable ones are reported, never hidden."""
@@ -359,7 +381,10 @@ def _rollback(conn: sqlite3.Connection) -> None:
 
 
 def _build_run(
-    row: sqlite3.Row, step_rows: Sequence[sqlite3.Row], attempt_rows: Sequence[sqlite3.Row]
+    row: sqlite3.Row,
+    step_rows: Sequence[sqlite3.Row],
+    attempt_rows: Sequence[sqlite3.Row],
+    context_row: sqlite3.Row | None = None,
 ) -> RunTrace:
     run_id = str(row["run_id"])
 
@@ -412,6 +437,12 @@ def _build_run(
             redactions=tuple(str(r) for r in redactions),
             plan=plan,
             steps=steps,
+            recalled=(
+                RecalledContext.model_validate_json(context_row["context_json"])
+                if context_row is not None
+                else None
+            ),
+            request_length=context_row["request_len"] if context_row is not None else None,
         )
         if status is not TraceStatus.INTERRUPTED and trace.to_task_run().status.value != status:
             raise bad("the stored status disagrees with the steps")

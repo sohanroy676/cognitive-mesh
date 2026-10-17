@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pydantic import JsonValue, TypeAdapter
 
 from cognitive_mesh import __version__
-from cognitive_mesh.agents import AgentResult
+from cognitive_mesh.agents import AgentResult, RecalledContext
 from cognitive_mesh.ingestion import IngestionResult
 from cognitive_mesh.ingestion.secrets import redact_secrets
 from cognitive_mesh.orchestrator import StepRecord, TaskRun, ValidatedPlan
@@ -70,8 +70,21 @@ class TraceRecorder:
         self._new_run_id = new_run_id
         self._rules: dict[str, set[str]] = {}
 
-    def begin(self, plan: ValidatedPlan, ingestion: IngestionResult | None = None) -> str:
+    def begin(
+        self,
+        plan: ValidatedPlan,
+        ingestion: IngestionResult | None = None,
+        *,
+        recalled: RecalledContext | None = None,
+        request_length: int | None = None,
+    ) -> str:
+        """Commit the run header. `recalled` (with `request_length`) is what the run was offered."""
         rules: set[str] = set()
+        stored_context = (
+            RecalledContext.model_validate(redact_json(recalled.model_dump(mode="json"), rules))
+            if recalled is not None
+            else None
+        )
         raw: dict[str, JsonValue] = {
             "task_id": plan.task_id,
             "steps": [s.model_dump(mode="json") for s in plan.order],
@@ -93,6 +106,8 @@ class TraceRecorder:
                 ),
                 redactions=tuple(sorted(rules)),
                 plan=plan_json,
+                recalled=stored_context,
+                request_length=request_length if recalled is not None else None,
             )
         )
         self._rules[run_id] = rules
