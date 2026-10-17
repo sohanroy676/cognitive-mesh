@@ -8,13 +8,13 @@ specialized agents, and keeps traceable memory of what it did and why.
 > graph exist. There are no model-provider calls, agents, orchestrator or persistent memory yet.
 > This README is updated with every version; the roadmap is not evidence that a feature exists.
 
-## What works today (v0.3.0, pending CI)
+## What works today (v0.3.0)
 
 | Version | Capability | Status |
 |---|---|---|
 | v0.1.0 | Project foundation: uv, ruff, mypy (strict), pytest, config loading, minimal CLI | Done, tagged |
 | v0.2.0 | Read-only application ingestion with source references, diagnostics and secret redaction | Done, tagged |
-| v0.3.0 | Dependency graph with evidence on every edge, unresolved items kept visible | Implemented; CI result recorded in `memory-bank/progress.md` |
+| v0.3.0 | Dependency graph with evidence on every edge, unresolved items kept visible | Done; merged to main, CI run 39010744225 passed |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`.

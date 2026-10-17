@@ -18,9 +18,9 @@ Tagged `v0.2.0` (2026-10-17). See ADR-0005.
 - Known limitations: pattern-based secret detection is not exhaustive, YAML is not syntax-checked,
   lockfiles are excluded, results are in-memory only, local directories only.
 
-## Now — v0.3.0: Dependency Graph
+## Now — v0.3.0: Dependency Graph (done, next: v0.3.1)
 
-Status: implemented and verified locally on `feature/v0.3.0-dependency-graph` (2026-10-17); not merged, CI not yet run on it, so not marked done. See ADR-0006.
+Status: done 2026-10-17. Merged to main (`d172312`); GitHub Actions CI run 39010744225 passed. Not tagged. See ADR-0006.
 
 - Represent application components and their dependencies (`cognitive_mesh.graph`, `cognitive-mesh graph`).
 - Establish graph construction and traversal behavior.
