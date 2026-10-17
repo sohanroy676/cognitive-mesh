@@ -20,6 +20,6 @@
 
 ## In progress
 
-- Nothing in flight. Next: v0.4.0 Agent Architecture (plan first). v0.3.1 is not tagged (ask the user).
+- Nothing in flight. Next: v0.3.2 Dependency Graph Visualization (plan first; ADR-0008), then plan v0.4.0 Agent Architecture afterwards (its ADR would be 0009). v0.3.1 is not tagged (ask the user).
 - Old branches (incl. `feature/v0.3.1-js-dynamic-imports`, pushed) are kept; local branches are never deleted.
 - Old branch `feature/v0.2.0-application-ingestion` is kept (local branches are never deleted).

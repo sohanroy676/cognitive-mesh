@@ -65,7 +65,7 @@ secrets. Packaging/build commands have not been run and are TBD.
 
 ## Roadmap (summary)
 
-Next: v0.4.0 agent architecture, v0.5.0
+Next: v0.3.2 dependency graph visualization (planned only), then v0.4.0 agent architecture, v0.5.0
 orchestrator, v0.6.0 trace store, v0.7.0 semantic retrieval, v0.8.0 experience graph, v0.9.0
 evidence-aware retrieval, v1.0.0 end-to-end prototype. See `ROADMAP.md`.
 

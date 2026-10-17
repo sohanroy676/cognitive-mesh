@@ -129,6 +129,34 @@ providers should be identified separately and must not require committed credent
 
 ---
 
+## v0.3.2 — Dependency Graph Visualization
+
+### Implement
+- Decide the output format and record it in ADR-0008 (prefer no new dependency; vet any new one per the security rules).
+- Render a built `DependencyGraph` to a viewable form via the CLI, reusing the existing graph API.
+- Distinguish node kinds (component, module, package, stdlib, unresolved) and edge kinds; mark cycles and computed/unresolved imports visibly.
+- Make evidence (file, line, rule) reachable for each edge (label, tooltip or companion listing).
+- Bound output size for large graphs with an explicit, visible truncation notice.
+
+### Test
+- Render the `dep_app` and `js_app` fixtures and compare against expected output (nodes and edges present, deterministic across runs).
+- Hostile node names and evidence text (markup, script tags, quotes, newlines, very long names) are escaped; output contains no executable content or external URLs.
+- Empty graph, single node, cycles, self-import, and a large graph with truncation.
+- Regression: all graph, ingestion and CLI tests still pass; existing text and `--json` output is unchanged.
+
+### Expected Output
+- A person can open or paste the output and see the fixture's components, dependencies, unresolved items and cycles.
+- Unresolved and computed imports are visually distinct from resolved edges.
+- The same graph always renders identically.
+
+### Fix If
+- Unresolved items or cycles are hidden or drawn like resolved edges.
+- Untrusted names can inject markup or script into the output.
+- Visualization changes graph content or existing CLI output.
+- Large graphs hang or silently drop nodes.
+
+---
+
 ## v0.4.0 — Agent Architecture
 
 ### Implement

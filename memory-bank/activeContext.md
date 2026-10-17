@@ -3,7 +3,7 @@
 <!-- Update this at the end of every session. This is the first thing to read when resuming. -->
 
 ## Current focus
-v0.3.0 is tagged. v0.3.1 (JS/TS + dynamic imports) is merged to main and pushed (`0d16c4a`), CI green (run 39012713238), not tagged. Dependabot PRs #1, #3, #4 are merged; no PRs are open. v0.4.0 Agent Architecture is next, planned only.
+v0.3.0 is tagged. v0.3.1 (JS/TS + dynamic imports) is merged to main and pushed (`0d16c4a`), CI green (run 39012713238), not tagged. Dependabot PRs #1, #3, #4 are merged; no PRs are open. v0.3.2 Dependency Graph Visualization is next, planned only (inserted before v0.4.0 at the user's request); v0.4.0 is planned after it.
 
 ## Recent decisions
 - ADR-0007 (accepted by the user): tree-sitter for JS/TS, private to `graph/js_parse.py`; syntax-node matching only; computed dynamic imports are `unresolved:dynamic:*` + `computed_import`; bare/aliased JS specifiers stay unresolved; no `.js`->`.ts` remap.
@@ -21,4 +21,5 @@ v0.3.0 is tagged. v0.3.1 (JS/TS + dynamic imports) is merged to main and pushed 
 - Build/packaging command is untested (TBD).
 
 ## Next step
-1. Ask about tagging v0.3.1, then plan v0.4.0 Agent Architecture (see docs/DETAILED_ROADMAP.md) via `/new-feature` after the user approves the plan. Lockfile ingestion (for transitive dependencies) was deliberately deferred in ADR-0006.
+1. Ask about tagging v0.3.1, then plan and build v0.3.2 visualization (ADR-0008 for the format) via `/new-feature` after the user approves the plan.
+2. Only after v0.3.2 is merged: plan v0.4.0 Agent Architecture (see docs/DETAILED_ROADMAP.md). Lockfile ingestion (for transitive dependencies) was deliberately deferred in ADR-0006.

@@ -26,7 +26,7 @@ Completed 2026-10-17. Merged to main (`d172312`); GitHub Actions CI run 39010744
 - Test dependency links against known sample applications (`tests/fixtures/dep_app`).
 - Known limitations: declared direct dependencies and Python imports only; lockfiles excluded so transitive external dependencies are unknown; JS/TS imports and dynamic imports not analysed (addressed in v0.3.1); in-memory only.
 
-## Now — v0.3.1: JS/TS and Dynamic Import Analysis (done, next: v0.4.0)
+## Now — v0.3.1: JS/TS and Dynamic Import Analysis (done, next: v0.3.2)
 
 Status: done 2026-10-17. Merged to main (`0d16c4a`); GitHub Actions CI run 39012713238 passed. Not tagged. See ADR-0007.
 
@@ -36,7 +36,14 @@ Status: done 2026-10-17. Merged to main (`0d16c4a`); GitHub Actions CI run 39012
 
 ## Next — Planned, Not Started
 
-### v0.4.0 — Agent Architecture
+### v0.3.2 — Dependency Graph Visualization
+- Render the existing `DependencyGraph` (v0.3.0/v0.3.1) so a person can see it, e.g. `cognitive-mesh graph PATH --format ...`. Output format (Mermaid text, self-contained HTML/SVG, or similar) and any new dependency are decided in ADR-0008 before coding; prefer no new dependency.
+- Show unresolved nodes, computed dynamic imports, cycles and diagnostics distinctly, and keep evidence (file, line, rule) reachable from each edge.
+- Treat all node names and evidence text as untrusted data: escape them in the output; no script execution, no network or CDN loads.
+- Read-only: the visualization adds no new analysis and does not change graph results.
+- Planned only; nothing implemented.
+
+### v0.4.0 — Agent Architecture (planned after v0.3.2)
 - Define agent interfaces, responsibilities, and capability descriptions.
 - Establish the initial specialized agent roles.
 - Test agent input/output contracts and error handling.
