@@ -107,12 +107,19 @@ uv run cognitive-mesh graph tests/fixtures/dep_app --format html --json         
 uv run cognitive-mesh graph tests/fixtures/dep_app --format html --output missing/dir/x.html   # exit 5
 uv run cognitive-mesh agents                    # exit 0, no config needed, lists 2 agents
 uv run cognitive-mesh agents --json             # exit 0, includes input/output schemas
+uv run cognitive-mesh run tests/fixtures/plans/ok.json --root tests/fixtures/dep_app          # exit 0, 2 steps succeeded
+uv run cognitive-mesh run tests/fixtures/plans/ok.json --root tests/fixtures/dep_app --json   # exit 0
+uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # exit 7, provider_unavailable, dependent blocked
+uv run cognitive-mesh run tests/fixtures/plans/cycle.json --root tests/fixtures/dep_app       # exit 6, "dependency cycle among steps: a, b"
+uv run cognitive-mesh run tests/fixtures/plans/nope.json --root tests/fixtures/dep_app        # exit 6, "cannot read the plan file"
+uv run cognitive-mesh run tests/fixtures/plans/ok.json --root does-not-exist                  # exit 3
 ```
 The v0.1.0 commands also passed in a fresh `git clone` of its feature branch; the `ingest` commands were run only in the working tree (not yet in a fresh clone or CI).
 The `dep_app` `graph` commands were run 2026-10-17 in the working tree on branch `feature/v0.3.0-dependency-graph` (not in a fresh clone; CI runs the test suite, not these CLI calls).
 The `js_app` graph commands were run 2026-10-17 in the working tree on branch `feature/v0.3.1-js-dynamic-imports` (not yet in a fresh clone or CI).
 The `--format` graph commands were run 2026-10-17 in the working tree on branch `feature/v0.3.2-graph-visualization` (not yet in a fresh clone or CI); the HTML output was also opened in headless Edge. No dependency was added in v0.3.2.
 The `agents` commands were run 2026-10-17 in the working tree on branch `feature/v0.4.0-agent-architecture` (not yet in a fresh clone or CI); v0.4.0 added no dependency.
+The `run` commands were run 2026-10-17 in the working tree on branch `feature/v0.5.0-orchestrator` (not yet in a fresh clone or CI); v0.5.0 added no dependency.
 Note: the "no config: exit 2" check needs a working directory without a local `.env`.
 
 Do not document unverified commands as working commands.
