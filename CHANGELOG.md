@@ -10,6 +10,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Document changelog workflow
 - Record verified build and version gap
 - Record git versioning and Mermaid renderer check
+- Hand off after changelog and versioning work
 
 ### Maintenance
 - Fetch full history for gitleaks
