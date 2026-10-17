@@ -68,7 +68,7 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 - Groq client (v0.6.2): `COGMESH_PROVIDER=groq` with `GROQ_API_KEY`; default model `qwen/qwen3.8-27b`
   (`COGMESH_GROQ_MODEL`), a Groq **preview** model that may be retired; reasoning is turned off
   (`COGMESH_GROQ_REASONING_EFFORT=none`). The endpoint is fixed (HTTPS to api.groq.com), so the key can
-  only be sent there. The contents of the explained file are sent to Groq, a third party. The key is
+  only be sent there. The contents of the explained file are sent to Groq, a third party, so `COGMESH_ALLOW_REMOTE_CONTENT=true` is required (exit 2 otherwise). The key is
   rejected if it has spaces, line breaks or non-ASCII characters, and never appears in errors, traces or
   output. A reply containing `<think>` is rejected, not cleaned up. HTTP 429 and 498 are retried only
   within the plan's bounded policy; `Retry-After` is not read. No streaming or proxy. Verified

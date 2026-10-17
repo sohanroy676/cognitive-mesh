@@ -126,7 +126,8 @@ uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fix
 COGMESH_PROVIDER=ollama COGMESH_OLLAMA_BASE_URL=http://127.0.0.1:1 uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # exit 7, provider_unavailable after 2 attempts
 COGMESH_PROVIDER=ollama COGMESH_OLLAMA_MODEL=no-such-model uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # exit 7, provider_error (HTTP 404, not retried)
 COGMESH_PROVIDER=groq uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # empty cwd, no key: exit 2, names GROQ_API_KEY
-COGMESH_PROVIDER=groq GROQ_API_KEY=gsk_fake uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # real call to api.groq.com with a fake key: exit 7, provider_error (auth), not retried
+COGMESH_PROVIDER=groq GROQ_API_KEY=gsk_fake uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # empty cwd, no opt-in: exit 2, names COGMESH_ALLOW_REMOTE_CONTENT, no request made (2026-10-17)
+COGMESH_PROVIDER=groq GROQ_API_KEY=gsk_fake COGMESH_ALLOW_REMOTE_CONTENT=true uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # real call to api.groq.com with a fake key: exit 7, provider_error (auth), not retried
 COGMESH_PROVIDER=groq uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app [--json --trace-db FILE]   # repo root, key from the ignored .env: exit 0, explain_file succeeded, model_unverified, provider groq; key absent from stdout/stderr/trace db
 COGMESH_PROVIDER=groq COGMESH_GROQ_MODEL=no/such-model uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # exit 7, provider_error (other)
 RUN_LIVE_GROQ=1 RUN_LIVE_GROQ_KEY=... uv run pytest -m live tests/test_live_groq.py   # 1 passed; skipped by default and in CI
@@ -150,6 +151,7 @@ Settings load via `cognitive_mesh.config.load_settings()` from the environment, 
 ignored `.env` in the working directory. Copy `.env.example` to `.env` to start.
 - `COGMESH_PROVIDER` (required): `groq` or `ollama`
 - `GROQ_API_KEY`: required when provider is `groq`; held as `SecretStr`; must be printable ASCII without spaces or line breaks
+- `COGMESH_ALLOW_REMOTE_CONTENT` (default `false`): must be `true` for `COGMESH_PROVIDER=groq` (file contents go to Groq's servers); checked in `providers/factory.py`, otherwise exit 2 naming the variable; Ollama is unaffected. The two older `run` commands above that make a real Groq call from the repo (the `.env` one and the `no/such-model` one) now also need it; they were run before it existed. The live test builds `GroqClient` directly and is unaffected.
 - `COGMESH_GROQ_MODEL` (default `qwen/qwen3.8-27b`), `COGMESH_GROQ_REASONING_EFFORT` (`none` default; `default|low|medium|high`, or empty to omit)
 - `COGMESH_OLLAMA_BASE_URL` (validated: http/https, host, no credentials/query), `COGMESH_OLLAMA_MODEL` (default `llama3.2`), `COGMESH_MODEL_TIMEOUT_S` (default 30, >0, max 600), `COGMESH_LOG_LEVEL`: optional, have defaults
 - `run` reads config only when the plan has a model step (`load_settings_if_configured`: no `COGMESH_PROVIDER` means no client; any other problem exits 2). Other commands never read it.

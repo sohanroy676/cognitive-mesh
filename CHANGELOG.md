@@ -5,6 +5,12 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **traces:** Add versioned schema migrations to the trace store
+
+### Documentation
+- Record CI-on-tags and trace-store migrations
+
 ### Maintenance
 - Run on release tags and check the changelog section
 
