@@ -32,13 +32,14 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 ### Known limitations
 - Local directories only; results are in memory, except run traces recorded with `--trace-db` (v0.6.0).
 - Secret detection is pattern- and entropy-based and not exhaustive (it can miss short, low-entropy or hex-only secrets and can redact an innocent random id). Sending file contents to Groq needs `COGMESH_ALLOW_REMOTE_CONTENT=true`.
-- The graph covers declared direct dependencies, Python imports and (v0.3.1) JS/TS imports. Lockfiles
-  are excluded, so dependencies of declared packages are reported as unknown, not absent.
+- The graph covers declared direct dependencies, Python imports and (v0.3.1) JS/TS imports. Only `uv.lock` and
+  `package-lock.json` (v2/v3) are read, giving transitive `requires` edges between locked packages; other
+  lockfiles are excluded, and ecosystems without a readable lockfile are reported as unknown, not absent.
 - JS/TS imports resolve only to ingested files by relative path. Bundler aliases, tsconfig `paths`,
   package.json `exports`, `.js` to `.ts` remapping and `.mjs`/`.cjs` files are not modelled; bare
   specifiers (`react`) stay unresolved. Computed dynamic imports (Python and JS) are unresolved.
 - JS/TS support adds native dependencies (tree-sitter and two grammars).
-- Visualization (v0.3.2): the HTML layout is naive (edges can cross or overlap on dense graphs). Large
+- Visualization (v0.3.2): the HTML layout is a simple layered one with crossing reduction (edges can still cross or overlap on dense graphs; checked in headless Chrome/Edge only). Large
   graphs are truncated with a visible notice (defaults: HTML 300 nodes / 1000 edges, Mermaid 100 / 200),
   and cycle members are kept before unresolved items. Mermaid output rendered correctly in mermaid-cli 12.0.0 (one-off manual check, not part of the test
   suite or CI; other renderers unchecked); the HTML was viewed only in headless Edge.
@@ -46,8 +47,8 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
   tested with fake clients only. Timeouts are enforced by the client, not by a watchdog, so a client
   that hangs is not interrupted. `code_explainer` output is unverified model text. Nothing is
   persisted.
-- Orchestrator (v0.5.0): steps run sequentially; `depends_on` controls order only (no data passes
-  between steps, inputs are literal); no fallback to another agent. A hung provider call is not
+- Orchestrator (v0.5.0): steps run sequentially; `depends_on` controls order; a step can take an input from an earlier step's output (`input_refs`, validated before running, source `basis` recorded), and up to two other agents of the same capability can take over after a failure result.
+  `cognitive-mesh plan "REQUEST"` drafts a plan with the configured model (never runs it; output is model-written and unreviewed). A hung provider call is not
   interrupted: the run budget is checked only before each attempt. Retries apply only to failures an
   agent marks retryable, at most 5 attempts per step. With no provider configured, `explain_file`
   steps fail as `provider_unavailable`. Run results are persisted only when `--trace-db` is given.
@@ -118,9 +119,8 @@ secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and
 
 ## Roadmap (summary)
 
-Next: a review of the known items (lockfile
-ingestion, secret detection, viewer, trace-store, provider and orchestrator limits) before v0.7.0 semantic
-retrieval (v0.6.1 and v0.6.2 provider clients are merged), v0.8.0 experience graph, v0.9.0
+Next: v0.7.0 semantic
+retrieval (the pre-v0.7.0 review pass is done and merged locally) (v0.6.1 and v0.6.2 provider clients are merged), v0.8.0 experience graph, v0.9.0
 evidence-aware retrieval, v1.0.0 end-to-end prototype. See `ROADMAP.md`.
 
 ## Principles

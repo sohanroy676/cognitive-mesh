@@ -24,7 +24,7 @@ Completed 2026-10-17. Merged to main (`d172312`); GitHub Actions CI run 39010744
 - Represent application components and their dependencies (`cognitive_mesh.graph`, `cognitive-mesh graph`).
 - Establish graph construction and traversal behavior.
 - Test dependency links against known sample applications (`tests/fixtures/dep_app`).
-- Known limitations: declared direct dependencies and Python imports only; lockfiles excluded so transitive external dependencies are unknown; JS/TS imports and dynamic imports not analysed (addressed in v0.3.1); in-memory only.
+- Known limitations: declared direct dependencies and Python imports only; only uv.lock and package-lock.json are read for transitive dependencies (other lockfiles excluded); JS/TS imports and dynamic imports not analysed (addressed in v0.3.1); in-memory only.
 
 ### v0.3.1 — JS/TS and Dynamic Import Analysis
 
@@ -41,7 +41,7 @@ Completed 2026-10-17. Merged to main (`e19d5e1`); the first CI run on that merge
 - `cognitive-mesh graph PATH --format mermaid|html [--output FILE] [--max-nodes N] [--max-edges N]` renders the existing `DependencyGraph`; no new dependency, no script, no network loads.
 - Unresolved nodes, computed dynamic imports and cycles are visually distinct; evidence is reachable per edge (tooltip + table in HTML, comments in Mermaid); truncation shows a visible notice.
 - Node names and evidence are escaped; output is ASCII and deterministic; text and `--json` output are unchanged (diffed against saved baselines).
-- Known limitations: naive layout (edges can cross); cycle members outrank unresolved items when truncating; Mermaid output checked once in mermaid-cli 12.0.0 (manual, not in CI), other renderers unchecked; HTML viewed only in headless Edge.
+- Known limitations: simple layered layout with crossing reduction (edges can still cross); cycle members outrank unresolved items when truncating; Mermaid output checked once in mermaid-cli 12.0.0 (manual, not in CI), other renderers unchecked; HTML viewed only in headless Edge.
 
 ### v0.4.0 — Agent Architecture
 
@@ -61,7 +61,7 @@ Implemented 2026-10-17 on `feature/v0.5.0-orchestrator`; its DETAILED_ROADMAP Te
 - `Orchestrator.run` executes sequentially, assigns by `AgentRegistry.find`, and returns a `TaskRun` whose status is derived from its steps (`succeeded` only if every step succeeded; `failed`; `incomplete`). Steps are `succeeded | failed | blocked | not_run`.
 - Bounded retries for failures marked `retryable` (default 2 attempts, cap 5); invalid agent results and raised exceptions are failures and are never retried; a run budget is checked before each attempt (no watchdog).
 - `cognitive-mesh run PLAN.json --root DIR [--json]` (exit 6 invalid plan, 7 task not succeeded).
-- Known limitations: no data passing between steps, no fallback agent, no concurrency, hung calls are not interrupted, results not persisted (see v0.6.0).
+- Known limitations: data passing and fallback agents were added after this version (ADR-0010 amendment); no concurrency, hung calls are not interrupted, results not persisted (see v0.6.0).
 
 ### v0.6.0 — Episodic Trace Store
 
