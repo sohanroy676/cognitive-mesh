@@ -86,3 +86,17 @@ output must be deterministic; existing text and `--json` output must not change;
   Update 2026-10-17: Mermaid checked 2026-10-17 with @mermaid-js/mermaid-cli 12.0.0 (Mermaid in Edge, installed in a scratch directory only, not a project dependency): the golden `dep_app.mmd` and `js_app.mmd` and a hostile-filename graph all rendered with exit 0, node counts matched, and the SVGs held no script or event-handler markup; hostile names appeared as literal label text. Other Mermaid versions and renderers (GitHub, editors) remain unchecked.
 - The HTML was checked in headless Edge only; other browsers are untested.
 - A view is a rendering of the in-memory graph; nothing is persisted. No new dependency.
+
+## Amendment 2026-10-17: crossing-reduced layered layout
+Accepted by the user before coding.
+- The HTML renderer keeps the same layers (dependents first) but reorders the nodes inside each layer
+  with deterministic barycenter sweeps (`order_layers`, 6 alternating passes, ties keep the incoming
+  order) to cut edge crossings, and centers shorter rows under the widest one. Layer membership, the
+  node and edge set, ids, classes, escaping and the table sections are unchanged; still no script,
+  dependency or network load.
+- `crossings()` counts crossings between adjacent layers, so tests can show the order is no worse than
+  before (and strictly better on a reversed bipartite fixture: 6 crossings to 0).
+- Still a simple layout: edges that span several layers are drawn as one curve and can pass over boxes
+  in between, labels can overlap, and very wide layers wrap into rows of 10.
+- Viewer coverage: opened as a screenshot in headless Chrome and headless Edge on 2026-10-17. Both are
+  Chromium, so that is one rendering engine checked twice. Firefox and Safari were not checked.

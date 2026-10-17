@@ -11,6 +11,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **ingestion:** Add secret formats and an entropy check
 - **graph:** Read uv.lock and package-lock.json for transitive dependencies
 - **orchestrator:** Pass step outputs to later steps and add fallback agents
+- **orchestrator:** Draft a plan from a request with a model
 
 ### Documentation
 - Record CI-on-tags and trace-store migrations
