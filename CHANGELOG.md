@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [0.9.0] - 2026-10-17
 
 ### Added
 - **experience:** Record listing coverage in graph format 2
@@ -14,6 +14,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record CI runs for v0.8.0
 - **adr:** Add ADR-0016 evidence-aware retrieval
 - Record v0.9.0 evidence-aware retrieval
+- Record v0.9.0 merge and CI
 
 ## [0.8.0] - 2026-10-17
 
