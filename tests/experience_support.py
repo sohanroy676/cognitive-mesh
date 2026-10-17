@@ -1,5 +1,6 @@
 """Helpers for the experience graph tests: schema-valid agent outputs and small trace databases."""
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from pydantic import JsonValue
@@ -11,7 +12,7 @@ Step = tuple[str, str, dict[str, JsonValue], AgentResult]
 
 
 def deps_output(
-    node_id: str, direct: list[str], indirect: list[str] | None = None
+    node_id: str, direct: list[str], indirect: list[str] | None = None, truncated: bool = False
 ) -> dict[str, JsonValue]:
     items: list[JsonValue] = [
         {"node_id": d, "node_kind": "module", "edge_kind": "imports", "depth": 1, "evidence": []}
@@ -25,16 +26,16 @@ def deps_output(
         "node_id": node_id,
         "transitive": bool(indirect),
         "total": len(items),
-        "truncated": False,
+        "truncated": truncated,
         "dependencies": items,
     }
 
 
-def unresolved_output(node_ids: list[str]) -> dict[str, JsonValue]:
+def unresolved_output(node_ids: list[str], truncated: bool = False) -> dict[str, JsonValue]:
     entries: list[JsonValue] = [{"node_id": n, "candidate_package": None} for n in node_ids]
     return {
         "total": len(entries),
-        "truncated": False,
+        "truncated": truncated,
         "unresolved": entries,
         "diagnostics_by_code": {},
     }
@@ -46,19 +47,22 @@ def deps_step(
     node_id: str,
     direct: list[str],
     indirect: list[str] | None = None,
+    truncated: bool = False,
 ) -> Step:
     result = success(
         run_id,
         step_id,
         "dependencies_of",
-        deps_output(node_id, direct, indirect),
+        deps_output(node_id, direct, indirect, truncated),
         Basis.DETERMINISTIC,
     )
     return (step_id, "dependencies_of", {"node_id": node_id}, result)
 
 
-def unresolved_step(run_id: str, step_id: str, node_ids: list[str]) -> Step:
-    result = success(run_id, step_id, "unresolved_report", unresolved_output(node_ids))
+def unresolved_step(
+    run_id: str, step_id: str, node_ids: list[str], truncated: bool = False
+) -> Step:
+    result = success(run_id, step_id, "unresolved_report", unresolved_output(node_ids, truncated))
     return (step_id, "unresolved_report", {}, result)
 
 
@@ -82,7 +86,7 @@ def failed_step(run_id: str, step_id: str) -> Step:
     )
 
 
-def make_db(tmp: Path, runs: dict[str, tuple[list[Step], str | None]]) -> Path:
+def make_db(tmp: Path, runs: Mapping[str, tuple[list[Step], str | None]]) -> Path:
     """One trace database. `runs` maps run id to (steps, source fingerprint)."""
     db = tmp / "traces.sqlite3"
     for run_id, (steps, fingerprint) in runs.items():

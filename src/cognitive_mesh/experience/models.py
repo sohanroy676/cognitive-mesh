@@ -12,8 +12,9 @@ from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-FORMAT_VERSION: Final = 1
+FORMAT_VERSION: Final = 2
 CLAIM_NOTE: Final = "claims are unvalidated: repeated observation is not proof of truth"
+REPETITION_NOTE: Final = "repeated observation is counted, never treated as proof of truth"
 
 
 class ExperienceGraphError(Exception):
@@ -90,6 +91,8 @@ class ExpNode(_Frozen):
     predicate: Literal["depends_on", "is_unresolved"] | None = None
     detail: str | None = None  # depends_on: the kind of the dependency edge
     validation: Literal["unvalidated"] | None = None
+    # Attempts of deterministic listing capabilities only: was the listing cut off (ADR-0016)?
+    coverage: Literal["complete", "truncated"] | None = None
 
 
 class ExpEdge(_Frozen):

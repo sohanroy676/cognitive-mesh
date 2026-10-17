@@ -174,7 +174,10 @@ def load(path: Path) -> LoadedGraph:
     finally:
         conn.close()
     if meta.get("format_version") != str(FORMAT_VERSION):
-        raise ExperienceGraphError("the experience graph has an unsupported format version")
+        raise ExperienceGraphError(
+            "the experience graph has an unsupported format version; "
+            "rebuild it with `experience build`"
+        )
     try:
         nodes = tuple(ExpNode.model_validate_json(row[1]) for row in node_rows)
         if any(node.id != row[0] for node, row in zip(nodes, node_rows, strict=True)):
