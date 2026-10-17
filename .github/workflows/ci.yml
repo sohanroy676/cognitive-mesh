@@ -62,7 +62,14 @@ jobs:
 
       - name: Changelog is up to date
         run: |
-          uv run git-cliff -o CHANGELOG.md
+          # A release merge lands on main before its tag exists. If the newest
+          # section is a version without a tag yet, regenerate as that release.
+          top="$(sed -n 's/^## \[\([0-9][0-9.]*\)\].*/\1/p' CHANGELOG.md | head -1)"
+          tag_args=()
+          if [ -n "$top" ] && ! git rev-parse -q --verify "refs/tags/v${top}" >/dev/null; then
+            tag_args=(--tag "v${top}")
+          fi
+          uv run git-cliff "${tag_args[@]}" -o CHANGELOG.md
           git diff --exit-code CHANGELOG.md || {
             echo "CHANGELOG.md is stale. Run 'uv run git-cliff -o CHANGELOG.md' and commit it as 'chore(changelog): regenerate'."
             exit 1
