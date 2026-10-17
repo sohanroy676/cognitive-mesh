@@ -24,6 +24,7 @@ packages = ["src/cognitive_mesh"]
 
 [dependency-groups]
 dev = [
+    "git-cliff>=2.14.2",
     "mypy>=2.4.0",
     "pytest>=9.1.1",
     "ruff>=0.17.1",
