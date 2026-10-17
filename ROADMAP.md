@@ -112,6 +112,7 @@ Implemented 2026-10-17 on `feature/v0.6.2-groq-client` (ADR-0013). Unit, CLI and
 - Test that retrieval does not silently discard known disagreement.
 
 ### v1.0.0 — Core End-to-End Prototype
+- Status 2026-10-17: implemented on `feature/v1.0.0-end-to-end` (`task`, ADR-0017, trace schema 2); criteria pass locally, including real-CLI runs with the real embedding model in separate processes; not merged, not pushed, not tagged, CI not yet run.
 - Connect application ingestion, analysis, agent execution, trace capture, storage,
   retrieval, and outcome handling.
 - Demonstrate memory reuse in a separate session.

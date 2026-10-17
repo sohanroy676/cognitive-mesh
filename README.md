@@ -6,11 +6,11 @@ specialized agents, and keeps traceable memory of what it did and why.
 
 > **Status: early development.** Only the foundation, application ingestion, a dependency
 > graph, the agent interfaces, (v0.5.0) a basic orchestrator, (v0.6.0) a SQLite store for run
-> traces, (v0.6.1) a real Ollama client, (v0.6.2) a Groq client, (v0.7.0) semantic search over stored traces and (v0.8.0) an experience graph and (v0.9.0) evidence-aware recall exist. Retrieved experience is not yet used by any
-> agent or task.
+> traces, (v0.6.1) a real Ollama client, (v0.6.2) a Groq client, (v0.7.0) semantic search over stored traces and (v0.8.0) an experience graph, (v0.9.0) evidence-aware recall and (v1.0.0) a `task` command that
+> supplies recalled experience to a later task exist. What a model does with that context is unverified.
 > This README is updated with every version; the roadmap is not evidence that a feature exists.
 
-## What works today (v0.9.0)
+## What works today (v1.0.0)
 
 | Version | Capability | Status |
 |---|---|---|
@@ -27,10 +27,11 @@ specialized agents, and keeps traceable memory of what it did and why.
 | v0.7.0 | Semantic memory retrieval: final attempts of finished runs are embedded (`all-MiniLM-L6-v2`, pinned revision) into a ChromaDB index; `memory index` / `memory search`; every hit is re-checked against its trace row; an index from another model is refused | Criteria pass locally, including a real-model run; merged to main and pushed; CI runs 39043661141 and 39043771776 passed; tagged `v0.7.0` |
 | v0.8.0 | Experience graph: runs, steps, final attempts, entities and claims from deterministic outputs, each edge with a source reference; persisted in its own SQLite file with a content hash; `experience build\|show\|claims\|check`; elements whose trace row is missing, changed or unreadable are marked and hidden unless asked for | Criteria pass locally, including a run of the real CLI from an empty directory; merged to main and pushed; CI runs 39053270212 and 39053504333 passed; tagged `v0.8.0` (tag run 39053616562 passed) |
 | v0.9.0 | Evidence-aware retrieval: `recall` follows vector hits into the experience graph and reports each claim with a status (`validated`, `supported`, `stale`, `conflicting`, `unsupported`), the observations and reviews behind it, and both sides of any conflict; raw and unconfirmed experiences are listed separately; `experience review` records a person's verdict; needs no model provider | Criteria pass locally, including a run of the real CLI with the real embedding model; merged to main (`12706e6`) and pushed; CI run 39055678848 passed; release merge CI run 39055806280 passed; tagged `v0.9.0` (tag run 39055934929 passed) |
+| v1.0.0 | Core end-to-end prototype: `task` runs a plan with the experience recalled for a request as read-only context (claims with status, meaning and source run ids; failed and model-written runs as labelled raw traces; unconfirmed and not-applicable hits counted and kept out), a deterministic `compare_with_recalled` capability re-checks recalled claims against the current code, `code_explainer` receives the same pack as untrusted data, and the pack each run was offered is stored with the run (trace schema 2); needs no model provider unless the plan has a model step | Criteria pass locally, including real-CLI runs with the real embedding model in separate processes and an opt-in live test; not merged, not pushed, not tagged; CI not yet run |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
-`docs/adr/0008-dependency-graph-visualization.md`, `docs/adr/0009-agent-architecture.md`, `docs/adr/0010-orchestrator.md`, `docs/adr/0011-episodic-trace-store.md`, `docs/adr/0012-ollama-client.md`, `docs/adr/0013-groq-client.md`, `docs/adr/0014-semantic-memory-retrieval.md`.
+`docs/adr/0008-dependency-graph-visualization.md`, `docs/adr/0009-agent-architecture.md`, `docs/adr/0010-orchestrator.md`, `docs/adr/0011-episodic-trace-store.md`, `docs/adr/0012-ollama-client.md`, `docs/adr/0013-groq-client.md`, `docs/adr/0014-semantic-memory-retrieval.md`, `docs/adr/0015-experience-graph.md`, `docs/adr/0016-evidence-aware-retrieval.md`, `docs/adr/0017-context-supply.md`.
 
 ### Known limitations
 - Local directories only; results are in memory, except run traces recorded with `--trace-db` (v0.6.0).
@@ -56,11 +57,13 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
   agent marks retryable, at most 5 attempts per step. With no provider configured, `explain_file`
   steps fail as `provider_unavailable`. Run results are persisted only when `--trace-db` is given.
 - Trace store (v0.6.0): recording is opt-in (`run --trace-db FILE`). Traces are raw records, not
-  validated knowledge; only `memory search` (v0.7.0) reads them for retrieval, and nothing reuses them. Secrets are redacted by pattern
+  validated knowledge; `memory search` (v0.7.0), the experience graph and `recall` read them, and `task` (v1.0.0) offers
+  what they support to a later task as labelled context. Secrets are redacted by pattern
   before storing, so a stored trace is not a byte-exact replay and detection is not exhaustive.
   The trace holds the resolved source path and file hashes (no hostname or user name). A run is
   committed as `running` first; a crash reads back as `interrupted` with no step data. No
-  retention or size limits, one writer assumed, no schema migrations (version 1), no per-attempt
+  retention or size limits, one writer assumed, schema version 2 (the first migration, v1.0.0, adds the
+  context a run was offered; writers upgrade older files, readers refuse them), no per-attempt
   timing, no tool activity beyond agent attempts. Run `traces` against files you trust: they are
   read as data and validated, but they are not authenticated.
 - Ollama client (v0.6.1): `COGMESH_PROVIDER=ollama`. Only `run` calls a model, and only for plans with a model step
@@ -111,6 +114,21 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
   with `experience build`. The graph does not record which application a run analysed, so equal node ids from
   different applications merge and differ only by fingerprint. Only two kinds of claim exist. Not verified:
   very large traces, concurrent reviewers, macOS, a fresh clone (CI ran the tests on Linux; the real CLI runs were Windows only).
+- Context supply (v1.0.0, ADR-0017): `task` recalls experience for the request and gives the agents a
+  read-only pack. Every claim keeps its status, its fixed meaning and the run/doc ids that back or
+  contradict it; nothing in the pack is verified truth. Failed and model-written runs are a separate raw group
+  (metadata only, no text); hits whose source no longer checks out are only counted. A claim is offered
+  only if its subject exists in the application being run, and a raw trace only if its run analysed a
+  directory with the same name; the rest is listed to the person and never sent. That gate uses node ids and
+  the directory name, not a real application identity, so two applications with the same folder name and
+  module paths can still share context. A first session (no index or graph yet) runs with an explicit
+  empty pack; an index, graph or reviews file that exists but is unusable is an error. `compare_with_recalled`
+  re-derives claims with the same analyzer that made them, which is not independent proof, and running it
+  adds no evidence for a claim. A run's success never validates anything. The index and graph are not
+  refreshed automatically: run `memory index` and `experience build` after new runs. What a model does
+  with the pack is unverified (the real-provider prompt path was not run). The 0.2 cut-off still comes from
+  a few documents: the opt-in live test kept a related claim and dropped "zebra quantum pastry" once.
+  Not verified: very large traces, concurrent sessions, macOS, a fresh clone, CI.
 - Ingested files are treated as data and are never executed.
 
 ## Setup and usage
@@ -147,6 +165,7 @@ uv run cognitive-mesh experience check --db FILE --graph FILE [--json]
 uv run cognitive-mesh experience claims --db FILE --graph FILE [--reviews FILE] [--root DIR] [--json]   # adds evidence status
 uv run cognitive-mesh experience review CLAIM_ID --verdict confirmed|rejected --note TEXT --by NAME --root DIR --graph FILE --reviews FILE [--json]
 uv run cognitive-mesh recall "QUERY" --db FILE --index DIR --graph FILE [--reviews FILE] [--root DIR] [--k N] [--min-similarity X] [--json]   # needs no provider
+uv run cognitive-mesh task "REQUEST" --plan PLAN.json --root DIR --db FILE --index DIR --graph FILE [--reviews FILE] [--k N] [--min-similarity X] [--json]   # recalled context + run; no provider unless the plan has a model step
 ```
 
 Exit codes: 0 ok, 2 configuration or usage error, 3 unusable ingestion root, 4 unknown graph node,
@@ -156,15 +175,16 @@ secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and
 
 ## Project layout
 
-- `src/cognitive_mesh/` - `config`, `cli`, `ingestion/`, `agents/` (interface, contracts, roles, registry), `orchestrator/` (plans, ordering, runner), `traces/` (SQLite trace store, recorder), `memory/` (eligible documents, embedder, ChromaDB index), `retrieval/` (evidence-aware recall), `providers/` (model client protocol, Ollama client, stdlib HTTP transport), `graph/` (JS/TS parsing isolated in `graph/js_parse.py`; visualization in `graph/view.py`, `render_mermaid.py`, `render_html.py`)
-- `tests/` - pytest suite; fixtures in `tests/fixtures/` (`sample_app`, `dep_app`, `js_app`)
+- `src/cognitive_mesh/` - `config`, `cli`, `ingestion/`, `agents/` (interface, contracts, roles, registry), `orchestrator/` (plans, ordering, runner), `traces/` (SQLite trace store, recorder), `memory/` (eligible documents, embedder, ChromaDB index), `retrieval/` (evidence-aware recall, the gated context pack), `workflow.py` (context for `task`), `providers/` (model client protocol, Ollama client, stdlib HTTP transport), `graph/` (JS/TS parsing isolated in `graph/js_parse.py`; visualization in `graph/view.py`, `render_mermaid.py`, `render_html.py`)
+- `tests/` - pytest suite; fixtures in `tests/fixtures/` (`sample_app`, `dep_app`, `js_app`, `lock_app`, `e2e_app` for the manual walkthrough)
 - `docs/adr/` - architecture decision records; `docs/DETAILED_ROADMAP.md` - per-version criteria
 - `memory-bank/` - agent-facing project record (brief, architecture, progress, active context)
 - `ROADMAP.md` - version plan; `AGENTS.md` / `CLAUDE.md` - contributor and agent instructions
 
 ## Roadmap (summary)
 
-v0.7.0 (semantic retrieval) and v0.8.0 (experience graph) are merged and tagged. v0.9.0 (evidence-aware retrieval) is merged and tagged. Next: v1.0.0 end-to-end prototype. See `ROADMAP.md`.
+v0.7.0 (semantic retrieval) and v0.8.0 (experience graph) are merged and tagged. v0.9.0 (evidence-aware retrieval) is merged and tagged. v1.0.0 (end-to-end prototype) is implemented on
+`feature/v1.0.0-end-to-end` and awaits merge. Next: v1.1.0 outcome validation. See `ROADMAP.md`.
 
 ## Principles
 

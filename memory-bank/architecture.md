@@ -47,7 +47,9 @@ while tracking their source, validity, confidence, and conflicts.
   Preserve task executions, model/provider details, tool activity, outputs, and outcomes.
   Implemented in v0.6.0 as `src/cognitive_mesh/traces/` (ADR-0011): SQLite via stdlib `sqlite3` (private to
   `store.py`), runs/steps/attempts, redaction before storing, `interrupted` for runs that never finished.
-  Opt-in (`run --trace-db`); traces are raw records and nothing retrieves them yet.
+  Opt-in (`run --trace-db`, or always with `task`); traces are raw records. Schema version 2 (v1.0.0, ADR-0017)
+  also stores, per run, the context pack the run was offered (`run_context`), so a later session can see what
+  past experience a run was given.
 - Memory Validation
   Evaluate whether an experience is eligible for promotion into reusable knowledge.
   Implemented in v0.9.0 (ADR-0016) as `experience/assess.py` (pure status rules), `current.py` (re-derive a
@@ -71,7 +73,13 @@ while tracking their source, validity, confidence, and conflicts.
   Combine retrieved evidence according to relevance, confidence, validity, and conflict status.
   Partly implemented in v0.9.0 as `src/cognitive_mesh/retrieval/` (`recall`): vector hits are followed into
   the graph; claims, raw experiences and unconfirmed hits are separate groups with the supporting and
-  contradicting records listed. It needs no model provider. No agent or task consumes it yet (v1.0.0).
+  contradicting records listed. It needs no model provider. Since v1.0.0 (ADR-0017) `retrieval/context.py` turns a recall result into a
+  read-only `RecalledContext` for the agents: every claim keeps its status, fixed meaning and the run/doc ids
+  on both sides; failed and model-written runs are a labelled raw group without text; unconfirmed hits are only
+  counted; a relevance gate (claim subject exists in the current graph, same-named root directory for raw
+  traces) keeps unrelated experience out and lists it for the person. `workflow.prepare_context` wires recall,
+  the gate and the pack for the `task` command; `code_explainer` reads the pack as untrusted data and
+  `dependency_analyst.compare_with_recalled` re-checks each claim against the current graph.
 - Outcome Evaluation
   Evaluate task results and feed new evidence into memory and model-performance records.
 
