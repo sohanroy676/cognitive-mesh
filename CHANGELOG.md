@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
+## [Unreleased]
+
+### Documentation
+- **adr:** Propose ADR-0011 episodic trace store
+- **adr:** Accept ADR-0011 episodic trace store
+
 ## [0.5.0] - 2026-10-17
 
 ### Added
