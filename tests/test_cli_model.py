@@ -3,7 +3,7 @@
 import json
 import sqlite3
 import threading
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -19,6 +19,7 @@ from cognitive_mesh.cli import (
     main,
 )
 from cognitive_mesh.orchestrator import TaskPlan, plan_task
+from cognitive_mesh.providers.http import HttpReply
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_app"
 DEP_FIXTURE = Path(__file__).parent / "fixtures" / "dep_app"
@@ -133,11 +134,12 @@ def test_no_provider_configured_keeps_the_provider_unavailable_behavior(
     [
         {"COGMESH_PROVIDER": "bogus"},
         {"COGMESH_PROVIDER": "groq"},  # key missing
-        {"COGMESH_PROVIDER": "groq", "GROQ_API_KEY": "gsk_fake"},  # no client until v0.6.2
+        {"COGMESH_PROVIDER": "groq", "GROQ_API_KEY": "gsk_fake x"},  # unsafe key characters
+        {"COGMESH_PROVIDER": "groq", "GROQ_API_KEY": "gsk_fake", "COGMESH_GROQ_MODEL": "a b"},
         {"COGMESH_PROVIDER": "ollama", "COGMESH_MODEL_TIMEOUT_S": "0"},
         {"COGMESH_MODEL_TIMEOUT_S": "0"},
     ],
-    ids=range(5),
+    ids=range(6),
 )
 def test_a_model_plan_with_bad_or_unsupported_config_exits_2(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], env: dict[str, str]
@@ -172,3 +174,88 @@ def test_the_configured_timeout_reaches_the_code_explainer(
     monkeypatch.setenv("COGMESH_MODEL_TIMEOUT_S", "77")
     explainer = _registry_for(validated).get("code_explainer")
     assert explainer._timeout_s == 77.0  # type: ignore[attr-defined]  # noqa: SLF001
+
+
+# ---- Groq (ADR-0013): the real client with a faked transport; no network ----
+
+GROQ_KEY = "gsk_" + "CANARY" + "KEY0123456789"
+GROQ_OK = json.dumps(
+    {"choices": [{"message": {"role": "assistant", "content": SUMMARY}, "finish_reason": "stop"}]}
+).encode()
+
+
+class _FakeGroqTransport:
+    status = 200
+    body = GROQ_OK
+    calls: list[tuple[str, dict[str, str], bytes]] = []  # noqa: RUF012 - reset per test
+
+    def post_json(
+        self, url: str, body: bytes, headers: Mapping[str, str], **_: object
+    ) -> HttpReply:
+        type(self).calls.append((url, dict(headers), body))
+        return HttpReply(type(self).status, type(self).body)
+
+
+@pytest.fixture
+def groq_env(monkeypatch: pytest.MonkeyPatch) -> type[_FakeGroqTransport]:
+    class Fake(_FakeGroqTransport):
+        calls: list[tuple[str, dict[str, str], bytes]] = []  # noqa: RUF012
+
+    monkeypatch.setattr("cognitive_mesh.providers.groq.StdlibTransport", Fake)
+    monkeypatch.setenv("COGMESH_PROVIDER", "groq")
+    monkeypatch.setenv("GROQ_API_KEY", GROQ_KEY)
+    return Fake
+
+
+def test_groq_model_step_succeeds_as_model_unverified(
+    groq_env: type[_FakeGroqTransport], capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    db = tmp_path / "t.sqlite3"
+    assert _run("--json", "--trace-db", str(db)) == EXIT_OK
+    out = capsys.readouterr().out
+    payload = json.loads(out)
+    assert payload["status"] == "succeeded"
+    attempt = payload["steps"][1]["attempts"][0]
+    assert attempt["basis"] == "model_unverified"
+    assert attempt["model"] == {"provider": "groq", "model": "qwen/qwen3.8-27b"}
+    url, headers, body = groq_env.calls[0]
+    assert url == "https://api.groq.com/openai/v1/chat/completions"
+    assert headers["Authorization"] == f"Bearer {GROQ_KEY}"
+    assert json.loads(body)["reasoning_effort"] == "none"
+    assert GROQ_KEY not in out + db.read_bytes().decode("latin-1")
+
+
+@pytest.mark.parametrize(
+    ("status", "expected", "attempts"),
+    [
+        (401, "provider_error", 1),  # auth is not retried
+        (429, "provider_error", 2),  # retried within the plan policy, then reported
+        (500, "provider_unavailable", 2),
+    ],
+)
+def test_groq_failures_are_explicit_bounded_and_leak_nothing(
+    groq_env: type[_FakeGroqTransport],
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    status: int,
+    expected: str,
+    attempts: int,
+) -> None:
+    groq_env.status = status
+    groq_env.body = f"{BODY_CANARY} {GROQ_KEY}".encode()
+    db = tmp_path / "t.sqlite3"
+    assert _run("--trace-db", str(db)) == EXIT_TASK_NOT_SUCCEEDED
+    captured = capsys.readouterr()
+    assert expected in captured.out
+    assert len(groq_env.calls) == attempts
+    for text in (captured.out, captured.err, db.read_bytes().decode("latin-1")):
+        for secret in (BODY_CANARY, GROQ_KEY, FILE_CANARY):
+            assert secret not in text
+
+
+def test_groq_without_a_key_is_a_config_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("COGMESH_PROVIDER", "groq")
+    assert _run() == EXIT_CONFIG_ERROR
+    assert "GROQ_API_KEY" in capsys.readouterr().err

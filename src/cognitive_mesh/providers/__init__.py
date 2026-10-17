@@ -1,4 +1,4 @@
-"""Model provider boundary: the protocol and errors (v0.4.0), plus the Ollama client (v0.6.1)."""
+"""Model provider boundary: protocol, errors and the Ollama and Groq clients."""
 
 from cognitive_mesh.providers.base import (
     ModelClient,
@@ -8,9 +8,11 @@ from cognitive_mesh.providers.base import (
     ProviderErrorKind,
 )
 from cognitive_mesh.providers.factory import build_model_client
+from cognitive_mesh.providers.groq import GroqClient
 from cognitive_mesh.providers.ollama import OllamaClient
 
 __all__ = [
+    "GroqClient",
     "ModelClient",
     "ModelRequest",
     "ModelResponse",

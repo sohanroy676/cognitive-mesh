@@ -145,3 +145,56 @@ def test_if_configured_still_raises_for_every_other_problem(
         monkeypatch.setenv(k, v)
     with pytest.raises(ConfigError, match=needle):
         load_settings_if_configured()
+
+
+def test_groq_model_and_reasoning_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("COGMESH_PROVIDER", "ollama")
+    settings = load_settings()
+    assert settings.groq_model == "qwen/qwen3.8-27b"
+    assert settings.groq_reasoning_effort == "none"
+
+
+@pytest.mark.parametrize("effort", ["", "none", "default", "low", "medium", "high"])
+def test_groq_reasoning_effort_accepts_documented_values(
+    monkeypatch: pytest.MonkeyPatch, effort: str
+) -> None:
+    monkeypatch.setenv("COGMESH_PROVIDER", "ollama")
+    monkeypatch.setenv("COGMESH_GROQ_REASONING_EFFORT", effort)
+    assert load_settings().groq_reasoning_effort == effort
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("COGMESH_GROQ_REASONING_EFFORT", "max"),
+        ("COGMESH_GROQ_MODEL", ""),
+        ("COGMESH_GROQ_MODEL", "bad model"),
+        ("COGMESH_GROQ_MODEL", "x" * 201),
+    ],
+    ids=range(4),
+)
+def test_invalid_groq_settings_are_rejected(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str
+) -> None:
+    monkeypatch.setenv("COGMESH_PROVIDER", "ollama")
+    monkeypatch.setenv(name, value)
+    with pytest.raises(ConfigError, match=name):
+        load_settings()
+
+
+@pytest.mark.parametrize("suffix", [" x", "\nx", "x\r", "kéy", "\tx"], ids=range(5))
+def test_a_key_that_could_break_a_header_is_rejected_without_echoing_it(
+    monkeypatch: pytest.MonkeyPatch, suffix: str
+) -> None:
+    key = "gsk_" + "CANARYKEY" + suffix
+    monkeypatch.setenv("COGMESH_PROVIDER", "groq")
+    monkeypatch.setenv("GROQ_API_KEY", key)
+    with pytest.raises(ConfigError, match="GROQ_API_KEY") as exc:
+        load_settings()
+    assert "CANARYKEY" not in str(exc.value)
+
+
+def test_a_blank_key_is_still_fine_for_ollama(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("COGMESH_PROVIDER", "ollama")
+    monkeypatch.setenv("GROQ_API_KEY", "")
+    assert load_settings().provider == "ollama"
