@@ -5,6 +5,20 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **experience:** Build the experience graph from traces
+- **experience:** Persist the graph in a checked SQLite file
+- **experience:** Query the graph and re-check its sources
+- **experience:** Add experience build, show, claims and check commands
+
+### Changed
+- **memory:** Share verify_source and load MemoryIndex lazily
+
+### Documentation
+- **adr:** Propose ADR-0015 experience graph
+- **adr:** Accept ADR-0015
+- Record v0.8.0 experience graph
+
 ### Maintenance
 - Regenerate changelog as the release for untagged versions
 

@@ -1,8 +1,13 @@
-"""Semantic retrieval over stored run traces (v0.7.0, ADR-0014)."""
+"""Semantic retrieval over stored run traces (v0.7.0, ADR-0014).
 
-from cognitive_mesh.memory.documents import TEXT_FORMAT_VERSION, eligible_documents
+`MemoryIndex` is re-exported lazily because importing it loads `chromadb`; the experience graph
+(ADR-0015) imports `memory.documents` and must not pay that cost.
+"""
+
+from typing import TYPE_CHECKING, Any
+
+from cognitive_mesh.memory.documents import TEXT_FORMAT_VERSION, eligible_documents, verify_source
 from cognitive_mesh.memory.embedder import Embedder, SentenceTransformerEmbedder
-from cognitive_mesh.memory.index import MemoryIndex
 from cognitive_mesh.memory.models import (
     SIMILARITY_NOTE,
     IndexReport,
@@ -14,6 +19,9 @@ from cognitive_mesh.memory.models import (
     SourceCheck,
     UnverifiedHit,
 )
+
+if TYPE_CHECKING:
+    from cognitive_mesh.memory.index import MemoryIndex
 
 __all__ = [
     "SIMILARITY_NOTE",
@@ -30,4 +38,13 @@ __all__ = [
     "SourceCheck",
     "UnverifiedHit",
     "eligible_documents",
+    "verify_source",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "MemoryIndex":
+        from cognitive_mesh.memory.index import MemoryIndex
+
+        return MemoryIndex
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

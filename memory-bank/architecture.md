@@ -52,12 +52,16 @@ while tracking their source, validity, confidence, and conflicts.
   Evaluate whether an experience is eligible for promotion into reusable knowledge.
 - Vector Retrieval
   Use ChromaDB and embeddings to find semantically relevant past experiences.
-  Implemented in v0.7.0 (branch, not merged) as `src/cognitive_mesh/memory/` (ADR-0014): the final attempt of each
+  Implemented in v0.7.0 (merged, tagged) as `src/cognitive_mesh/memory/` (ADR-0014): the final attempt of each
   step of a finished run is embedded (pinned MiniLM) into a derived ChromaDB index; `memory index` / `memory search`;
   each hit is re-read from SQLite and reported unconfirmed if the row is missing, changed or unreadable. No agent
   or task uses the results yet.
 - Knowledge Graph
   Use NetworkX to represent claims, entities, relationships, provenance, and conflicts.
+  Experiences, entities and unvalidated claims are implemented in v0.8.0 (branch, not merged) as
+  `src/cognitive_mesh/experience/` (ADR-0015): built from the trace database, persisted in a separate SQLite
+  file with a content hash, sources re-checked on load. Conflicts, confidence and validation are not
+  implemented (v0.9.0).
 - Context Assembly
   Combine retrieved evidence according to relevance, confidence, validity, and conflict status.
 - Outcome Evaluation

@@ -4,7 +4,7 @@
 v0.1.0 foundation is implemented: tooling, config loading, and a minimal CLI. The commands
 in "Verified commands" below were run successfully on 2026-10-16 (Windows 11, Git Bash,
 uv 0.13.1, CPython 3.12.3). Everything else here is still planned and unimplemented, except
-the v0.7.0 vector index (branch `feature/v0.7.0-semantic-memory`, ChromaDB + Sentence Transformers). v0.6.1 added a real Ollama client (stdlib HTTP, no new dependency; ADR-0012). GitHub Actions CI passed on main (run 38942568274, 2026-10-16).
+the v0.7.0 vector index (ChromaDB + Sentence Transformers, merged, tagged `v0.7.0`) and the v0.8.0 experience graph (branch `feature/v0.8.0-experience-graph`, not merged). v0.6.1 added a real Ollama client (stdlib HTTP, no new dependency; ADR-0012). GitHub Actions CI passed on main (run 38942568274, 2026-10-16).
 
 ## Language and Runtime
 - Language: Python
@@ -28,7 +28,7 @@ Never hardcode credentials in source code or commit secrets.
 
 ## Memory and Data
 - Vector database: ChromaDB
-- Graph representation and traversal: NetworkX 3.7 (runtime dependency since v0.3.0; `types-networkx` in dev; ADR-0006)
+- Graph representation and traversal: NetworkX 3.7 (runtime dependency since v0.3.0; `types-networkx` in dev; ADR-0006). v0.8.0 (branch `feature/v0.8.0-experience-graph`, ADR-0015) uses it again, private to `experience/graph.py`, and stores the experience graph in its own SQLite file (stdlib `sqlite3`, `PRAGMA application_id`, no new dependency)
 - JS/TS import parsing: tree-sitter 0.26.0 + tree-sitter-javascript 0.25.0 + tree-sitter-typescript 0.23.2 (runtime dependencies since v0.3.1; MIT, official tree-sitter org; private to `graph/js_parse.py`; ADR-0007)
 - Persistent structured storage: SQLite (stdlib `sqlite3`; run traces since v0.6.0, schema version 1, ADR-0011; no new dependency)
 - Embeddings: Sentence Transformers 6.1.0 (Apache-2.0), runtime dependency since v0.7.0 on branch `feature/v0.7.0-semantic-memory` (ADR-0014); torch 2.14.1 is a direct dependency so that `[tool.uv.sources]` can take the CPU build from the official PyTorch index on Linux (`uv.lock` has no `nvidia-*`/`cuda` entries; checked 2026-10-17, Linux install verified by CI run 39043661141 on 2026-10-17: torch CPU, 4 s with `uv sync --locked`)
@@ -141,7 +141,15 @@ RUN_LIVE_EMBEDDINGS=1 uv run pytest -m live tests/test_live_embeddings.py -s   #
 uv run cognitive-mesh memory index --db FILE --index DIR     # empty scratch cwd via uv run --project: exit 0, "4 added"; second run "4 unchanged", model not re-run for unchanged text
 uv run cognitive-mesh memory search "QUERY" --db FILE --index DIR [--k N] [--min-similarity X] [--json]   # exit 0; relevant query ranks the right step first; unrelated query prints "no sufficiently similar experience"
 uv run cognitive-mesh memory search x --db FILE --index missing-dir   # exit 11, "the memory index does not exist"; creates nothing
+uv run cognitive-mesh run tests/fixtures/plans/ok.json --root tests/fixtures/dep_app --trace-db T   # run twice, then needs_model.json (exit 7), in an empty scratch directory via uv run --project
+uv run cognitive-mesh experience build --db T --graph G     # exit 0, 33 nodes, 46 edges, 6 claims (all unvalidated), prints the content sha256
+uv run cognitive-mesh experience claims --db T --graph G    # new process: exit 0, each claim "observed 2x (2 still confirmed, 1 code version(s))", then the unvalidated note
+uv run cognitive-mesh experience check --db T --graph G     # exit 0, "content hash matches", sources: ok=33
+uv run cognitive-mesh experience check --db T2 --graph G    # T2 = copy of T with one run deleted: exit 14, source_missing=5, diagnostics on stderr; claims then show "1 still confirmed"
+uv run cognitive-mesh experience claims --db T --graph G3   # G3 = copy of G with one claim name edited: exit 12, "the stored content hash does not match the graph content"
+uv run cognitive-mesh experience show run:ID --db T --graph G2   # G2 = node record set to an invalid value: exit 12, "malformed record"
 ```
+The `experience` commands were run 2026-10-17 on branch `feature/v0.8.0-experience-graph` from an empty directory (not in a fresh clone or CI). Not run: `show --incoming` and `--include-unverified` outside the tests, very large traces.
 The `memory` commands were run 2026-10-17 on branch `feature/v0.7.0-semantic-memory` from an empty directory against a trace database made by `run ok.json` and `run needs_model.json` (not in a fresh clone or CI). Not run for real: an index built with a different real model (covered by tests with a fake embedder).
 The v0.1.0 commands also passed in a fresh `git clone` of its feature branch; the `ingest` commands were run only in the working tree (not yet in a fresh clone or CI).
 The `dep_app` `graph` commands were run 2026-10-17 in the working tree on branch `feature/v0.3.0-dependency-graph` (not in a fresh clone; CI runs the test suite, not these CLI calls).
