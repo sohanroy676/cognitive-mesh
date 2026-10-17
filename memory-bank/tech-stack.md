@@ -127,6 +127,9 @@ COGMESH_PROVIDER=ollama COGMESH_OLLAMA_BASE_URL=http://127.0.0.1:1 uv run cognit
 COGMESH_PROVIDER=ollama COGMESH_OLLAMA_MODEL=no-such-model uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # exit 7, provider_error (HTTP 404, not retried)
 COGMESH_PROVIDER=groq uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # empty cwd, no key: exit 2, names GROQ_API_KEY
 COGMESH_PROVIDER=groq GROQ_API_KEY=gsk_fake uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # real call to api.groq.com with a fake key: exit 7, provider_error (auth), not retried
+COGMESH_PROVIDER=groq uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app [--json --trace-db FILE]   # repo root, key from the ignored .env: exit 0, explain_file succeeded, model_unverified, provider groq; key absent from stdout/stderr/trace db
+COGMESH_PROVIDER=groq COGMESH_GROQ_MODEL=no/such-model uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # exit 7, provider_error (other)
+RUN_LIVE_GROQ=1 RUN_LIVE_GROQ_KEY=... uv run pytest -m live tests/test_live_groq.py   # 1 passed; skipped by default and in CI
 COGMESH_PROVIDER=bogus uv run cognitive-mesh run tests/fixtures/plans/ok.json --root tests/fixtures/dep_app   # exit 0: plans without a model step never read config
 RUN_LIVE_OLLAMA=1 uv run pytest -m live   # opt-in real Ollama test, 1 passed; skipped by default and in CI
 ```
@@ -153,7 +156,7 @@ ignored `.env` in the working directory. Copy `.env.example` to `.env` to start.
 Missing/invalid values raise `ConfigError`; the CLI prints it to stderr and exits 2.
 
 ## External Services
-- Groq API: external model provider; client implemented in v0.6.2 (fixed endpoint, never verified with a real key yet)
+- Groq API: external model provider; client implemented and verified in v0.6.2 (fixed endpoint; one key, `qwen/qwen3.8-27b`)
 - Ollama: local model runtime; client implemented in v0.6.1 (only `run` with a model step calls it)
 - Other model APIs: Optional future integrations
 - API credentials and endpoint configuration: see Configuration above (Ollama calls exist since v0.6.1, Groq since v0.6.2)

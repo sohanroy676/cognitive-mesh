@@ -85,7 +85,7 @@ Implemented 2026-10-17 on `feature/v0.6.1-ollama-client`; its DETAILED_ROADMAP T
 
 ### v0.6.2 — Real Groq Client
 
-Implemented 2026-10-17 on `feature/v0.6.2-groq-client` (ADR-0013). Unit, CLI and parity tests pass locally and a fake key got a real 401 from Groq (reported as `auth`). **Not yet done:** a successful call with a real key (the DETAILED_ROADMAP Expected Output), so this version is not marked done. Not merged, not tagged.
+Implemented 2026-10-17 on `feature/v0.6.2-groq-client` (ADR-0013). Unit, CLI and parity tests pass locally. Against the real API: a fake key got a 401 (`auth`), an unknown model gave `other`, and with the user's key `run needs_model.json` succeeded (`explain_file`, `model_unverified`, provider groq, model `qwen/qwen3.8-27b`) and the live test passed. Rate limiting (429) and outages were tested with fakes only. Not merged, not tagged.
 - Implement `ModelClient` for the Groq API (`providers/groq.py`); key from `GROQ_API_KEY` (`SecretStr`), same model setting as v0.6.1.
 - Map 401/403 to `auth`, 429 to `rate_limited`, timeouts, 5xx and malformed replies to the existing `ProviderError` kinds; the key never appears in logs, errors, traces or output.
 - The provider factory selects Groq or Ollama from `COGMESH_PROVIDER`; a missing key stays a `ConfigError` (exit 2).
