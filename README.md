@@ -62,7 +62,7 @@ uv run cognitive-mesh graph PATH --format mermaid|html [--output FILE] [--max-no
 Exit codes: 0 ok, 2 configuration or usage error, 3 unusable ingestion root, 4 unknown graph node,
 5 output file could not be written.
 Configuration comes from the environment or an ignored `.env` (copy `.env.example`); never commit
-secrets. Packaging/build commands have not been run and are TBD.
+secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and run in a fresh venv on Windows; not published, not run in CI). The package version in `pyproject.toml` is still 0.1.0, so builds are labelled 0.1.0.
 
 ## Project layout
 

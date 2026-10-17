@@ -74,7 +74,7 @@ integration credentials.
 - Install uv (one-time, Windows): `winget install --id=astral-sh.uv -e`
 - Environment setup / install: `uv sync` (CI uses `uv sync --locked`)
 - Application startup: `uv run cognitive-mesh` (also `uv run python -m cognitive_mesh`, exercised by a test)
-- Build or packaging command: TBD (not run)
+- Build: `uv build --out-dir DIR` builds an sdist and a wheel (run 2026-10-17; `dist/` is git-ignored). The wheel installed into a fresh venv and `cognitive-mesh` ran from an empty directory (no config: exit 2; `COGMESH_PROVIDER=ollama`: exit 0; `graph` on a tiny app: exit 0). The sdist holds only the placeholder `.env.example`. Not verified: publishing, other platforms, CI. Known gap: `pyproject.toml` version is still `0.1.0` while the project is at v0.3.2, so artifacts and `cognitive-mesh --version` report 0.1.0; versioning policy is undecided.
 
 ### Verified commands
 ```
