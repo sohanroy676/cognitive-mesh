@@ -22,6 +22,7 @@ from cognitive_mesh.experience.models import (
     NodeKind,
     Snapshot,
     TraceRef,
+    ref_key,
 )
 from cognitive_mesh.memory.documents import eligible_documents
 from cognitive_mesh.traces import RunTrace, TraceRecordError, TraceStatus, TraceStore
@@ -59,7 +60,7 @@ class _Accumulator:
     def snapshot(self, diagnostics: list[ExperienceDiagnostic]) -> Snapshot:
         nodes = tuple(sorted(self.nodes.values(), key=lambda n: n.id))
         edges = tuple(
-            ExpEdge(source=s, target=t, kind=k, refs=tuple(refs))
+            ExpEdge(source=s, target=t, kind=k, refs=tuple(sorted(refs, key=ref_key)))
             for (s, t, k), refs in sorted(
                 self.edges.items(), key=lambda i: (i[0][0], i[0][1], i[0][2].value)
             )

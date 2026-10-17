@@ -119,26 +119,41 @@ class Reached(_Frozen):
     path: tuple[ExpEdge, ...]
 
 
-def canonical(nodes: tuple[ExpNode, ...], edges: tuple[ExpEdge, ...]) -> str:
+def ref_key(ref: TraceRef) -> str:
+    """The one ordering of references, used by the build, the hash and the file."""
+    return json.dumps(ref.model_dump(mode="json"), sort_keys=True, ensure_ascii=True)
+
+
+def canonical(
+    nodes: tuple[ExpNode, ...],
+    edges: tuple[ExpEdge, ...],
+    diagnostics: tuple[ExperienceDiagnostic, ...] = (),
+) -> str:
     """The text the content hash covers: sorted, compact, ASCII, independent of insertion order."""
     node_part = [n.model_dump(mode="json") for n in sorted(nodes, key=lambda n: n.id)]
     edge_part = [
         {
             **e.model_dump(mode="json", exclude={"refs"}),
-            "refs": sorted(
-                (r.model_dump(mode="json") for r in e.refs),
-                key=lambda r: json.dumps(r, sort_keys=True),
-            ),
+            "refs": [r.model_dump(mode="json") for r in sorted(e.refs, key=ref_key)],
         }
         for e in sorted(edges, key=lambda e: (e.source, e.target, e.kind.value))
     ]
     return json.dumps(
-        {"format": FORMAT_VERSION, "nodes": node_part, "edges": edge_part},
+        {
+            "format": FORMAT_VERSION,
+            "nodes": node_part,
+            "edges": edge_part,
+            "diagnostics": [d.model_dump(mode="json") for d in diagnostics],
+        },
         sort_keys=True,
         ensure_ascii=True,
         separators=(",", ":"),
     )
 
 
-def content_sha256(nodes: tuple[ExpNode, ...], edges: tuple[ExpEdge, ...]) -> str:
-    return hashlib.sha256(canonical(nodes, edges).encode("ascii")).hexdigest()
+def content_sha256(
+    nodes: tuple[ExpNode, ...],
+    edges: tuple[ExpEdge, ...],
+    diagnostics: tuple[ExperienceDiagnostic, ...] = (),
+) -> str:
+    return hashlib.sha256(canonical(nodes, edges, diagnostics).encode("ascii")).hexdigest()
