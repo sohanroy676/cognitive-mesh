@@ -73,14 +73,15 @@ Implemented 2026-10-17 on `feature/v0.6.0-trace-store`; its DETAILED_ROADMAP Tes
 - `run PLAN --root DIR --trace-db FILE`, `traces list --db FILE`, `traces show RUN_ID --db FILE` (exit 8 store error or malformed trace, 9 unknown run id). Orchestrator gained an optional `now` clock for per-step timestamps.
 - Known limitations: opt-in only, raw traces (not validated knowledge, nothing retrieves them yet), no retention limits or migrations, single writer, pattern-based redaction, no tool activity beyond agent attempts.
 
-## Next — Planned, Not Started
+### v0.6.1 — Real Ollama Client
 
-### v0.6.1 — Real Ollama Client (planned, not started)
-- Implement `ModelClient` for a local Ollama runtime (`providers/ollama.py`); base URL from `COGMESH_OLLAMA_BASE_URL`, model name from a new setting (name decided in ADR-0012).
-- Enforce `timeout_s`; map connection refused, timeouts, missing model (HTTP 404), server errors, malformed and oversized replies to the existing `ProviderError` kinds.
-- Build the client from `Settings` (provider factory) and pass it to `default_registry` in the CLI; commands that need no model keep needing no configuration.
-- Test with a fake HTTP server or injected transport (no network, no Ollama needed). A real-Ollama test is opt-in and skipped by default and in CI.
-- Library choice (stdlib or a new dependency) is decided in ADR-0012 and confirmed by the user before coding.
+Implemented 2026-10-17 on `feature/v0.6.1-ollama-client`; its DETAILED_ROADMAP Test/Expected items pass locally, including a real `llama3.2` run and the opt-in live test. Merged to main and pushed; CI result not yet recorded; not tagged. See ADR-0012.
+- `ModelClient` for a local Ollama (`providers/ollama.py`) on a private stdlib transport (`providers/http.py`): one total deadline per call, no new dependency.
+- Settings `COGMESH_OLLAMA_MODEL` (default `llama3.2`) and `COGMESH_MODEL_TIMEOUT_S` (default 30, max 600); `COGMESH_OLLAMA_BASE_URL` is validated.
+- `providers/factory.py`; `run` reads config only for plans with a model step; no provider set keeps the old `provider_unavailable` behavior; bad config exits 2.
+- Known limitations: only Ollama; no streaming, proxy or redirect support; verified against one local Ollama only.
+
+## Next — Planned, Not Started
 
 ### v0.6.2 — Real Groq Client (planned, not started)
 - Implement `ModelClient` for the Groq API (`providers/groq.py`); key from `GROQ_API_KEY` (`SecretStr`), same model setting as v0.6.1.

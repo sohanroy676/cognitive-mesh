@@ -9,8 +9,8 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from cognitive_mesh import __version__
-from cognitive_mesh.agents import AgentContext, default_registry
-from cognitive_mesh.config import ConfigError, load_settings
+from cognitive_mesh.agents import AgentContext, AgentRegistry, default_registry
+from cognitive_mesh.config import ConfigError, load_settings, load_settings_if_configured
 from cognitive_mesh.graph import (
     DEFAULT_MAX_EDGES,
     DEFAULT_MAX_NODES,
@@ -28,8 +28,10 @@ from cognitive_mesh.orchestrator import (
     TaskPlan,
     TaskRun,
     TaskStatus,
+    ValidatedPlan,
     plan_task,
 )
+from cognitive_mesh.providers import build_model_client
 from cognitive_mesh.traces import (
     RunTrace,
     TraceNotFoundError,
@@ -273,17 +275,33 @@ def _emit_run(run: TaskRun, as_json: bool, trace_id: str | None) -> None:
         print(f"trace: {trace_id}")
 
 
+def _registry_for(validated: ValidatedPlan) -> AgentRegistry:
+    """Config is read only when the plan has a model step; no provider set means no client."""
+    registry = default_registry()
+    model_caps = {c.name for spec in registry.specs() for c in spec.capabilities if c.uses_model}
+    if not any(step.capability in model_caps for step in validated.order):
+        return registry
+    settings = load_settings_if_configured()
+    if settings is None:
+        return registry
+    return default_registry(build_model_client(settings), model_timeout_s=settings.model_timeout_s)
+
+
 def _run_plan(plan_path: Path, root: Path, as_json: bool, trace_db: Path | None) -> int:
     registry = default_registry()
     try:
         validated = plan_task(_load_plan(plan_path), registry)
         ingestion = ingest_application(root)
+        registry = _registry_for(validated)
     except PlanError as exc:
         print(_printable(str(exc)), file=sys.stderr)
         return EXIT_PLAN_ERROR
     except IngestionError as exc:
         print(_printable(str(exc)), file=sys.stderr)
         return EXIT_INGESTION_ERROR
+    except ConfigError as exc:
+        print(exc, file=sys.stderr)
+        return EXIT_CONFIG_ERROR
     context = AgentContext(ingestion=ingestion, graph=build_dependency_graph(ingestion))
     if trace_db is None:
         run = Orchestrator(registry).run(validated, context)
@@ -396,7 +414,7 @@ def _run_traces_show(run_id: str, db: Path, as_json: bool) -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     """With no subcommand, validate configuration. Other subcommands need no config.
 
-    None of these paths makes provider network calls.
+    Only `run` can call a model, and only when the plan has a model step and a provider is set.
     """
     parser = _build_parser()
     args = parser.parse_args(argv)

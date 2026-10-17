@@ -39,8 +39,8 @@ while tracking their source, validity, confidence, and conflicts.
   capability, bounded retries, run budget, task status derived from step statuses. In-memory only.
 - Model Provider Interface
   Route model requests to configured providers, including Groq and Ollama where available.
-  Only the protocol and error types exist (v0.4.0, `src/cognitive_mesh/providers/`); no Groq or Ollama client yet.
-  Planned: a real Ollama client in v0.6.1 (ADR-0012), then Groq in v0.6.2 (ADR-0013), before v0.7.0.
+  Protocol and error types (v0.4.0) plus a real Ollama client (v0.6.1, ADR-0012: `providers/ollama.py`, stdlib transport
+  `providers/http.py`, `providers/factory.py`). No Groq client yet; planned for v0.6.2 (ADR-0013), before v0.7.0.
 - Episodic Trace Store
   Preserve task executions, model/provider details, tool activity, outputs, and outcomes.
   Implemented in v0.6.0 as `src/cognitive_mesh/traces/` (ADR-0011): SQLite via stdlib `sqlite3` (private to

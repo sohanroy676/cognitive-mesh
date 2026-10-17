@@ -3,8 +3,8 @@
 ## Status
 v0.1.0 foundation is implemented: tooling, config loading, and a minimal CLI. The commands
 in "Verified commands" below were run successfully on 2026-10-16 (Windows 11, Git Bash,
-uv 0.13.1, CPython 3.12.3). Everything else here (providers, memory stores, agents) is still
-planned and unimplemented. GitHub Actions CI passed on main (run 38942568274, 2026-10-16).
+uv 0.13.1, CPython 3.12.3). Everything else here (memory stores, Groq client) is still
+planned and unimplemented. v0.6.1 added a real Ollama client (stdlib HTTP, no new dependency; ADR-0012). GitHub Actions CI passed on main (run 38942568274, 2026-10-16).
 
 ## Language and Runtime
 - Language: Python
@@ -19,7 +19,7 @@ planned and unimplemented. GitHub Actions CI passed on main (run 38942568274, 20
 - Local model runtime: Ollama
 - Model selection and routing: Custom Python implementation
 - Model IDs, provider SDKs, and model availability: TBD
-- Real clients are planned (not implemented): Ollama in v0.6.1, Groq in v0.6.2; HTTP library choice is decided in ADR-0012/0013.
+- Ollama client implemented in v0.6.1 (`providers/ollama.py`, ADR-0012) on stdlib `http.client` (`providers/http.py`, one total deadline per call, no new dependency). Groq is planned for v0.6.2 (ADR-0013) and will reuse the transport; its model ID is decided then. Default Ollama model: `llama3.2`.
 
 The application should support multiple configured model providers where available.
 Provider-specific logic should be isolated behind a common internal interface.
@@ -51,6 +51,7 @@ must be implemented explicitly; NetworkX alone is not the persistent database.
 - Test directory: `tests/`
 - Test file naming convention: `test_*.py`
 - Test command: `uv run pytest`
+- Marker `live` (real provider, needs an explicit env var such as `RUN_LIVE_OLLAMA=1`) is skipped by default and in CI.
 
 `tests/conftest.py` has an autouse fixture that clears `COGMESH_*`/`GROQ_API_KEY` and
 runs each test in an empty temp cwd so a developer's real `.env` cannot leak in.
@@ -120,6 +121,13 @@ uv run cognitive-mesh traces list --db FILE [--json]    # exit 0 (newest first)
 uv run cognitive-mesh traces show RUN_ID --db FILE [--json]   # exit 0; in a new process too
 uv run cognitive-mesh traces show nope --db FILE                # exit 9, "no run has the id"
 uv run cognitive-mesh traces list --db missing.sqlite3          # exit 8, "the trace database does not exist"; creates nothing
+COGMESH_PROVIDER=ollama COGMESH_MODEL_TIMEOUT_S=120 uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app --trace-db FILE   # exit 0 with a running Ollama + llama3.2; explain_file succeeded, trace saved
+uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # empty cwd, no config: exit 7, provider_unavailable
+COGMESH_PROVIDER=ollama COGMESH_OLLAMA_BASE_URL=http://127.0.0.1:1 uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # exit 7, provider_unavailable after 2 attempts
+COGMESH_PROVIDER=ollama COGMESH_OLLAMA_MODEL=no-such-model uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # exit 7, provider_error (HTTP 404, not retried)
+COGMESH_PROVIDER=groq GROQ_API_KEY=gsk_fake uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app   # exit 2, no Groq client yet (v0.6.2)
+COGMESH_PROVIDER=bogus uv run cognitive-mesh run tests/fixtures/plans/ok.json --root tests/fixtures/dep_app   # exit 0: plans without a model step never read config
+RUN_LIVE_OLLAMA=1 uv run pytest -m live   # opt-in real Ollama test, 1 passed; skipped by default and in CI
 ```
 The v0.1.0 commands also passed in a fresh `git clone` of its feature branch; the `ingest` commands were run only in the working tree (not yet in a fresh clone or CI).
 The `dep_app` `graph` commands were run 2026-10-17 in the working tree on branch `feature/v0.3.0-dependency-graph` (not in a fresh clone; CI runs the test suite, not these CLI calls).
@@ -128,6 +136,7 @@ The `--format` graph commands were run 2026-10-17 in the working tree on branch 
 The `agents` commands were run 2026-10-17 in the working tree on branch `feature/v0.4.0-agent-architecture` (not yet in a fresh clone or CI); v0.4.0 added no dependency.
 The `run` commands were run 2026-10-17 in the working tree on branch `feature/v0.5.0-orchestrator` (not yet in a fresh clone or CI); v0.5.0 added no dependency.
 The `--trace-db` and `traces` commands were run 2026-10-17 in the working tree on branch `feature/v0.6.0-trace-store` with the database in a scratch directory (not yet in a fresh clone or CI); v0.6.0 added no dependency.
+The v0.6.1 commands below were run 2026-10-17 on branch `feature/v0.6.1-ollama-client` against a local Ollama (`llama3.2:latest` pulled), from the repo and from an empty directory via `uv run --project`; not yet in a fresh clone or CI.
 Note: the "no config: exit 2" check needs a working directory without a local `.env`.
 
 Do not document unverified commands as working commands.
@@ -137,14 +146,15 @@ Settings load via `cognitive_mesh.config.load_settings()` from the environment, 
 ignored `.env` in the working directory. Copy `.env.example` to `.env` to start.
 - `COGMESH_PROVIDER` (required): `groq` or `ollama`
 - `GROQ_API_KEY`: required when provider is `groq`; held as `SecretStr`
-- `COGMESH_OLLAMA_BASE_URL`, `COGMESH_LOG_LEVEL`: optional, have defaults
+- `COGMESH_OLLAMA_BASE_URL` (validated: http/https, host, no credentials/query), `COGMESH_OLLAMA_MODEL` (default `llama3.2`), `COGMESH_MODEL_TIMEOUT_S` (default 30, >0, max 600), `COGMESH_LOG_LEVEL`: optional, have defaults
+- `run` reads config only when the plan has a model step (`load_settings_if_configured`: no `COGMESH_PROVIDER` means no client; any other problem exits 2). Other commands never read it.
 Missing/invalid values raise `ConfigError`; the CLI prints it to stderr and exits 2.
 
 ## External Services
 - Groq API: Planned primary external model provider
-- Ollama: Planned local model runtime
+- Ollama: local model runtime; client implemented in v0.6.1 (only `run` with a model step calls it)
 - Other model APIs: Optional future integrations
-- API credentials and endpoint configuration: see Configuration above (no provider calls implemented yet)
+- API credentials and endpoint configuration: see Configuration above (Ollama calls exist since v0.6.1; no Groq client until v0.6.2)
 
 The core application should separate provider configuration from orchestration,
 memory, and agent logic.
