@@ -27,7 +27,7 @@ Never hardcode credentials in source code or commit secrets.
 
 ## Memory and Data
 - Vector database: ChromaDB
-- Graph representation and traversal: NetworkX
+- Graph representation and traversal: NetworkX 3.7 (runtime dependency since v0.3.0; `types-networkx` in dev; ADR-0006)
 - Persistent structured storage: SQLite
 - Embeddings: Sentence Transformers
 - Embedding model and version: TBD
@@ -80,8 +80,14 @@ uv run cognitive-mesh                           # no config: exit 2, names COGME
 uv run cognitive-mesh ingest tests/fixtures/sample_app          # exit 0, lists 9 files
 uv run cognitive-mesh ingest tests/fixtures/sample_app --json   # exit 0 (--include-content adds file text)
 uv run cognitive-mesh ingest does-not-exist                     # exit 3, "ingestion root does not exist"
+uv run cognitive-mesh graph tests/fixtures/dep_app              # exit 0, nodes/edges/unresolved/cycle/diagnostics
+uv run cognitive-mesh graph tests/fixtures/dep_app --json       # exit 0
+uv run cognitive-mesh graph tests/fixtures/dep_app --deps-of module:src/dep_app/a.py --transitive   # exit 0
+uv run cognitive-mesh graph tests/fixtures/dep_app --deps-of nope   # exit 4, "unknown node"
+uv run cognitive-mesh graph does-not-exist                      # exit 3
 ```
 The v0.1.0 commands also passed in a fresh `git clone` of its feature branch; the `ingest` commands were run only in the working tree (not yet in a fresh clone or CI).
+The `graph` commands were run 2026-10-17 in the working tree on branch `feature/v0.3.0-dependency-graph` (not yet in a fresh clone or CI).
 Note: the "no config: exit 2" check needs a working directory without a local `.env`.
 
 Do not document unverified commands as working commands.

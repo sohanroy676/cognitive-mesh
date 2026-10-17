@@ -102,6 +102,33 @@ providers should be identified separately and must not require committed credent
 
 ---
 
+## v0.3.1 — JS/TS and Dynamic Import Analysis
+
+### Implement
+- Parse JS/TS static imports, `require()` and literal dynamic `import()` into graph edges with evidence.
+- Detect Python dynamic imports (`importlib.import_module`, `__import__`) with literal arguments.
+- Represent non-literal or computed dynamic imports as unresolved, never as guessed edges.
+- Decide and record the parser approach (ADR); vet any new dependency per the security rules.
+- Never execute ingested code.
+
+### Test
+- Fixture with JS/TS files using ES imports, CommonJS, dynamic imports, type-only imports.
+- Literal vs computed dynamic imports (Python and JS); commented-out and string-embedded imports.
+- Malformed JS/TS, huge files, injection text in import strings.
+- Regression: all v0.3.0 graph tests still pass.
+
+### Expected Output
+- Literal imports appear as edges with file, line and rule evidence.
+- Computed dynamic imports are visible as unresolved or flagged, not omitted silently.
+- Limits of the analysis (e.g. bundler aliases, tsconfig paths) are stated in diagnostics/ADR.
+
+### Fix If
+- Imports in comments or strings produce edges.
+- Computed imports produce guessed targets.
+- A malformed file aborts the whole graph build.
+
+---
+
 ## v0.4.0 — Agent Architecture
 
 ### Implement

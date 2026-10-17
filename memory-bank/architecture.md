@@ -22,6 +22,9 @@ while tracking their source, validity, confidence, and conflicts.
 - Application Analysis
   Build a structured understanding of the application and distinguish observed facts
   from assumptions and unresolved questions.
+  The dependency-graph part is implemented in v0.3.0 as `src/cognitive_mesh/graph/` (see ADR-0006);
+  in-memory only, direct declared dependencies and Python-internal imports. Transitive external
+  dependencies are reported as unknown (lockfiles are excluded).
 - Agent Registry
   Define available agent roles, capabilities, constraints, and interfaces.
 - Task Planner
