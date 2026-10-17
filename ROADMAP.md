@@ -45,7 +45,7 @@ Completed 2026-10-17. Merged to main (`e19d5e1`); the first CI run on that merge
 
 ### v0.4.0 — Agent Architecture
 
-Implemented 2026-10-17 on `feature/v0.4.0-agent-architecture`; its DETAILED_ROADMAP Test/Expected items pass locally. Merged to main at session end; CI run 39023604187 on that merge passed (2026-10-17); not tagged. See ADR-0009.
+Implemented 2026-10-17 on `feature/v0.4.0-agent-architecture`; its DETAILED_ROADMAP Test/Expected items pass locally. Merged to main; CI run 39023604187 on that merge passed (2026-10-17). Tagged `v0.4.0`; CI run 39024302873 on the release merge passed. See ADR-0009.
 
 - Common `Agent` interface whose `run` never raises; capability declarations derived from the handler table; strict input/output contracts; success and failure results (`AgentSuccess | AgentFailure`) with explicit failure kinds.
 - Roles: `dependency_analyst` (deterministic, over the dependency graph) and `code_explainer` (model-backed, output marked `model_unverified`).
@@ -53,13 +53,17 @@ Implemented 2026-10-17 on `feature/v0.4.0-agent-architecture`; its DETAILED_ROAD
 - `cognitive-mesh agents [--json]` lists roles and capabilities.
 - Known limitations: no real provider client; timeouts are enforced by clients only (no watchdog); nothing persisted; no orchestrator.
 
-## Next — Planned, Not Started
-
 ### v0.5.0 — Basic Orchestrator and Task Planning
-- Implement the custom orchestration workflow.
-- Represent tasks, dependencies, and execution results.
-- Select agents based on task requirements and declared capabilities.
-- Test planning, execution order, and failure paths.
+
+Implemented 2026-10-17 on `feature/v0.5.0-orchestrator`; its DETAILED_ROADMAP Test/Expected items pass locally. Merged to main at session end; CI result on the merge not yet recorded; not tagged. See ADR-0010.
+
+- `TaskPlan`/`PlanStep` models; `plan_task` validates (unique ids, existing dependencies, no cycles, capability has an agent) and orders steps before anything runs.
+- `Orchestrator.run` executes sequentially, assigns by `AgentRegistry.find`, and returns a `TaskRun` whose status is derived from its steps (`succeeded` only if every step succeeded; `failed`; `incomplete`). Steps are `succeeded | failed | blocked | not_run`.
+- Bounded retries for failures marked `retryable` (default 2 attempts, cap 5); invalid agent results and raised exceptions are failures and are never retried; a run budget is checked before each attempt (no watchdog).
+- `cognitive-mesh run PLAN.json --root DIR [--json]` (exit 6 invalid plan, 7 task not succeeded).
+- Known limitations: no data passing between steps, no fallback agent, no concurrency, hung calls are not interrupted, results not persisted.
+
+## Next — Planned, Not Started
 
 ### v0.6.0 — Episodic Trace Store
 - Record task executions and their provenance.

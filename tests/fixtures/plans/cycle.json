@@ -1,0 +1,7 @@
+{
+  "task_id": "loop",
+  "steps": [
+    {"step_id": "a", "capability": "unresolved_report", "depends_on": ["b"]},
+    {"step_id": "b", "capability": "unresolved_report", "depends_on": ["a"]}
+  ]
+}

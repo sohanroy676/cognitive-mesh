@@ -1,0 +1,12 @@
+{
+  "task_id": "demo",
+  "steps": [
+    {"step_id": "report", "capability": "unresolved_report"},
+    {
+      "step_id": "deps",
+      "capability": "dependencies_of",
+      "inputs": {"node_id": "module:src/dep_app/a.py", "transitive": true},
+      "depends_on": ["report"]
+    }
+  ]
+}

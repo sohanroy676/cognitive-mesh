@@ -5,11 +5,11 @@ The goal is a system that reads an application's code and configuration, coordin
 specialized agents, and keeps traceable memory of what it did and why.
 
 > **Status: early development.** Only the foundation, application ingestion, a dependency
-> graph and (v0.4.0) the agent interfaces exist. There are no real model-provider
-> clients, orchestrator or persistent memory yet.
+> graph, the agent interfaces and (v0.5.0) a basic orchestrator exist. There are no real
+> model-provider clients or persistent memory yet.
 > This README is updated with every version; the roadmap is not evidence that a feature exists.
 
-## What works today (v0.4.0)
+## What works today (v0.5.0)
 
 | Version | Capability | Status |
 |---|---|---|
@@ -18,11 +18,12 @@ specialized agents, and keeps traceable memory of what it did and why.
 | v0.3.0 | Dependency graph with evidence on every edge, unresolved items kept visible | Done, tagged; CI run 39010744225 passed |
 | v0.3.1 | JS/TS imports and literal dynamic imports in the graph; computed ones stay unresolved | Done, tagged `v0.3.1`; CI run 39012713238 passed |
 | v0.3.2 | Graph visualization: Mermaid text or self-contained HTML/SVG, with evidence and visible truncation | Done; merged to main, CI run 39021177652 passed |
-| v0.4.0 | Agent architecture: common interface, two roles, capability declarations, explicit failure results, provider protocol (fake clients only) | Criteria pass locally; merged to main; CI run 39023604187 on the merge passed (2026-10-17); not tagged |
+| v0.4.0 | Agent architecture: common interface, two roles, capability declarations, explicit failure results, provider protocol (fake clients only) | Criteria pass locally; merged to main; Done, tagged `v0.4.0`; CI runs 39023604187 and 39024302873 passed |
+| v0.5.0 | Orchestrator: validated task plans, dependency ordering, capability-based assignment, explicit failed/blocked/incomplete results, bounded retries, run budget, `run` command | Criteria pass locally; merged to main; CI result on the merge not yet recorded; not tagged |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
-`docs/adr/0008-dependency-graph-visualization.md`, `docs/adr/0009-agent-architecture.md`.
+`docs/adr/0008-dependency-graph-visualization.md`, `docs/adr/0009-agent-architecture.md`, `docs/adr/0010-orchestrator.md`.
 
 ### Known limitations
 - Local directories only; results are in memory (nothing is persisted yet).
@@ -40,7 +41,12 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 - Agents (v0.4.0): no real provider client exists (no Groq or Ollama calls); the provider path is
   tested with fake clients only. Timeouts are enforced by the client, not by a watchdog, so a client
   that hangs is not interrupted. `code_explainer` output is unverified model text. Nothing is
-  persisted, and there is no orchestrator to choose agents yet (v0.5.0).
+  persisted.
+- Orchestrator (v0.5.0): steps run sequentially; `depends_on` controls order only (no data passes
+  between steps, inputs are literal); no fallback to another agent. A hung provider call is not
+  interrupted: the run budget is checked only before each attempt. Retries apply only to failures an
+  agent marks retryable, at most 5 attempts per step. Without a real model client, `explain_file`
+  steps fail as `provider_unavailable`. Run results are not persisted (v0.6.0).
 - Ingested files are treated as data and are never executed.
 
 ## Setup and usage
@@ -64,16 +70,17 @@ uv run cognitive-mesh ingest PATH [--json] [--include-content]
 uv run cognitive-mesh graph PATH [--json] [--deps-of NODE_ID [--transitive]]
 uv run cognitive-mesh graph PATH --format mermaid|html [--output FILE] [--max-nodes N] [--max-edges N]
 uv run cognitive-mesh agents [--json]                  # lists roles and capabilities, no config needed
+uv run cognitive-mesh run PLAN.json --root DIR [--json]   # runs a task plan, no config needed
 ```
 
 Exit codes: 0 ok, 2 configuration or usage error, 3 unusable ingestion root, 4 unknown graph node,
-5 output file could not be written.
+5 output file could not be written, 6 invalid or unreadable plan, 7 task failed or incomplete.
 Configuration comes from the environment or an ignored `.env` (copy `.env.example`); never commit
 secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and run in a fresh venv on Windows; not published, not run in CI). The package version is derived from git tags (hatch-vcs): a build at tag `vX.Y.Z` is `X.Y.Z`, later commits are `X.Y.(Z+1).devN`, and a checkout without tags is `0.1.devN`.
 
 ## Project layout
 
-- `src/cognitive_mesh/` - `config`, `cli`, `ingestion/`, `agents/` (interface, contracts, roles, registry), `providers/` (model client protocol), `graph/` (JS/TS parsing isolated in `graph/js_parse.py`; visualization in `graph/view.py`, `render_mermaid.py`, `render_html.py`)
+- `src/cognitive_mesh/` - `config`, `cli`, `ingestion/`, `agents/` (interface, contracts, roles, registry), `orchestrator/` (plans, ordering, runner), `providers/` (model client protocol), `graph/` (JS/TS parsing isolated in `graph/js_parse.py`; visualization in `graph/view.py`, `render_mermaid.py`, `render_html.py`)
 - `tests/` - pytest suite; fixtures in `tests/fixtures/` (`sample_app`, `dep_app`, `js_app`)
 - `docs/adr/` - architecture decision records; `docs/DETAILED_ROADMAP.md` - per-version criteria
 - `memory-bank/` - agent-facing project record (brief, architecture, progress, active context)
@@ -81,7 +88,7 @@ secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and
 
 ## Roadmap (summary)
 
-Next: v0.5.0 orchestrator (v0.4.0 agent architecture is implemented on its branch), v0.6.0 trace store, v0.7.0 semantic retrieval, v0.8.0 experience graph, v0.9.0
+Next: v0.6.0 trace store (v0.5.0 orchestrator is merged, CI result and tag pending), v0.7.0 semantic retrieval, v0.8.0 experience graph, v0.9.0
 evidence-aware retrieval, v1.0.0 end-to-end prototype. See `ROADMAP.md`.
 
 ## Principles

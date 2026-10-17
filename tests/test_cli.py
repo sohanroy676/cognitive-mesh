@@ -11,6 +11,8 @@ from cognitive_mesh.cli import (
     EXIT_INGESTION_ERROR,
     EXIT_OK,
     EXIT_OUTPUT_ERROR,
+    EXIT_PLAN_ERROR,
+    EXIT_TASK_NOT_SUCCEEDED,
     _printable,
     main,
 )
@@ -19,6 +21,7 @@ SECRET = "gsk_test_secret_value_123"  # noqa: S105 - fake value for tests
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_app"
 DEP_FIXTURE = Path(__file__).parent / "fixtures" / "dep_app"
 JS_FIXTURE = Path(__file__).parent / "fixtures" / "js_app"
+PLANS = Path(__file__).parent / "fixtures" / "plans"
 
 
 def test_main_succeeds_with_valid_config(
@@ -295,3 +298,57 @@ def test_agents_json_has_schemas(capsys: pytest.CaptureFixture[str]) -> None:
         for cap in agent["capabilities"]:
             assert cap["input_schema"]["type"] == "object"
             assert cap["output_schema"]["type"] == "object"
+
+
+def test_run_succeeds_with_a_valid_plan(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["run", str(PLANS / "ok.json"), "--root", str(DEP_FIXTURE)])  # no config needed
+    assert code == EXIT_OK
+    out = capsys.readouterr().out
+    assert "task demo: succeeded" in out
+    assert out.index("report") < out.index("deps")
+
+
+def test_run_json_reports_status_and_steps(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["run", str(PLANS / "ok.json"), "--root", str(DEP_FIXTURE), "--json"]) == EXIT_OK
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "succeeded"
+    assert [s["step_id"] for s in payload["steps"]] == ["report", "deps"]
+
+
+def test_run_exits_7_and_shows_the_failure_when_a_step_cannot_run(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    code = main(["run", str(PLANS / "needs_model.json"), "--root", str(FIXTURE)])
+    assert code == EXIT_TASK_NOT_SUCCEEDED
+    out = capsys.readouterr().out
+    assert "task explain: failed" in out
+    assert "provider_unavailable" in out
+    assert "blocked by: explain" in out
+
+
+def test_run_rejects_a_cyclic_plan_with_exit_6(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["run", str(PLANS / "cycle.json"), "--root", str(DEP_FIXTURE)]) == EXIT_PLAN_ERROR
+    assert "cycle among steps: a, b" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "content",
+    [b"not json", b'{"task_id": "t", "steps": [], "extra": 1}', b"\xff\xfe", b"x" * (300 * 1024)],
+    ids=["not_json", "extra_key", "bad_bytes", "oversized"],
+)
+def test_run_rejects_bad_plan_files_without_echoing_content(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], content: bytes
+) -> None:
+    plan = tmp_path / "plan.json"
+    plan.write_bytes(content)
+    assert main(["run", str(plan), "--root", str(DEP_FIXTURE)]) == EXIT_PLAN_ERROR
+    err = capsys.readouterr().err
+    assert err.strip() and "not json" not in err and "xxxx" not in err
+
+
+def test_run_reports_a_missing_plan_and_a_missing_root(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["run", str(tmp_path / "nope.json"), "--root", str(DEP_FIXTURE)]) == EXIT_PLAN_ERROR
+    code = main(["run", str(PLANS / "ok.json"), "--root", str(tmp_path / "missing")])
+    assert code == EXIT_INGESTION_ERROR
