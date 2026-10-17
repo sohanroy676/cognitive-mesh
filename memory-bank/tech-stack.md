@@ -28,6 +28,7 @@ Never hardcode credentials in source code or commit secrets.
 ## Memory and Data
 - Vector database: ChromaDB
 - Graph representation and traversal: NetworkX 3.7 (runtime dependency since v0.3.0; `types-networkx` in dev; ADR-0006)
+- JS/TS import parsing: tree-sitter 0.26.0 + tree-sitter-javascript 0.25.0 + tree-sitter-typescript 0.23.2 (runtime dependencies since v0.3.1; MIT, official tree-sitter org; private to `graph/js_parse.py`; ADR-0007)
 - Persistent structured storage: SQLite
 - Embeddings: Sentence Transformers
 - Embedding model and version: TBD
@@ -85,9 +86,14 @@ uv run cognitive-mesh graph tests/fixtures/dep_app --json       # exit 0
 uv run cognitive-mesh graph tests/fixtures/dep_app --deps-of module:src/dep_app/a.py --transitive   # exit 0
 uv run cognitive-mesh graph tests/fixtures/dep_app --deps-of nope   # exit 4, "unknown node"
 uv run cognitive-mesh graph does-not-exist                      # exit 3
+uv run cognitive-mesh graph tests/fixtures/js_app               # exit 0, 7 unresolved, computed_import + js_resolution_limited
+uv run cognitive-mesh graph tests/fixtures/js_app --json        # exit 0
+uv run cognitive-mesh graph tests/fixtures/js_app --deps-of module:src/index.ts --transitive   # exit 0
+uv run cognitive-mesh graph tests/fixtures/js_app --deps-of nope   # exit 4
 ```
 The v0.1.0 commands also passed in a fresh `git clone` of its feature branch; the `ingest` commands were run only in the working tree (not yet in a fresh clone or CI).
-The `graph` commands were run 2026-10-17 in the working tree on branch `feature/v0.3.0-dependency-graph` (not yet in a fresh clone or CI).
+The `dep_app` `graph` commands were run 2026-10-17 in the working tree on branch `feature/v0.3.0-dependency-graph` (not in a fresh clone; CI runs the test suite, not these CLI calls).
+The `js_app` graph commands were run 2026-10-17 in the working tree on branch `feature/v0.3.1-js-dynamic-imports` (not yet in a fresh clone or CI).
 Note: the "no config: exit 2" check needs a working directory without a local `.env`.
 
 Do not document unverified commands as working commands.

@@ -18,23 +18,23 @@ Tagged `v0.2.0` (2026-10-17). See ADR-0005.
 - Known limitations: pattern-based secret detection is not exhaustive, YAML is not syntax-checked,
   lockfiles are excluded, results are in-memory only, local directories only.
 
-## Now — v0.3.0: Dependency Graph (done, next: v0.3.1)
-
-Status: done 2026-10-17. Merged to main (`d172312`); GitHub Actions CI run 39010744225 passed. Not tagged. See ADR-0006.
+### v0.3.0 — Dependency Graph
+Completed 2026-10-17. Merged to main (`d172312`); GitHub Actions CI run 39010744225 passed. Tagged `v0.3.0` (2026-10-17). See ADR-0006.
 
 - Represent application components and their dependencies (`cognitive_mesh.graph`, `cognitive-mesh graph`).
 - Establish graph construction and traversal behavior.
 - Test dependency links against known sample applications (`tests/fixtures/dep_app`).
-- Known limitations: declared direct dependencies and Python imports only; lockfiles excluded so transitive external dependencies are unknown; JS/TS imports and dynamic imports not analysed; in-memory only.
+- Known limitations: declared direct dependencies and Python imports only; lockfiles excluded so transitive external dependencies are unknown; JS/TS imports and dynamic imports not analysed (addressed in v0.3.1); in-memory only.
+
+## Now — v0.3.1: JS/TS and Dynamic Import Analysis (implemented, not yet merged)
+
+Status: implemented and verified locally on branch `feature/v0.3.1-js-dynamic-imports` (2026-10-17). Not merged, not pushed, CI not yet run; mark done only after merge and green CI. See ADR-0007.
+
+- JS/TS `import` / `export ... from` / `require()` / literal `import()` / type-only imports become evidence-backed edges (tree-sitter, private to `graph/js_parse.py`).
+- Python `importlib.import_module` / `__import__` with a literal argument become edges; computed ones become `unresolved` nodes plus a `computed_import` diagnostic.
+- Known limitations: bundler aliases, tsconfig `paths`, package.json `exports`, `.js` to `.ts` remapping and `.mjs`/`.cjs` files are not modelled; bare specifiers stay unresolved; in-memory only.
 
 ## Next — Planned, Not Started
-
-### v0.3.1 — JS/TS and Dynamic Import Analysis
-- Extend the dependency graph to JS/TS `import` / `require` / dynamic `import()` statements.
-- Detect Python dynamic imports (`importlib.import_module`, `__import__`) and record them as
-  evidence-backed edges when the target is a literal, otherwise as unresolved.
-- Parser choice (new dependency or restricted stdlib approach) to be decided in an ADR.
-- Create the README update habit: `README.md` is refreshed every version.
 
 ### v0.4.0 — Agent Architecture
 - Define agent interfaces, responsibilities, and capability descriptions.
