@@ -16,6 +16,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record v0.6.1 CI and v0.6.2 plan
 - **adr:** Propose ADR-0013 Groq client
 - Record v0.6.2 Groq client
+- Record real-API Groq verification
 
 ## [0.6.0] - 2026-10-17
 
