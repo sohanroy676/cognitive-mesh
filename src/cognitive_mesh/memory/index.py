@@ -4,7 +4,8 @@ The SQLite trace database stays authoritative; this index is a derived copy. Chr
 vectors come from the `Embedder` we pass in. Messages never contain document text or the query.
 """
 
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, Final
 
@@ -33,6 +34,8 @@ MAX_QUERY_CHARS: Final = 2000
 MAX_K: Final = 50
 EXCERPT_CHARS: Final = 300
 _DB_FILE: Final = "chroma.sqlite3"
+_BACKOFF_S: Final = (0.25, 0.5, 1.0, 2.0)  # waits before the 2nd to 5th try
+_sleep = time.sleep  # tests replace this so they never wait
 
 
 def _metadata_for(key: ModelKey) -> dict[str, str | int]:
@@ -55,11 +58,33 @@ def _check_compatible(collection: Any, key: ModelKey) -> None:
         )
 
 
+def _retry[T](action: Callable[[], T], *, only_locked: bool) -> T:
+    """Run `action`, trying again after a wait while another process is using Chroma's files.
+
+    Opening and upserting are safe to repeat. With `only_locked`, an error that does not say the
+    database is locked is raised at once. After `_BACKOFF_S` is used up the last error is raised.
+    """
+    for delay in _BACKOFF_S:
+        try:
+            return action()
+        except Exception as exc:
+            if only_locked and "locked" not in str(exc).lower():
+                raise
+            _sleep(delay)
+    return action()
+
+
+def _open_client(path: Path) -> Any:
+    return chromadb.PersistentClient(path=str(path), settings=Settings(anonymized_telemetry=False))
+
+
 def _client(path: Path) -> Any:
+    # Observed when several processes create one new index at once: "database is locked", "table
+    # collections already exists", and then, in the process that failed, an AttributeError from the
+    # half-built cached client on the next try. All of them pass on a later try, so any error is
+    # retried here (a few seconds at most before the usual message).
     try:
-        return chromadb.PersistentClient(
-            path=str(path), settings=Settings(anonymized_telemetry=False)
-        )
+        return _retry(lambda: _open_client(path), only_locked=False)
     except Exception:
         raise MemoryIndexError("cannot open the memory index") from None
 
@@ -90,8 +115,11 @@ class MemoryIndex:
             raise MemoryIndexError("cannot create the memory index directory") from None
         client = _client(path)
         try:
-            collection = client.get_or_create_collection(
-                COLLECTION, metadata=_metadata_for(embedder.key), embedding_function=None
+            collection = _retry(
+                lambda: client.get_or_create_collection(
+                    COLLECTION, metadata=_metadata_for(embedder.key), embedding_function=None
+                ),
+                only_locked=False,
             )
         except Exception:
             raise MemoryIndexError("cannot open the memory index") from None
@@ -167,10 +195,13 @@ class MemoryIndex:
         if len(vectors) != len(batch) or any(len(v) != dimension for v in vectors):
             raise MemoryIndexError("the embedder returned vectors of the wrong size")
         try:
-            self._col.upsert(
-                ids=[d.doc_id for d in batch],
-                embeddings=vectors,
-                metadatas=[_doc_metadata(d) for d in batch],
+            _retry(
+                lambda: self._col.upsert(
+                    ids=[d.doc_id for d in batch],
+                    embeddings=vectors,
+                    metadatas=[_doc_metadata(d) for d in batch],
+                ),
+                only_locked=True,
             )
         except Exception:
             raise MemoryIndexError("cannot write to the memory index") from None
