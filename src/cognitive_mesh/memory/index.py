@@ -11,7 +11,7 @@ from typing import Any, Final
 import chromadb
 from chromadb.config import Settings
 
-from cognitive_mesh.memory.documents import eligible_documents
+from cognitive_mesh.memory.documents import eligible_documents, verify_source
 from cognitive_mesh.memory.embedder import BATCH_SIZE, Embedder
 from cognitive_mesh.memory.models import (
     IndexReport,
@@ -24,7 +24,6 @@ from cognitive_mesh.memory.models import (
     UnverifiedHit,
 )
 from cognitive_mesh.traces import (
-    TraceNotFoundError,
     TraceRecordError,
     TraceStore,
 )
@@ -240,7 +239,7 @@ class MemoryIndex:
                 attempt_no, expected = int(meta["attempt_no"]), str(meta["text_sha256"])
             except (KeyError, TypeError, ValueError):
                 raise MemoryIndexError("the memory index holds a malformed entry") from None
-            doc, check = self._verify(store, sources, run_id, step_id, attempt_no, expected)
+            doc, check = verify_source(store, sources, run_id, step_id, attempt_no, expected)
             if doc is None or check is not SourceCheck.OK:
                 unverified.append(
                     UnverifiedHit(
@@ -272,31 +271,3 @@ class MemoryIndex:
                 else "no similar experience with a confirmed source"
             )
         return result(tuple(hits), tuple(unverified), dropped, message)
-
-    @staticmethod
-    def _verify(
-        store: TraceStore,
-        cache: dict[str, dict[str, MemoryDocument] | None],
-        run_id: str,
-        step_id: str,
-        attempt_no: int,
-        expected_sha: str,
-    ) -> tuple[MemoryDocument | None, SourceCheck]:
-        """Re-read the trace row and rebuild the document; trust only what still matches."""
-        if run_id not in cache:
-            try:
-                trace = store.get(run_id)
-                cache[run_id] = {d.doc_id: d for d in eligible_documents(trace)}
-            except TraceNotFoundError:
-                cache[run_id] = {}
-            except TraceRecordError:
-                cache[run_id] = None
-        docs = cache[run_id]
-        if docs is None:
-            return None, SourceCheck.UNREADABLE
-        doc = docs.get(f"{run_id}/{step_id}/{attempt_no}")
-        if doc is None:
-            return None, SourceCheck.MISSING
-        if doc.text_sha256 != expected_sha:
-            return None, SourceCheck.CHANGED
-        return doc, SourceCheck.OK

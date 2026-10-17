@@ -1,6 +1,8 @@
 """Which trace content is eligible for embedding, and the exact text that is embedded (ADR-0014).
 
-Pure functions over a `RunTrace`; nothing here touches a database or a model.
+Pure functions over a `RunTrace`; nothing here touches a model. `verify_source` is the one place
+that re-reads a trace row, shared by the vector index (ADR-0014) and the experience graph
+(ADR-0015).
 """
 
 import hashlib
@@ -10,8 +12,15 @@ from typing import Final
 from pydantic import JsonValue
 
 from cognitive_mesh.agents import AgentSuccess
-from cognitive_mesh.memory.models import MemoryDocument
-from cognitive_mesh.traces import RunTrace, StepTrace, TraceStatus
+from cognitive_mesh.memory.models import MemoryDocument, SourceCheck
+from cognitive_mesh.traces import (
+    RunTrace,
+    StepTrace,
+    TraceNotFoundError,
+    TraceRecordError,
+    TraceStatus,
+    TraceStore,
+)
 
 TEXT_FORMAT_VERSION: Final = 1
 MAX_TEXT_CHARS: Final = 8000  # part of the format: longer text is cut, deterministically
@@ -72,3 +81,35 @@ def eligible_documents(trace: RunTrace) -> tuple[MemoryDocument, ...]:
         return ()
     docs = (_step_document(trace, step) for step in trace.steps)
     return tuple(d for d in docs if d is not None)
+
+
+def verify_source(
+    store: TraceStore,
+    cache: dict[str, dict[str, MemoryDocument] | None],
+    run_id: str,
+    step_id: str,
+    attempt_no: int,
+    expected_sha: str,
+) -> tuple[MemoryDocument | None, SourceCheck]:
+    """Re-read the trace row and rebuild the document; trust only what still matches.
+
+    `cache` maps a run id to its rebuilt documents (None when the run is unreadable), so one run is
+    read once per caller.
+    """
+    if run_id not in cache:
+        try:
+            trace = store.get(run_id)
+            cache[run_id] = {d.doc_id: d for d in eligible_documents(trace)}
+        except TraceNotFoundError:
+            cache[run_id] = {}
+        except TraceRecordError:
+            cache[run_id] = None
+    docs = cache[run_id]
+    if docs is None:
+        return None, SourceCheck.UNREADABLE
+    doc = docs.get(f"{run_id}/{step_id}/{attempt_no}")
+    if doc is None:
+        return None, SourceCheck.MISSING
+    if doc.text_sha256 != expected_sha:
+        return None, SourceCheck.CHANGED
+    return doc, SourceCheck.OK
