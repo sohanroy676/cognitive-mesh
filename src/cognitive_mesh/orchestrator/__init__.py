@@ -1,5 +1,6 @@
 """Task planning and orchestration (v0.5.0, ADR-0010)."""
 
+from cognitive_mesh.orchestrator.generate import PlanGenerationError, generate_plan
 from cognitive_mesh.orchestrator.models import (
     MAX_ATTEMPTS_CAP,
     MAX_STEPS,
@@ -22,6 +23,7 @@ __all__ = [
     "Orchestrator",
     "OrchestratorFailureKind",
     "PlanError",
+    "PlanGenerationError",
     "PlanStep",
     "RetryPolicy",
     "StepRecord",
@@ -30,5 +32,6 @@ __all__ = [
     "TaskRun",
     "TaskStatus",
     "ValidatedPlan",
+    "generate_plan",
     "plan_task",
 ]

@@ -32,7 +32,8 @@ while tracking their source, validity, confidence, and conflicts.
 - Task Planner
   Break a user request into appropriate tasks and dependencies.
   Plan validation and dependency ordering are implemented in v0.5.0 (`orchestrator/planner.py`, ADR-0010);
-  plans are written by the caller as JSON. Nothing generates a plan from a user request yet.
+  plans are written by the caller as JSON, or drafted by `cognitive-mesh plan` (ADR-0010 amendment): a model
+  drafts, `plan_task` validates, a person reviews, nothing is executed by the drafting step.
 - Custom Orchestrator
   Assign tasks, coordinate execution, manage results, and handle failures.
   Implemented in v0.5.0 as `src/cognitive_mesh/orchestrator/` (ADR-0010): sequential, assignment by

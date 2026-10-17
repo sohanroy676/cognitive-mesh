@@ -56,3 +56,19 @@ Plans, step inputs and agent outputs are untrusted data.
 - The task status cannot disagree with its steps.
 - A hung provider call can exceed the run budget; only the clients' own timeouts bound it.
 - Steps cannot consume earlier outputs yet; useful multi-step pipelines wait for a later ADR.
+
+## Amendment 2026-10-17: drafting a plan from a request
+Accepted by the user before coding: a `plan` command that drafts a plan and does not run it.
+- `cognitive-mesh plan "REQUEST" [--task-id ID] [--output FILE]` uses the configured model client (the
+  Groq remote-content opt-in applies) and prints or writes plan JSON that `run` accepts. Exit 2 for
+  config, 5 if the file cannot be written, 10 (`EXIT_PLAN_GENERATION_ERROR`) when no usable plan came back.
+- `orchestrator/generate.py`: the request (max 2,000 characters) and the capability catalog go to the
+  model as one JSON string with a system note that the request is untrusted data. The reply must be
+  strict JSON of exactly `{"steps": [...]}`; it becomes a `TaskPlan` only through the existing strict
+  model and must pass `plan_task` (registered capabilities, valid dependencies and references, no
+  cycles). `task_id` is set by us, never by the model.
+- Nothing is executed. The output is labelled model-written and unreviewed on stderr. A plan can pass
+  validation and still be wrong (wrong inputs, wrong choice of steps); a real run with Ollama
+  `llama3.2` produced a structurally valid plan with a nonsensical `node_id`. `run` then fails that
+  step visibly; nothing checks plan quality beyond the structure.
+- Error messages hold fixed text and plan ids only: never the request or the model's text.

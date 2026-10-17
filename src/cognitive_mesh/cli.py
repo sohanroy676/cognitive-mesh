@@ -25,10 +25,12 @@ from cognitive_mesh.ingestion import IngestionError, IngestionResult, ingest_app
 from cognitive_mesh.orchestrator import (
     Orchestrator,
     PlanError,
+    PlanGenerationError,
     TaskPlan,
     TaskRun,
     TaskStatus,
     ValidatedPlan,
+    generate_plan,
     plan_task,
 )
 from cognitive_mesh.providers import build_model_client
@@ -51,6 +53,7 @@ EXIT_PLAN_ERROR = 6
 EXIT_TASK_NOT_SUCCEEDED = 7
 EXIT_TRACE_STORE_ERROR = 8
 EXIT_TRACE_NOT_FOUND = 9
+EXIT_PLAN_GENERATION_ERROR = 10
 MAX_PLAN_BYTES = 256 * 1024
 
 
@@ -88,6 +91,12 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--trace-db", type=Path, metavar="FILE", help="record the run in this SQLite trace database"
     )
+    plan = sub.add_parser(
+        "plan", help="draft a plan (JSON) from a request with the configured model; runs nothing"
+    )
+    plan.add_argument("request", help="what you want done, in plain words")
+    plan.add_argument("--task-id", default="generated", help="task id for the plan")
+    plan.add_argument("--output", type=Path, metavar="FILE", help="write the plan to FILE")
     traces = sub.add_parser("traces", help="read recorded run traces")
     traces_sub = traces.add_subparsers(dest="traces_command", required=True)
     traces_list = traces_sub.add_parser("list", help="list recorded runs")
@@ -243,6 +252,42 @@ def _load_plan(path: Path) -> TaskPlan:
     except ValidationError as exc:
         kinds = ", ".join(sorted({str(e["type"]) for e in exc.errors()}))
         raise PlanError(f"the plan file is not a valid plan ({kinds})") from None
+
+
+def _run_plan_request(request: str, task_id: str, output: Path | None) -> int:
+    """Draft a plan with the configured model. The plan is printed or written, never executed."""
+    try:
+        settings = load_settings()
+        client = build_model_client(settings)
+    except ConfigError as exc:
+        print(exc, file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+    try:
+        plan, response = generate_plan(
+            request,
+            default_registry(),
+            client,
+            task_id=task_id,
+            timeout_s=settings.model_timeout_s,
+        )
+    except PlanGenerationError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_PLAN_GENERATION_ERROR
+    text = plan.model_dump_json(indent=2)
+    if output is None:
+        print(text)
+    else:
+        try:
+            output.write_text(text + "\n", encoding="utf-8", newline="\n")
+        except OSError:
+            print("cannot write the plan file", file=sys.stderr)
+            return EXIT_OUTPUT_ERROR
+    print(
+        f"drafted by {_printable(response.provider)}/{_printable(response.model)}: "
+        "model-written and unreviewed; read it before running it with `run`",
+        file=sys.stderr,
+    )
+    return EXIT_OK
 
 
 def _print_run(run: TaskRun) -> None:
@@ -422,6 +467,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_ingest(args.path, args.as_json, args.include_content)
     if args.command == "run":
         return _run_plan(args.plan, args.root, args.as_json, args.trace_db)
+    if args.command == "plan":
+        return _run_plan_request(args.request, args.task_id, args.output)
     if args.command == "traces":
         if args.traces_command == "list":
             return _run_traces_list(args.db, args.as_json)
