@@ -3,6 +3,11 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
+## [Unreleased]
+
+### Documentation
+- **adr:** Propose bounded recall cost (ADR-0019)
+
 ## [1.0.1] - 2026-10-18
 
 ### Documentation
