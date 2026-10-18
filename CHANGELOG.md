@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.2.0] - 2026-10-18
 
 ### Added
 - **plan:** Show a valid example plan in the draft prompt
@@ -18,6 +18,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Propose ADR-0020 corroboration and lineage
 - **adr:** Accept ADR-0020
 - **progress:** Record v1.2.0 corroboration
+- Mark v1.2.0 merged
 
 ### Fixed
 - **plan:** Name the refusal and complete depends_on in drafts
