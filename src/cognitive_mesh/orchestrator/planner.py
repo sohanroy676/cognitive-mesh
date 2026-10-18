@@ -1,10 +1,18 @@
 """Plan validation and dependency ordering. Nothing runs if the plan is invalid (ADR-0010)."""
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from cognitive_mesh.agents import AgentRegistry
-from cognitive_mesh.orchestrator.models import MAX_STEPS, PlanError, PlanStep, TaskPlan
+from cognitive_mesh.orchestrator.models import (
+    MAX_STATE_ENTRIES,
+    MAX_STEPS,
+    InputRef,
+    PlanError,
+    PlanStep,
+    StateEntry,
+    TaskPlan,
+)
 
 
 @dataclass(frozen=True)
@@ -13,6 +21,7 @@ class ValidatedPlan:
 
     task_id: str
     order: tuple[PlanStep, ...]
+    state: dict[str, StateEntry] = field(default_factory=dict)
 
 
 def plan_task(plan: TaskPlan, registry: AgentRegistry) -> ValidatedPlan:
@@ -38,11 +47,14 @@ def plan_task(plan: TaskPlan, registry: AgentRegistry) -> ValidatedPlan:
                 "which no registered agent declares"
             )
     by_id = {s.step_id: s for s in steps}
+    _check_state(plan.state, by_id, registry)
     for step in steps:
-        _check_refs(step, by_id, registry)
+        _check_refs(step, by_id, registry, plan.state)
     for step in steps:
         _check_inputs(step, by_id, registry)
-    return ValidatedPlan(task_id=plan.task_id, order=_topological_order(steps))
+    return ValidatedPlan(
+        task_id=plan.task_id, order=_topological_order(steps), state=dict(plan.state)
+    )
 
 
 _INPUT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
@@ -107,13 +119,54 @@ def _check_inputs(step: PlanStep, by_id: dict[str, PlanStep], registry: AgentReg
             )
 
 
-def _check_refs(step: PlanStep, by_id: dict[str, PlanStep], registry: AgentRegistry) -> None:
+def _check_state(
+    state: dict[str, StateEntry], by_id: dict[str, PlanStep], registry: AgentRegistry
+) -> None:
+    if len(state) > MAX_STATE_ENTRIES:
+        raise PlanError(f"the plan declares more than {MAX_STATE_ENTRIES} state entries")
+    for name, entry in sorted(state.items()):
+        where = f"state {name!r}"
+        if not _INPUT_NAME.match(name):
+            raise PlanError("a state entry has an invalid name")
+        if entry.step_id not in by_id:
+            raise PlanError(f"{where} names unknown step {entry.step_id!r}")
+        if entry.fields == "*":
+            continue
+        if not entry.fields or len(set(entry.fields)) != len(entry.fields):
+            raise PlanError(f"{where} must list distinct fields or use '*'")
+        declared = _output_fields(registry, by_id[entry.step_id].capability)
+        for field_name in entry.fields:
+            if not _INPUT_NAME.match(field_name):
+                raise PlanError(f"{where} has an invalid field name")
+            if declared is not None and field_name not in declared:
+                raise PlanError(
+                    f"{where} names field {field_name!r}, which step {entry.step_id!r} does not "
+                    f"declare in its output; its output fields: {', '.join(sorted(declared))}"
+                )
+
+
+def _check_refs(
+    step: PlanStep,
+    by_id: dict[str, PlanStep],
+    registry: AgentRegistry,
+    state: dict[str, StateEntry],
+) -> None:
     for name, ref in sorted(step.input_refs.items()):
         where = f"step {step.step_id!r} input {name!r}"
         if not _INPUT_NAME.match(name):
             raise PlanError(f"step {step.step_id!r} has an input reference with an invalid name")
         if name in step.inputs:
             raise PlanError(f"{where} is given both as a literal and as a reference")
+        if not isinstance(ref, InputRef):
+            entry = state.get(ref.state)
+            if entry is None:
+                raise PlanError(f"{where} references undeclared state {ref.state!r}")
+            if entry.step_id not in step.depends_on:
+                raise PlanError(
+                    f"{where} uses state {ref.state!r} from step {entry.step_id!r}, "
+                    "which it does not depend on"
+                )
+            continue
         if ref.step_id not in step.depends_on:
             raise PlanError(f"{where} references step {ref.step_id!r}, which it does not depend on")
         fields = _output_fields(registry, by_id[ref.step_id].capability)

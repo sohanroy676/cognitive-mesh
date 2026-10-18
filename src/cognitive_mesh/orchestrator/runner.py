@@ -20,6 +20,8 @@ from cognitive_mesh.orchestrator.models import (
     OrchestratorFailureKind,
     PlanStep,
     RetryPolicy,
+    StateEntry,
+    StateRef,
     StepRecord,
     StepStatus,
     TaskRun,
@@ -54,7 +56,7 @@ class Orchestrator:
         records: list[StepRecord] = []
         for step in plan.order:
             started = self._now() if self._now else None
-            record = self._run_step(plan.task_id, step, status, context, start, outputs)
+            record = self._run_step(plan.task_id, step, status, context, start, outputs, plan.state)
             if self._now is not None:
                 record = record.model_copy(
                     update={"started_at": started, "finished_at": self._now()}
@@ -78,6 +80,7 @@ class Orchestrator:
         context: AgentContext,
         start: float,
         outputs: dict[str, AgentSuccess],
+        state: dict[str, StateEntry],
     ) -> StepRecord:
         def record(st: StepStatus, **fields: object) -> StepRecord:
             return StepRecord(step_id=step.step_id, capability=step.capability, status=st, **fields)
@@ -97,7 +100,7 @@ class Orchestrator:
                 failure_kind=OrchestratorFailureKind.NO_AGENT.value,
                 message="no registered agent declares this capability",
             )
-        resolved = _resolve_inputs(step, outputs)
+        resolved = _resolve_inputs(step, outputs, state)
         if isinstance(resolved, str):
             return record(
                 StepStatus.FAILED,
@@ -164,13 +167,56 @@ class Orchestrator:
         )
 
 
+def _resolve_state(
+    name: str, input_name: str, entry: StateEntry, outputs: dict[str, AgentSuccess]
+) -> tuple[JsonValue, InputSource] | str:
+    """The value of a declared state entry, or a failure message. State is never defaulted."""
+    upstream = outputs.get(entry.step_id)
+    if upstream is None:
+        return (
+            f"input {input_name!r} needs state {name!r}, but step {entry.step_id!r} "
+            "produced no output"
+        )
+    if entry.fields == "*":
+        value: dict[str, JsonValue] = dict(upstream.output)
+        label = "*"
+    else:
+        missing = [f for f in entry.fields if f not in upstream.output]
+        if missing:
+            return (
+                f"input {input_name!r} needs state {name!r}, but step {entry.step_id!r} "
+                f"has no output field(s): {', '.join(missing)}"
+            )
+        value = {f: upstream.output[f] for f in entry.fields}
+        label = ",".join(entry.fields)
+    source = InputSource(
+        input=input_name,
+        step_id=entry.step_id,
+        field=label,
+        basis=upstream.basis,
+        model=upstream.model,
+        state=name,
+    )
+    return value, source
+
+
 def _resolve_inputs(
-    step: PlanStep, outputs: dict[str, AgentSuccess]
+    step: PlanStep, outputs: dict[str, AgentSuccess], state: dict[str, StateEntry]
 ) -> tuple[dict[str, JsonValue], tuple[InputSource, ...]] | str:
     """Literal inputs plus values taken from earlier outputs; a string is a failure message."""
     inputs: dict[str, JsonValue] = dict(step.inputs)
     sources: list[InputSource] = []
     for name, ref in sorted(step.input_refs.items()):
+        if isinstance(ref, StateRef):
+            entry = state.get(ref.state)
+            if entry is None:
+                return f"input {name!r} references undeclared state {ref.state!r}"
+            taken = _resolve_state(ref.state, name, entry, outputs)
+            if isinstance(taken, str):
+                return taken
+            inputs[name], source = taken
+            sources.append(source)
+            continue
         upstream = outputs.get(ref.step_id)
         if upstream is None or ref.field not in upstream.output:
             return (
