@@ -7,6 +7,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Added
 - **experience:** Record outcomes and promote only validated claims
+- **plan:** Refuse repeated steps and unknown files in drafts
 
 ### Documentation
 - **adr:** Propose outcome validation (ADR-0018)
@@ -17,6 +18,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record the small-model plan experiment
 - Record the plan node-id fix and the re-run
 - Record the plan repair and the re-run
+- Record the round-two plan results
 
 ### Fixed
 - **plan:** Accept a file path as a module node id
