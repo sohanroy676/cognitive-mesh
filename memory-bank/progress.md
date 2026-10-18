@@ -7,6 +7,16 @@
 
 ## Done
 
+- v1.1.0 Outcome Validation (branch `feature/v1.1.0-outcome-validation`, local only; not merged, pushed or tagged). Design: ADR-0018 (accepted 2026-10-18).
+  - `experience/outcomes.py`: append-only outcomes file (`COUT`, schema 1). Rows have source check / person / promotion and result succeeded / failed / ambiguous / rejected. Each row links to the previous row for the same claim and code version (the revision chain).
+  - `assess.py`: outcomes count only for the current code version. The newest result per source decides. A person and a check that disagree give `conflicting`; a failure gives `contested`; ambiguous gives `unknown`; a success counts as validation (`validated_by: outcome`).
+  - CLI: `experience outcome` (exit 16 on store errors), `experience promote` (accepted only when validated now; otherwise refused with the unmet checks, exit 17, and a rejected row recorded), `experience claims --outcomes`.
+  - Tests: `tests/test_experience_outcomes.py` (store, rules, statuses) and `tests/test_cli_outcomes.py` (CLI). Full suite: 1098 passed, 7 skipped.
+  - Not covered: the "not a claim" branch of `experience outcome` (only the unknown-node path is tested). README status table not updated: the version is finished only once it is merged.
+  - Not started from the verification list: graph-cost ADR, concurrency repeats, small-model plan quality.
+- Groq status fix (`fix/groq-status-in-error`, local only): `ProviderError` carries the HTTP status, so an agent failure reads `the model provider failed (other, HTTP 413)`. Full suite at that commit: 1056 passed, 7 skipped. The 7 skips are environment checks and the live tests. The 1057/5 count in the v1.0.0 notes came from another machine.
+- CI record for v1.0.1 (`docs/record-ci-v1.0.1`, local only), entry below.
+
 - Session 2026-10-18 (after v1.0.1). Branches are local only; nothing pushed, merged or tagged.
   - `docs/record-ci-v1.0.1`: CI record for v1.0.1 (entry above).
   - `fix/groq-status-in-error`: a rejected provider call reached the run as `provider_error (other)` with no status. `ProviderError` now carries the HTTP status as an int, and the agent failure message shows it (`the model provider failed (other, HTTP 413)`). Tests: `test_providers_errors.py`, `test_agent_code_explainer.py`. Full suite: 1056 passed, 7 skipped. The 7 skips are 3 environment checks (symlinks, control characters in file names) plus the 4 live tests; the 1057/5 count in the v1.0.0 notes was from a different machine.
