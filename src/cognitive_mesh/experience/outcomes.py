@@ -12,7 +12,7 @@ the same claim and code version, so a claim's history is a chain that can be fol
 import contextlib
 import re
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from pathlib import Path
 from types import TracebackType
@@ -22,7 +22,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from cognitive_mesh.ingestion.secrets import redact_secrets
 
-SCHEMA_VERSION: Final = 1
+SCHEMA_VERSION: Final = 2  # 2 (ADR-0022): the nullable `valid_until` column
 APPLICATION_ID: Final = 0x434F5554  # "COUT": tells an outcomes file from any other SQLite file
 MAX_DETAIL_CHARS: Final = 1000
 MAX_RECORDER_CHARS: Final = 100
@@ -42,6 +42,7 @@ CREATE TABLE outcomes (
     recorder TEXT NOT NULL,
     previous_id INTEGER REFERENCES outcomes (id),
     created_at TEXT NOT NULL,
+    valid_until TEXT,
     CHECK ((source = 'promotion') = (result = 'rejected'))
 );
 CREATE INDEX outcomes_by_claim ON outcomes (claim_id, fingerprint);
@@ -89,6 +90,7 @@ class Outcome(BaseModel):
     recorder: str
     previous_id: int | None
     created_at: datetime
+    valid_until: date | None = None  # ADR-0022: set only by whoever records the outcome
 
 
 def _clean(text: str, limit: int, what: str) -> str:
@@ -123,8 +125,36 @@ def _check_header(conn: sqlite3.Connection) -> None:
         raise OutcomeStoreError(
             f"the outcomes file has version {version}, newer than this program supports"
         )
-    if version != SCHEMA_VERSION:
+    if version not in (1, SCHEMA_VERSION):
         raise OutcomeStoreError(f"unsupported outcomes file version ({version})")
+
+
+def _upgrade(conn: sqlite3.Connection) -> None:
+    """Version 1 -> 2 in one transaction; the version is re-read under the lock, so a process
+    that lost the race to upgrade does nothing."""
+    if _pragma_int(conn, "user_version") == SCHEMA_VERSION:
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        if _pragma_int(conn, "user_version") == 1:
+            conn.execute("ALTER TABLE outcomes ADD COLUMN valid_until TEXT")
+            conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        conn.execute("COMMIT")
+    except sqlite3.Error:
+        with contextlib.suppress(sqlite3.Error):
+            conn.execute("ROLLBACK")
+        raise
+
+
+# A version-1 file read without upgrading has no `valid_until` column: no outcome expires.
+_SELECT_V1 = (
+    "SELECT id, claim_id, fingerprint, source, result, detail, recorder, previous_id,"
+    " created_at, NULL FROM outcomes"
+)
+_SELECT_V2 = (
+    "SELECT id, claim_id, fingerprint, source, result, detail, recorder, previous_id,"
+    " created_at, valid_until FROM outcomes"
+)
 
 
 class OutcomeStore:
@@ -144,6 +174,7 @@ class OutcomeStore:
                 cls._create_schema(conn)
             else:
                 _check_header(conn)
+                _upgrade(conn)
         except sqlite3.Error:
             conn.close()
             raise OutcomeStoreError("cannot open the outcomes file (sqlite error)") from None
@@ -205,6 +236,7 @@ class OutcomeStore:
         recorder: str,
         *,
         now: datetime | None = None,
+        valid_until: date | None = None,
     ) -> Outcome:
         """Append one outcome. It links to the newest row for the same claim and code version."""
         if not self._writable:
@@ -218,6 +250,8 @@ class OutcomeStore:
         clean_detail = _clean(detail, MAX_DETAIL_CHARS, "detail")
         clean_by = _clean(recorder, MAX_RECORDER_CHARS, "recorder")
         stamp = (now or datetime.now(UTC)).astimezone(UTC)
+        if valid_until is not None and valid_until < stamp.date():
+            raise OutcomeStoreError("valid_until is before today")
         try:
             self._conn.execute("BEGIN IMMEDIATE")
             try:
@@ -227,7 +261,7 @@ class OutcomeStore:
                 ).fetchone()[0]
                 cur = self._conn.execute(
                     "INSERT INTO outcomes (claim_id, fingerprint, source, result, detail, recorder,"
-                    " previous_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    " previous_id, created_at, valid_until) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         claim_id,
                         fingerprint,
@@ -237,6 +271,7 @@ class OutcomeStore:
                         clean_by,
                         previous,
                         stamp.isoformat(),
+                        valid_until.isoformat() if valid_until else None,
                     ),
                 )
                 self._conn.execute("COMMIT")
@@ -256,14 +291,12 @@ class OutcomeStore:
             recorder=clean_by,
             previous_id=previous,
             created_at=stamp,
+            valid_until=valid_until,
         )
 
     def list_outcomes(self, claim_id: str | None = None) -> list[Outcome]:
         """Oldest first. A malformed row is an error, never skipped."""
-        columns = (
-            "SELECT id, claim_id, fingerprint, source, result, detail, recorder, previous_id,"
-            " created_at FROM outcomes"
-        )
+        columns = _SELECT_V2 if _pragma_int(self._conn, "user_version") >= 2 else _SELECT_V1
         try:
             if claim_id is None:
                 rows = self._conn.execute(f"{columns} ORDER BY id").fetchall()
@@ -285,6 +318,7 @@ class OutcomeStore:
                     recorder=r[6],
                     previous_id=r[7],
                     created_at=datetime.fromisoformat(r[8]),
+                    valid_until=date.fromisoformat(r[9]) if r[9] else None,
                 )
                 for r in rows
             ]

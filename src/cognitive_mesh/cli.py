@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
+from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -231,6 +232,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     exp_outcome.add_argument("--by", required=True, metavar="NAME", help="unauthenticated label")
     exp_outcome.add_argument(
+        "--valid-until", type=_iso_date, metavar="DATE", help=_VALID_UNTIL_HELP
+    )
+    exp_outcome.add_argument(
         "--root", type=Path, required=True, metavar="DIR", help="the application as observed"
     )
     exp_outcome.add_argument("--graph", type=Path, required=True, metavar="FILE", help="graph file")
@@ -262,6 +266,7 @@ def _build_parser() -> argparse.ArgumentParser:
     exp_review.add_argument("--verdict", choices=("confirmed", "rejected"), required=True)
     exp_review.add_argument("--note", required=True, help="why; stored as data, secrets redacted")
     exp_review.add_argument("--by", required=True, metavar="NAME", help="unauthenticated label")
+    exp_review.add_argument("--valid-until", type=_iso_date, metavar="DATE", help=_VALID_UNTIL_HELP)
     exp_review.add_argument(
         "--root", type=Path, required=True, metavar="DIR", help="the application as reviewed"
     )
@@ -288,6 +293,19 @@ def _hit_limit(text: str) -> int:
     if value > 20:
         raise argparse.ArgumentTypeError("must be at most 20")
     return value
+
+
+def _iso_date(text: str) -> date:
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("not a date; use YYYY-MM-DD") from None
+
+
+_VALID_UNTIL_HELP = (
+    "last day this stays in force (YYYY-MM-DD, not in the past); after it the claim shows as "
+    "expired (ADR-0022). Without it nothing expires by time"
+)
 
 
 def _positive_int(text: str) -> int:
@@ -1111,7 +1129,12 @@ def _experience_review(args: argparse.Namespace) -> int:
     current = observe_current(args.root)
     with ReviewStore.create(args.reviews) as review_store:
         review = review_store.add(
-            node.id, current.fingerprint, Verdict(args.verdict), args.note, args.by
+            node.id,
+            current.fingerprint,
+            Verdict(args.verdict),
+            args.note,
+            args.by,
+            valid_until=args.valid_until,
         )
     if args.as_json:
         print(json.dumps(review.model_dump(mode="json"), indent=2))
@@ -1142,6 +1165,7 @@ def _experience_outcome(args: argparse.Namespace) -> int:
             OutcomeResult(args.result),
             args.detail,
             args.by,
+            valid_until=args.valid_until,
         )
     if args.as_json:
         print(json.dumps(row.model_dump(mode="json"), indent=2))
