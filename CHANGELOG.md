@@ -15,6 +15,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record real-CLI corroborated check
 - Handoff after v1.2.1 and ADR-0021
 
+### Maintenance
+- **settings:** Drop the git push permission prompt
+
 ## [1.2.0] - 2026-10-18
 
 ### Added
