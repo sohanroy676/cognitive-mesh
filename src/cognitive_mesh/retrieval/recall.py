@@ -7,12 +7,17 @@ changes a status. No model provider is involved.
 
 from typing import Protocol
 
-from cognitive_mesh.experience.assess import ClaimAssessment, assess_claims
+from cognitive_mesh.experience.assess import (
+    ClaimAssessment,
+    assess_claims,
+    attempts_behind,
+    claims_of_subjects,
+)
 from cognitive_mesh.experience.current import CurrentSource
 from cognitive_mesh.experience.graph import ExperienceGraph
 from cognitive_mesh.experience.models import EdgeKind, Snapshot, SourceStatus
 from cognitive_mesh.experience.reviews import Review
-from cognitive_mesh.experience.verify import check_sources
+from cognitive_mesh.experience.verify import SourceReport, check_attempts
 from cognitive_mesh.memory.models import MemoryHit, SearchResult
 from cognitive_mesh.retrieval.models import (
     RawExperience,
@@ -66,8 +71,23 @@ def recall(
 ) -> RecallResult:
     found = searcher.search(query, store, k=k, min_similarity=min_similarity)
     graph = ExperienceGraph(snapshot)
-    report = check_sources(snapshot, store)
-    assessments: dict[str, ClaimAssessment] = assess_claims(graph, report, reviews or [], current)
+    # ADR-0019: only the hits' attempts, the claims about their subjects and the attempts those
+    # claims are judged by are checked and assessed. Any other claim could not be reported anyway.
+    hit_attempts = [
+        f"attempt:{h.run_id}/{h.step_id}/{h.attempt_no}"
+        for h in found.hits
+        if graph.has_node(f"attempt:{h.run_id}/{h.step_id}/{h.attempt_no}")
+    ]
+    hit_claims = {
+        e.source for a in hit_attempts for e in graph.in_edges(a, {EdgeKind.EVIDENCED_BY})
+    }
+    subjects = {graph.node(c).subject for c in hit_claims} - {None}
+    scoped = claims_of_subjects(graph, {s for s in subjects if s is not None})
+    statuses = check_attempts(graph, store, {*hit_attempts, *attempts_behind(graph, scoped)})
+    report = SourceReport(statuses=statuses, claim_support={}, diagnostics=())
+    assessments: dict[str, ClaimAssessment] = assess_claims(
+        graph, report, reviews or [], current, only={c.id for c in scoped}
+    )
 
     via: dict[str, list[RetrievedVia]] = {}
     raw: list[RawExperience] = []
@@ -127,6 +147,8 @@ def recall(
         indexed_documents=found.indexed_documents,
         dropped_weak=found.dropped_weak,
         current_fingerprint=current.fingerprint if current else None,
+        subjects_followed=len(subjects),
+        claims_assessed=len(assessments),
         claims=claims,
         experiences_without_claims=tuple(raw),
         unconfirmed=tuple(unconfirmed),

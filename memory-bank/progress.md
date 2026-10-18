@@ -7,6 +7,8 @@
 
 ## Done
 
+- v1.2.1 subject index (`feature/v1.2.1-subject-index`, ADR-0019 amended) - 2026-10-18. Claim `subject` field, graph format 3, load check against the `subject` edge; `verify.check_attempts` (scoped source check); `assess.claims_of_subjects`/`attempts_behind`; `recall` scoped to the hits' subjects. New `tests/test_recall_subject_index.py` (7 tests): indexed assessment equals whole-graph assessment on a conflict/stale/truncated/unresolved fixture and on 5,000 generated runs (the test takes about 50 s, mostly building and the whole-graph reference); at 5,000 runs indexed recall (without graph load) took 0.88 s with 123 of the graph's claims assessed. Suite 1144 passed, 7 skipped; ruff, format, mypy clean. Deviation from the ADR text: no whole-graph fallback when no hit reaches a claim (result identical, so it only costs). Not measured: end-to-end `recall` time with graph load and a real model at 5,000+ runs. Not merged, pushed or tagged. `chore/changelog-after-ci-record` (changelog fix after the CI-record merge) is also unmerged; CI on main may fail on the changelog check until it is merged.
+
 - v1.2.0 released 2026-10-18: main `d20f09c` pushed, CI run 39116536227 passed; annotated tag `v1.2.0` on `d20f09c`, tag run 39116840371 passed. Merged suite 1137 passed, 7 skipped. Still not run: `corroborated` in the real CLI with a real review or `check` outcome.
 
 - Plan drafting, step A (`fix/plan-draft-repair`, merged as `2330139`). Fixed hint text on the repair round (allowed keys and types, exact shape, the referenced step's output fields), a drafted reference to a step also adds it to `depends_on`, and a validated example plan in the prompt (`EXAMPLE_REPLY`, checked by a test). Full suite: 1122 passed, 7 skipped.
