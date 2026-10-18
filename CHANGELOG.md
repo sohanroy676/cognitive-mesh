@@ -14,6 +14,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Accept ADR-0018
 - Record the v1.1.0 implementation state
 - Record the verification items for v1.1.0
+- Record the small-model plan experiment
 
 ### Maintenance
 - **cli:** Cover outcome on a node that is not a claim
