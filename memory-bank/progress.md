@@ -7,6 +7,13 @@
 
 ## Done
 
+- Plan drafting, step A (`fix/plan-draft-repair`, local only, not merged). Fixed hint text on the repair round (allowed keys and types, exact shape, the referenced step's output fields), a drafted reference to a step also adds it to `depends_on`, and a validated example plan in the prompt (`EXAMPLE_REPLY`, checked by a test). Full suite: 1122 passed, 7 skipped.
+  - `llama3.2`, request "Explain what the cart module depends on and why", `plan --root tests/fixtures/e2e_app`, each accepted plan then run with `run --root`:
+    - Before any change, 10 drafts in two batches: 5 passed validation, all 5 ran. Rejections: undeclared output field, wrong shape, `model_type`, `extra_forbidden` x2.
+    - After the hints and `depends_on` completion, 5 drafts: 2 passed, 1 ran (`limit` int_type failure on the other).
+    - After the example prompt, 5 drafts: 5 passed, 4 ran (one failed with `unknown node id`).
+  - Indicative only: one request, 5 drafts per condition, so the hints alone showed no effect and the example's effect could be noise. Re-measure with a second request before relying on it.
+
 - v1.1.0 released 2026-10-18: outcome validation (ADR-0018) and the plan drafting fixes, merged to `main` (fast-forward, `fe9721e`) and pushed. CI on `main` passed (run 39109293292). Tag `v1.1.0` is annotated on `fe9721e` and pushed. Its first tag run (39109510574) failed at the Secret scan with a GitHub API rate limit on the runner (the gitleaks action could not look up a user, then reported a missing license), not a leak; `gh run rerun --failed` passed.
   - Full suite at the release code: 1114 passed, 7 skipped.
   - Open, for the next session: ADR-0019 (accepted) is on local branch `docs/adr-0019-recall-cost` and not pushed; CI record for v1.0.1 is on local branch `docs/record-ci-v1.0.1`; `llama3.2` plan drafts still show wrong-shape replies and invalid step references; application identity (v1.3.0).
