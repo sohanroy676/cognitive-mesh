@@ -10,6 +10,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - Record application identity work (v1.3.0 part 1)
+- **adr:** Propose ADR-0022 environment and validity
 
 ## [1.2.1] - 2026-10-18
 
