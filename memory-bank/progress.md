@@ -7,6 +7,11 @@
 
 ## Done
 
+- Plan gaps, addressed on `fix/plan-node-id-format` (local only). (1) Inputs are checked against each capability's schema when the plan is drafted: an input the capability does not take, a missing required input, and a literal that is another step's id are all refused. Messages never echo model-written names. (2) A refused draft gets one repair round, with the refusal passed back in the prompt as data; two model calls at most, and provider failures are not retried. The planner prompt says so. Tests: `tests/test_plan_generation.py` (refusals, repair, stop after two, provider not repaired).
+  - `llama3.2`, same request, 5 drafts, second re-run: 5 of 5 passed validation; 4 of 5 ran to success (1 retry on one plan; 4 attempts on the others). Before this change: 3 of 5 passed validation and 0 of 3 accepted plans ran (one run of the same five before the node-id fix); after the node-id fix: 4 of 5 passed and 3 of 4 ran.
+  - Still open, found in the re-run: (a) one plan had 50 steps, most of them repeats of the same calls; it ran to success but is padded, and no rule refuses duplicated steps; (b) one plan named a file path that is not in the application (`no ingested file has that path`); only the ingested application can judge a path, so this needs a design choice, not a planner rule.
+  - Sample size is 5 drafts on one request, so these results are indicative only.
+
 - Plan node-id fix (`fix/plan-node-id-format`, local only). Two fixes, each with tests: `dependencies_of` accepts a file path and resolves it to `module:<path>` only when that node exists; `explain_file` accepts `module:<path>` for the same file. The planner prompt states the node-id format. Full suite: 1103 passed, 7 skipped.
   - Re-run of the `llama3.2` experiment (same request, 5 drafts, `COGMESH_MODEL_TIMEOUT_S=300`): before the fixes, 3 of 5 drafts passed validation and 0 of 3 accepted plans ran. After: 4 of 5 passed validation, and 3 of 4 accepted plans ran to success (2, 3 and 1 retry attempts). One failed on an extra input key (`extra_forbidden`), and one reply was not usable. Still open: the model sometimes writes a step id as a literal input instead of an `input_refs` reference, and extra input keys are not corrected.
   - Sample size is 5 drafts on one request, so these are indicative only.
