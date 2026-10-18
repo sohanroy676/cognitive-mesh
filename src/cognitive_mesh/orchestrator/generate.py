@@ -27,7 +27,8 @@ SYSTEM_PROMPT = (
     '(letters, digits, _ or -), "capability", optional "inputs" (an object of literal values), '
     'optional "depends_on" (a list of earlier step_ids) and optional "input_refs" '
     '(an object mapping an input name to {"step_id": ..., "field": ...}, taken from that step\'s '
-    f"output; the step must also be in depends_on). At most {MAX_STEPS} steps."
+    f"output; the step must also be in depends_on). A file's node id is 'module:' plus its path, "
+    f"for example 'module:src/app/main.py'. At most {MAX_STEPS} steps."
 )
 
 

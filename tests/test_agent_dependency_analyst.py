@@ -60,6 +60,20 @@ def test_limit_sets_truncated_and_total_stays_full() -> None:
     assert len(out.dependencies) == 1
 
 
+def test_a_file_path_names_its_module_node() -> None:
+    out = _deps(_run("dependencies_of", {"node_id": "src/dep_app/a.py"}))
+    assert out.node_id == A
+    assert [i.node_id for i in out.dependencies] == [
+        e.target for e in _graph().direct_dependencies(A)
+    ]
+
+
+def test_a_path_that_names_no_module_is_still_invalid_input() -> None:
+    result = _run("dependencies_of", {"node_id": "src/dep_app/missing.py"})
+    assert isinstance(result, AgentFailure)
+    assert result.kind is FailureKind.INVALID_INPUT
+
+
 def test_unknown_node_is_invalid_input() -> None:
     result = _run("dependencies_of", {"node_id": "module:nope.py"})
     assert isinstance(result, AgentFailure)

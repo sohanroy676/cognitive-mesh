@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from cognitive_mesh.agents.base import Agent, AgentFault, Capability, Handled, require_graph
 from cognitive_mesh.agents.context import NO_PRIOR_CONTEXT
 from cognitive_mesh.agents.models import AgentContext, EvidenceRef, FailureKind
-from cognitive_mesh.graph import Edge, GraphError
+from cognitive_mesh.graph import DependencyGraph, Edge, GraphError
 from cognitive_mesh.graph.rederive import Holding, Rederivation, rederive
 
 SAME_ANALYZER_NOTE = (
@@ -16,6 +16,21 @@ SAME_ANALYZER_NOTE = (
 
 class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+def resolve_node_id(graph: DependencyGraph, raw: str) -> str:
+    """A node id, or a file path that names a module node (`src/a.py` is `module:src/a.py`).
+
+    Only an id that exists in the graph is returned, so a path that names nothing still fails with
+    the same fixed message as an unknown id.
+    """
+    for candidate in (raw, f"module:{raw}"):
+        try:
+            graph.node(candidate)
+        except GraphError:
+            continue
+        return candidate
+    raise AgentFault(FailureKind.INVALID_INPUT, "unknown node id") from None
 
 
 class DependenciesOfInput(_Strict):
@@ -120,16 +135,17 @@ class DependencyAnalyst(Agent):
     @staticmethod
     def _dependencies_of(args: DependenciesOfInput, context: AgentContext) -> Handled:
         graph = require_graph(context)
+        node_id = resolve_node_id(graph, args.node_id)
         try:
             if args.transitive:
                 found = [
                     (r.node.id, r.node.kind.value, r.path[-1], r.depth)
-                    for r in graph.transitive_dependencies(args.node_id)
+                    for r in graph.transitive_dependencies(node_id)
                 ]
             else:
                 found = [
                     (e.target, graph.node(e.target).kind.value, e, 1)
-                    for e in graph.direct_dependencies(args.node_id)
+                    for e in graph.direct_dependencies(node_id)
                 ]
         except GraphError:
             raise AgentFault(FailureKind.INVALID_INPUT, "unknown node id") from None
@@ -144,7 +160,7 @@ class DependencyAnalyst(Agent):
             for node_id, node_kind, edge, depth in found[: args.limit]
         ]
         output = DependenciesOfOutput(
-            node_id=args.node_id,
+            node_id=node_id,
             transitive=args.transitive,
             total=len(found),
             truncated=len(found) > args.limit,
