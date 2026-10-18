@@ -1,7 +1,7 @@
 # ADR-0019: Bounding the cost of whole-graph recall
 
 ## Status
-Proposed (drafted 2026-10-18; not accepted. No code changes until the user accepts this text.)
+Accepted (drafted 2026-10-18; accepted 2026-10-18 under the user's delegation to choose the best option. The subject index is a v1.x implementation item; no code change is made by this ADR.)
 
 ## Date
 2026-10-18
