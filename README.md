@@ -10,11 +10,11 @@ specialized agents, and keeps traceable memory of what it did and why.
 > supplies recalled experience to a later task exist. What a model does with that context is unverified.
 > This README is updated with every version; the roadmap is not evidence that a feature exists.
 
-## What works today (v1.3.0, in progress)
+## What works today (v1.3.0)
 
 | Version | Capability | Status |
 |---|---|---|
-| v1.3.0 | Application identity (ADR-0021) and temporal/environment awareness (ADR-0022): runs carry an application id (declared, manifest or directory; trace schema 3, graph format 5); claims have a scope (`code`, `environment`, `unscoped`); reviews and outcomes can carry `--valid-until` (files at schema 2); statuses `expired`, `environment_changed`, `environment_unverified`; the agent pack withholds expired and environment-changed claims with a reason | Criteria pass locally (suite 1217 passed, 7 skipped); merged to main only for the identity part (CI run 39125954559 passed); the validity part is on `feature/v1.3.0-environment-validity`, not merged. No claim type is environment-dependent yet, so that path is exercised with synthetic claims; expiry exists only where a person sets `--valid-until` |
+| v1.3.0 | Application identity (ADR-0021) and temporal/environment awareness (ADR-0022): runs carry an application id (declared, manifest or directory; trace schema 3, graph format 5); claims have a scope (`code`, `environment`, `unscoped`); reviews and outcomes can carry `--valid-until` (files at schema 2); statuses `expired`, `environment_changed`, `environment_unverified`; the agent pack withholds expired and environment-changed claims with a reason | Done: criteria pass (suite 1222 passed, 7 skipped); merged to main with CI green (identity part run 39125954559, validity part run 39128164981); tag `v1.3.0` follows the release merge. `recall` and `task` read outcomes with `--outcomes`. No claim type is environment-dependent yet, so that path is exercised with synthetic claims; expiry exists only where a person sets `--valid-until`; identity is a label, so two applications with the same derived id still share context |
 | v0.1.0 | Project foundation: uv, ruff, mypy (strict), pytest, config loading, minimal CLI | Done, tagged |
 | v0.2.0 | Read-only application ingestion with source references, diagnostics and secret redaction | Done, tagged |
 | v0.3.0 | Dependency graph with evidence on every edge, unresolved items kept visible | Done, tagged; CI run 39010744225 passed |
