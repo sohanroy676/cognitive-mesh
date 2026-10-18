@@ -34,6 +34,10 @@ VALID_INPUTS: dict[str, dict[str, object]] = {
     "dependencies_of": {"node_id": "module:src/dep_app/a.py"},
     "unresolved_report": {},
     "compare_with_recalled": {},
+    "compare_dependencies": {
+        "first": {"node_id": "a", "dependencies": []},
+        "second": {"node_id": "b", "dependencies": []},
+    },
     "explain_file": {"path": "pyproject.toml"},
 }
 
