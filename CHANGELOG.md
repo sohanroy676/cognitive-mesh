@@ -5,8 +5,12 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **experience:** Stdlib edges are environment-scoped claims
+
 ### Documentation
 - **adr:** Propose ADR-0025 and ADR-0026
+- Record stdlib environment claims
 
 ## [1.4.0] - 2026-10-18
 
