@@ -3,13 +3,14 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [1.0.1] - 2026-10-17
+## [1.0.1] - 2026-10-18
 
 ### Documentation
 - Record CI runs and handoff for v1.0.0
 - Record the v1.0.0 verification pass
 - Record the remaining v1.0.0 verification items
 - Hand off after the v1.0.0 verification pass
+- Note the release-section date pitfall
 
 ### Fixed
 - **traces:** Tolerate parallel creation of a new trace database
