@@ -107,8 +107,14 @@ def test_claims_show_counts_and_the_unvalidated_note(
     build(capsys, db, graph)
     code, out, _ = run(capsys, "experience", "claims", "--db", db, "--graph", graph)
     assert code == 0
-    assert f"observed 2x (2 still confirmed, 2 code version(s))  {A} depends_on {B}" in out
-    assert f"observed 1x (1 still confirmed, 1 code version(s))  {A} depends_on {C}" in out
+    assert (
+        "1 independent source(s), 0 dependent repeat(s), single "
+        f"(2 still confirmed, 2 code version(s))  {A} depends_on {B}"
+    ) in out
+    assert (
+        "1 independent source(s), 0 dependent repeat(s), single "
+        f"(1 still confirmed, 1 code version(s))  {A} depends_on {C}"
+    ) in out
     assert "not proof of truth" in out
 
 
@@ -188,14 +194,14 @@ def test_a_deleted_run_is_reported_hidden_and_shown_on_request(
     _, out, _ = run(capsys, "experience", "claims", "--db", db, "--graph", graph)
     assert f"{A} depends_on {C}" not in out  # only r1 stated it, and r1 is gone
     assert "1 claim(s) hidden" in out
-    assert "observed 2x (1 still confirmed" in out  # r2 still supports A -> B
+    assert "single (1 still confirmed" in out  # r2 still supports A -> B
     _, out, _ = run(
         capsys, "experience", "claims", "--db", db, "--graph", graph, "--include-unverified"
     )
     assert (
-        f"source_missing  observed 1x (0 still confirmed, 1 code version(s))  {A} depends_on {C}"
-        in out
-    )
+        "source_missing  0 independent source(s), 0 dependent repeat(s), none "
+        f"(0 still confirmed, 1 code version(s))  {A} depends_on {C}"
+    ) in out
     _, out, _ = run(capsys, "experience", "show", "run:r1", "--db", db, "--graph", graph)
     assert "status=source_missing" in out and "hidden because" in out
     _, out, _ = run(
