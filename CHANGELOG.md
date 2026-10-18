@@ -11,6 +11,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Accept ADR-0019
 - Record CI runs for the v1.0.1 release
 
+### Fixed
+- **plan:** Name the refusal and complete depends_on in drafts
+
 ## [1.1.0] - 2026-10-18
 
 ### Added
