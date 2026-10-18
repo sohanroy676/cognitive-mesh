@@ -98,7 +98,9 @@ class CodeExplainer(Agent):
 
     def _explain_file(self, args: ExplainFileInput, context: AgentContext) -> Handled:
         ingestion = require_ingestion(context)
-        file = next((f for f in ingestion.files if f.ref.path == args.path), None)
+        # A module node id for a file names the same file: 'module:src/a.py' is 'src/a.py'.
+        path = args.path.removeprefix("module:")
+        file = next((f for f in ingestion.files if f.ref.path == path), None)
         if file is None:
             raise AgentFault(FailureKind.INVALID_INPUT, "no ingested file has that path")
         if len(file.content) > MAX_CONTENT_CHARS:

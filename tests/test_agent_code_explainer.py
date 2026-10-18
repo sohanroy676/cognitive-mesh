@@ -214,3 +214,14 @@ def test_request_limits_are_validated() -> None:
         } | bad
         with pytest.raises(ValueError):  # noqa: PT011 - pydantic ValidationError
             ModelRequest.model_validate(data)
+
+
+def test_a_module_node_id_names_its_file() -> None:
+    result = _run(CodeExplainer(GoodClient()), path="module:pyproject.toml")
+    assert isinstance(result, AgentSuccess)
+    assert [e.path for e in result.evidence] == ["pyproject.toml"]
+
+
+def test_a_module_node_id_for_a_missing_file_is_still_invalid_input() -> None:
+    result = _run(CodeExplainer(GoodClient()), path="module:nope/missing.py")
+    assert isinstance(result, AgentFailure) and result.kind is FailureKind.INVALID_INPUT
