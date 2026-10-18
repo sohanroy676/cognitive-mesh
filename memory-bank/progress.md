@@ -7,6 +7,12 @@
 
 ## Done
 
+- CI record for the v1.0.1 release (branch `docs/record-ci-v1.0.1`, 2026-10-18). Runs on `main` and tags, all from the GitHub Actions `CI` workflow:
+  - Handoff merge `94c42f5`, run 39080315003: passed.
+  - Release merge `b785293`, run 39085788748: passed. The first run, 39081067182, failed on the untagged changelog section: git-cliff dated it with the UTC date at CI time, which was after midnight UTC, while the committed file said 2026-10-17. Fixed on `fix/changelog-release-date`.
+  - Tag `v1.0.1`, run 39085935196: passed on rerun. The first attempt failed at the Secret scan step with a GitHub API rate limit on the runner, not a leak.
+  - Takeaway: the UTC-date pitfall is recorded in `activeContext.md`; a release section needs tagging soon after the merge, or the date checked against `date -u +%F`.
+
 - v1.0.0 verification pass (branches `chore/verify-v1.0.0` for docs and the identity test, `fix/trace-store-create-race` for the fixes) — 2026-10-18. Nothing here was merged, pushed or tagged. Results, including failures:
   - (e) Fresh clone of GitHub main `c362e99`: `uv sync --locked` 17 s, 1030 passed 5 skipped (140 s), ruff/format/mypy clean, e2e_app walkthrough with the real MiniLM matched the recorded results (cart->pricing `stale`, cart->tax `validated`, 6 documents indexed).
   - (d) `--reviews` in a real `task`: a rejecting review made the cart->tax claim `[conflicting]` in the pack and in `traces show`; a missing reviews file exits 15. `experience claims --include-unverified --reviews` and `experience show --incoming` work (`recall` has no `--include-unverified`).
