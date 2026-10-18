@@ -20,7 +20,12 @@ from cognitive_mesh.orchestrator import (
     generate_plan,
     plan_task,
 )
-from cognitive_mesh.orchestrator.generate import MAX_REPLY_CHARS, MAX_REQUEST_CHARS
+from cognitive_mesh.orchestrator.generate import (
+    EXAMPLE_REPLY,
+    MAX_REPLY_CHARS,
+    MAX_REQUEST_CHARS,
+    SYSTEM_PROMPT,
+)
 from cognitive_mesh.providers import (
     ModelRequest,
     ModelResponse,
@@ -505,3 +510,9 @@ def test_a_reference_to_a_step_that_does_not_exist_is_still_refused() -> None:
     steps[1].pop("depends_on")
     with pytest.raises(PlanGenerationError):
         generate_plan("x", _refs_registry(), FakeClient(reply))
+
+
+def test_the_prompt_example_is_itself_a_valid_plan() -> None:
+    assert EXAMPLE_REPLY in SYSTEM_PROMPT
+    plan, _ = draft(json.loads(EXAMPLE_REPLY))
+    assert [s.step_id for s in plan.steps] == ["report", "deps"]
