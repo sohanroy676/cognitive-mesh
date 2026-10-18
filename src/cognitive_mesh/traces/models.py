@@ -7,6 +7,7 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, JsonValue, model_validator
 
 from cognitive_mesh.agents import AgentResult, RecalledContext
+from cognitive_mesh.identity import IdentityHow
 from cognitive_mesh.orchestrator import StepRecord, StepStatus, TaskRun, TaskStatus
 
 
@@ -71,6 +72,9 @@ class RunTrace(_Frozen):
     finished_at: datetime | None = None
     source_root: str | None = None
     source_fingerprint: str | None = None
+    # Application identity (ADR-0021). None: recorded before schema 3, or no source analysed.
+    app_id: str | None = None
+    app_id_how: IdentityHow | None = None
     environment: TraceEnvironment
     redactions: tuple[str, ...] = ()  # rule names only, never values
     plan: dict[str, JsonValue]
@@ -78,6 +82,12 @@ class RunTrace(_Frozen):
     # What past experience this run was offered (ADR-0017). None: a plain `run`, or an older run.
     recalled: RecalledContext | None = None
     request_length: int | None = None
+
+    @model_validator(mode="after")
+    def _app_id_and_how_go_together(self) -> Self:
+        if (self.app_id is None) != (self.app_id_how is None):
+            raise ValueError("application id and how it was obtained are recorded together")
+        return self
 
     @model_validator(mode="after")
     def _context_and_request_go_together(self) -> Self:

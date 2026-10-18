@@ -12,7 +12,9 @@ from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-FORMAT_VERSION: Final = 3
+from cognitive_mesh.identity import IdentityHow
+
+FORMAT_VERSION: Final = 4
 CLAIM_NOTE: Final = "claims are unvalidated: repeated observation is not proof of truth"
 REPETITION_NOTE: Final = "repeated observation is counted, never treated as proof of truth"
 
@@ -97,6 +99,11 @@ class ExpNode(_Frozen):
     subject: str | None = None
     # Attempts of deterministic listing capabilities only: was the listing cut off (ADR-0016)?
     coverage: Literal["complete", "truncated"] | None = None
+    # Application identity (ADR-0021). Run, attempt and claim nodes carry `app_id` (None: run was
+    # recorded without one). Only run nodes carry `app_id_how`; a claim merged from several runs
+    # would otherwise depend on which run came first.
+    app_id: str | None = None
+    app_id_how: IdentityHow | None = None
 
 
 class ExpEdge(_Frozen):

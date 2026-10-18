@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
+## [Unreleased]
+
+### Added
+- **identity:** Record an application id per run
+
+### Documentation
+- Record application identity work (v1.3.0 part 1)
+
 ## [1.2.1] - 2026-10-18
 
 ### Added

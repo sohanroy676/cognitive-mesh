@@ -10,6 +10,7 @@ from pydantic import JsonValue, TypeAdapter
 
 from cognitive_mesh import __version__
 from cognitive_mesh.agents import AgentResult, RecalledContext
+from cognitive_mesh.identity import AppIdentity
 from cognitive_mesh.ingestion import IngestionResult
 from cognitive_mesh.ingestion.secrets import redact_secrets
 from cognitive_mesh.orchestrator import StepRecord, TaskRun, ValidatedPlan
@@ -77,8 +78,10 @@ class TraceRecorder:
         *,
         recalled: RecalledContext | None = None,
         request_length: int | None = None,
+        identity: AppIdentity | None = None,
     ) -> str:
-        """Commit the run header. `recalled` (with `request_length`) is what the run was offered."""
+        """Commit the run header. `recalled` (with `request_length`) is what the run was offered;
+        `identity` is the application id label (ADR-0021)."""
         rules: set[str] = set()
         stored_context = (
             RecalledContext.model_validate(redact_json(recalled.model_dump(mode="json"), rules))
@@ -99,6 +102,8 @@ class TraceRecorder:
                 started_at=self._now(),
                 source_root=ingestion.root if ingestion else None,
                 source_fingerprint=source_fingerprint(ingestion) if ingestion else None,
+                app_id=identity.app_id if identity else None,
+                app_id_how=identity.how if identity else None,
                 environment=TraceEnvironment(
                     cognitive_mesh_version=__version__,
                     python_version=platform.python_version(),

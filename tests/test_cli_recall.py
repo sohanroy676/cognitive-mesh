@@ -18,8 +18,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
 A = "module:src/dep_app/a.py"
 B = "module:src/dep_app/b.py"
 UTIL = "module:src/dep_app/util.py"
-A_B = claim_id("depends_on", A, B, "imports")
-A_UTIL = claim_id("depends_on", A, UTIL, "imports")
+APP_ID = "dep-app@app"  # manifest name + directory name of the copied fixture (ADR-0021)
+A_B = claim_id("depends_on", A, B, "imports", APP_ID)
+A_UTIL = claim_id("depends_on", A, UTIL, "imports", APP_ID)
 QUERY = "dependencies_of module:src/dep_app/a.py"
 
 

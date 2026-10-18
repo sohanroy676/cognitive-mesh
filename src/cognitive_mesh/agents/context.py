@@ -43,6 +43,9 @@ class ContradictingRun(_Frozen):
 
 class ClaimItem(_Frozen):
     claim_id: str
+    # ADR-0021: `matched` = the claim's application id equals the current one; `unrecorded` = the
+    # claim comes from runs recorded without an id and passed only the older subject/directory gate.
+    identity: Literal["matched", "unrecorded"] = "unrecorded"
     name: str
     predicate: str | None
     subject: str | None
@@ -66,6 +69,7 @@ class ClaimItem(_Frozen):
 class RawItem(_Frozen):
     """An experience that states no claim. Metadata only; no excerpt of the trace."""
 
+    identity: Literal["matched", "unrecorded"] = "unrecorded"  # see ClaimItem
     run_id: str
     step_id: str
     attempt_no: int

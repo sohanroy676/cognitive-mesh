@@ -45,6 +45,12 @@ CREATE TABLE run_context (
     request_len INTEGER NOT NULL
 );
 """,
+    # 2 -> 3 (ADR-0021): which application a run analysed and how that id was obtained. Runs
+    # recorded earlier keep NULL ("unrecorded"); nothing is back-filled.
+    2: """
+ALTER TABLE runs ADD COLUMN app_id TEXT;
+ALTER TABLE runs ADD COLUMN app_id_how TEXT;
+""",
 }
 SCHEMA_VERSION = 1 + len(MIGRATIONS)
 _RESULT = TypeAdapter(AgentResult)
@@ -195,8 +201,9 @@ class TraceStore:
             conn.execute("BEGIN IMMEDIATE")
             conn.execute(
                 "INSERT INTO runs (run_id, task_id, state, status, started_at, finished_at,"
-                " plan_json, source_root, source_fingerprint, env_json, redactions_json)"
-                " VALUES (?, ?, 'running', NULL, ?, NULL, ?, ?, ?, ?, ?)",
+                " plan_json, source_root, source_fingerprint, env_json, redactions_json,"
+                " app_id, app_id_how)"
+                " VALUES (?, ?, 'running', NULL, ?, NULL, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     header.run_id,
                     header.task_id,
@@ -206,6 +213,8 @@ class TraceStore:
                     header.source_fingerprint,
                     header.environment.model_dump_json(),
                     json.dumps(list(header.redactions)),
+                    header.app_id,
+                    header.app_id_how.value if header.app_id_how is not None else None,
                 ),
             )
             if header.recalled is not None and header.request_length is not None:
@@ -466,6 +475,8 @@ def _build_run(
             finished_at=row["finished_at"],
             source_root=row["source_root"],
             source_fingerprint=row["source_fingerprint"],
+            app_id=row["app_id"],
+            app_id_how=row["app_id_how"],
             environment=environment,
             redactions=tuple(str(r) for r in redactions),
             plan=plan,

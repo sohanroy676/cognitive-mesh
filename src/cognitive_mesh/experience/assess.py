@@ -323,6 +323,11 @@ def claim_parts(graph: ExperienceGraph, claim: ExpNode) -> tuple[str | None, str
     return target(EdgeKind.SUBJECT), target(EdgeKind.OBJECT)
 
 
+def _same_application(graph: ExperienceGraph, claim: ExpNode, attempts: list[str]) -> list[str]:
+    """A listing of another or an unrecorded application never contradicts the claim (ADR-0021)."""
+    return [a for a in attempts if graph.node(a).app_id == claim.app_id]
+
+
 def _contradiction_candidates(
     graph: ExperienceGraph, claim: ExpNode, subject: str | None
 ) -> list[str]:
@@ -335,9 +340,15 @@ def _contradiction_candidates(
             if not matches:
                 return []
             subject_node = matches[0]
-        return [e.source for e in graph.in_edges(subject_node, {EdgeKind.ABOUT})]
+        return _same_application(
+            graph, claim, [e.source for e in graph.in_edges(subject_node, {EdgeKind.ABOUT})]
+        )
     if claim.predicate == "is_unresolved" and graph.has_node(UNRESOLVED_CAPABILITY):
-        return [e.source for e in graph.in_edges(UNRESOLVED_CAPABILITY, {EdgeKind.USED_CAPABILITY})]
+        return _same_application(
+            graph,
+            claim,
+            [e.source for e in graph.in_edges(UNRESOLVED_CAPABILITY, {EdgeKind.USED_CAPABILITY})],
+        )
     return []
 
 

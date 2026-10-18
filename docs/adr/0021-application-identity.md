@@ -1,7 +1,7 @@
 # ADR-0021: Application identity
 
 ## Status
-Accepted (drafted and accepted 2026-10-18 under the user's delegation to choose the best option; no code written yet). The three open questions are answered below.
+Accepted (drafted and accepted 2026-10-18 under the user's delegation to choose the best option). Implemented on branch `feature/v1.3.0-application-identity` (not merged). Implementation detail: only run nodes store `how`; claim and attempt nodes store the id alone, so a claim merged from several runs does not depend on run order. The three open questions are answered below.
 
 ## Date
 2026-10-18

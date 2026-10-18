@@ -1,18 +1,22 @@
-"""Known limitation of ADR-0017: the relevance gate does not know which application a run analysed.
+"""What application identity (ADR-0021) does and does not separate.
 
-The gate keeps a claim when its subject exists in the current dependency graph, and a raw trace
-when the run's root directory has the same name. Two different applications that share a directory
-name and module paths therefore share context. These tests pin that behaviour so that a future fix
-(application identity, planned with the v1.3.0 environment identifiers) has to change them on
-purpose. What must hold today: the foreign claim is never `validated` for code that does not
-contain it, and it is labelled with the runs (of the other application) that back it.
+Before v1.3.0 the relevance gate could not tell applications apart, and these tests pinned that.
+Now applications given different ids (here `--app-id`) no longer share claims or raw traces. Two
+applications that derive the SAME id (same manifest name and directory name, nothing declared)
+still do, because the id is a local label and not proof of identity. Either way a foreign claim is
+never `validated` for code that does not contain it.
 """
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from cognitive_mesh.retrieval.context import (
+    REASON_OTHER_APPLICATION,
+    REASON_OTHER_APPLICATION_RAW,
+)
 from test_e2e_sessions import App, Files, cli_session, make_app, task, write_plan
 
 
@@ -38,40 +42,65 @@ def twin(root: Path, like: App, imports: str) -> App:
     return app
 
 
-def test_same_named_applications_share_context_but_not_validation(
-    tmp_path: Path, work: Path
-) -> None:
+def _two_sessions(
+    tmp_path: Path, work: Path, first_args: tuple[str, ...], second_args: tuple[str, ...]
+) -> tuple[App, str, dict[str, Any]]:
+    """Session 1 on one application, then the same request against its same-named twin."""
     one = make_app(tmp_path / "one" / "shop_app")
     two = twin(tmp_path / "two" / "shop_app", one, one.gamma)  # alpha imports gamma here
     files = Files(tmp_path / "t.sqlite3", tmp_path / "idx", tmp_path / "g.sqlite3")
-    alpha = one.node(one.alpha)
     steps: list[dict[str, object]] = [
         {"step_id": "report", "capability": "unresolved_report"},
-        {"step_id": "deps", "capability": "dependencies_of", "inputs": {"node_id": alpha}},
+        {
+            "step_id": "deps",
+            "capability": "dependencies_of",
+            "inputs": {"node_id": one.node(one.alpha)},
+        },
     ]
     plan = write_plan(tmp_path / "p.json", steps)
-    code, first, _ = task(work, files, one, plan, f"dependencies of {one.alpha}")
+    code, first, _ = task(work, files, one, plan, f"dependencies of {one.alpha}", *first_args)
     assert code == 0
-    first_id = str(first["trace_id"])
     assert cli_session(work, "memory", "index", "--db", files.db, "--index", files.index)[0] == 0
     assert (
         cli_session(work, "experience", "build", "--db", files.db, "--graph", files.graph)[0] == 0
     )
-
-    # the same request, now against the other application
     code, data, err = task(
-        work, files, two, plan, f"dependencies of {one.alpha}", "--min-similarity", "0"
+        work,
+        files,
+        two,
+        plan,
+        f"dependencies of {one.alpha}",
+        "--min-similarity",
+        "0",
+        *second_args,
     )
     assert code == 0, err
+    return one, str(first["trace_id"]), data
+
+
+def test_the_same_derived_id_still_shares_context_but_not_validation(
+    tmp_path: Path, work: Path
+) -> None:
+    one, first_id, data = _two_sessions(tmp_path, work, (), ())
     context = data["context"]
     claims = {c["name"]: c for c in context["claims"]}
-    foreign = claims[f"{alpha} depends_on {one.node(one.beta)}"]
+    foreign = claims[f"{one.node(one.alpha)} depends_on {one.node(one.beta)}"]
 
-    # LIMITATION: a claim observed on the other application is offered here, backed by its run ...
+    # LIMITATION (ADR-0021): both applications derive the same label, so it cannot tell them apart.
     assert {s["run_id"] for s in foreign["supporting"]} == {first_id}
-    # ... and a raw trace of the other application passes the same-directory-name check.
     assert first_id in {r["run_id"] for r in context["raw"]}
+    assert foreign["identity"] == "matched"
     # What still protects the agent: the claim is re-derived against this application's code.
-    assert foreign["status"] != "validated"
     assert foreign["status"] == "stale"
     assert json.dumps(context)  # the pack stays a well-formed document
+
+
+def test_different_declared_ids_keep_the_applications_apart(tmp_path: Path, work: Path) -> None:
+    _, first_id, data = _two_sessions(
+        tmp_path, work, ("--app-id", "shop-one"), ("--app-id", "shop-two")
+    )
+    context = data["context"]
+    assert context["claims"] == [] and context["raw"] == [] and context["empty"] is True
+    reasons = {n["reason"] for n in data["not_applicable"]}
+    assert reasons == {REASON_OTHER_APPLICATION, REASON_OTHER_APPLICATION_RAW}
+    assert first_id not in json.dumps(context)
