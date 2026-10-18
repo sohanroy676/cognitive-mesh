@@ -1,7 +1,7 @@
 # ADR-0025: The first environment-dependent claim type: standard-library membership
 
 ## Status
-Proposed (awaits review and acceptance before any code)
+Accepted (text reviewed and accepted by the user 2026-10-18, before any code was written)
 
 ## Date
 2026-10-18

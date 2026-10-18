@@ -91,6 +91,7 @@ def make_db(
     runs: Mapping[str, tuple[list[Step], str | None]],
     roots: Mapping[str, str] | None = None,
     apps: Mapping[str, str] | None = None,
+    pythons: Mapping[str, str] | None = None,
 ) -> Path:
     """One trace database. `runs` maps run id to (steps, source fingerprint)."""
     db = tmp / "traces.sqlite3"
@@ -102,5 +103,6 @@ def make_db(
             fingerprint=fingerprint,
             source_root=(roots or {}).get(run_id),
             app_id=(apps or {}).get(run_id),
+            python_version=(pythons or {}).get(run_id, "3.12"),
         )
     return db

@@ -89,6 +89,7 @@ def add_run(
     fingerprint: str | None = None,
     source_root: str | None = None,
     app_id: str | None = None,
+    python_version: str = "3.12",
 ) -> None:
     """Store one run. Each step is (step_id, capability, plan inputs, final result)."""
     task_id = f"{run_id}-task"
@@ -106,7 +107,7 @@ def add_run(
         app_id=app_id,
         app_id_how=IdentityHow.DECLARED if app_id else None,
         environment=TraceEnvironment(
-            cognitive_mesh_version="test", python_version="3.12", platform="test"
+            cognitive_mesh_version="test", python_version=python_version, platform="test"
         ),
         plan=plan,
     )
