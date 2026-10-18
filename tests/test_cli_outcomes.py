@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 
 from cognitive_mesh.cli import main
+from cognitive_mesh.experience import NodeKind
+from cognitive_mesh.experience import store as graph_store
 from cognitive_mesh.experience.build import claim_id
 from cognitive_mesh.experience.outcomes import OutcomeStore
 
@@ -211,3 +213,18 @@ def test_a_refusal_creates_the_outcomes_file_when_it_is_missing(
         "--db", world["db"], "--graph", world["graph"], "--outcomes", other,
     )  # fmt: skip
     assert code == 17 and other.exists()
+
+
+def test_an_outcome_for_a_node_that_is_not_a_claim_exits_13(
+    world: dict[str, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    snapshot = graph_store.load(world["graph"]).snapshot
+    [other] = [n for n in snapshot.nodes if n.kind is not NodeKind.CLAIM][:1]
+    code, _, err = cli(
+        capsys,
+        "experience", "outcome", other.id,
+        "--source", "check", "--result", "failed", "--detail", "t", "--by", "ci",
+        "--root", world["blank"], "--graph", world["graph"], "--outcomes", world["outcomes"],
+    )  # fmt: skip
+    assert code == 13 and "not a claim" in err
+    assert not world["outcomes"].exists()
