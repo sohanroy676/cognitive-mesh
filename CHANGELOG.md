@@ -7,6 +7,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - **adr:** Propose bounded recall cost (ADR-0019)
+- **adr:** Accept ADR-0019
 
 ## [1.0.1] - 2026-10-18
 
