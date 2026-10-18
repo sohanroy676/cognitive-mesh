@@ -11,7 +11,10 @@
   - Not-a-claim branch of `experience outcome` tested (exit 13, nothing stored).
   - ADR-0019 (Proposed, branch `docs/adr-0019-recall-cost`): bounding whole-graph recall with a subject index. Numbers cited from verification item (b); no code change.
   - Concurrency repeats, 5 rounds: 10 parallel `experience review` (new file), 10 parallel `experience outcome` (new file), 6 `experience claims` readers with 1 `experience build` writer. Zero failed processes; each evidence file ended with exactly 10 rows. A first attempt hung: the harness piped large JSON output without reading it, a pipe-buffer deadlock in the harness, not in the product. Six direct readers were fine.
-  - Not done: small-model plan quality. Ollama is not installed or running here (port 11434 refused), so the `llama3.2` experiment needs a setup decision first.
+  - Small-model plan quality, run 2026-10-18 after installing Ollama 0.40.5 (winget) and pulling `llama3.2`, on the request "list the modules that src/app/main.py depends on, then explain each one". The default 30 s model timeout was too short on this CPU (4 of 5 first attempts timed out); the second round used `COGMESH_MODEL_TIMEOUT_S=300`.
+    - Drafts (5, second round): 3 passed `plan` validation; 2 were rejected (a step read an input from a step it does not depend on).
+    - The 3 accepted plans all failed in `run` (exit 7, 2 attempts each) with `invalid_input: unknown node id`: the model wrote `node_id` as the path `src/app/main.py`, but the graph uses node ids such as `module:src/app/main.py`. The planner gives the model no node-id format, so this is a repeatable quality gap, not bad luck (3 of 3). Fix options, not started: state the id format in the planner prompt, or accept paths in `dependencies_of` and map them to nodes.
+    - Ollama server is left running on this machine (started hidden after install).
 
 - v1.1.0 Outcome Validation (branch `feature/v1.1.0-outcome-validation`, local only; not merged, pushed or tagged). Design: ADR-0018 (accepted 2026-10-18).
   - `experience/outcomes.py`: append-only outcomes file (`COUT`, schema 1). Rows have source check / person / promotion and result succeeded / failed / ambiguous / rejected. Each row links to the previous row for the same claim and code version (the revision chain).
