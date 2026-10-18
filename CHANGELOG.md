@@ -5,9 +5,14 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **experience:** Record outcomes and promote only validated claims
+
 ### Documentation
 - **adr:** Propose outcome validation (ADR-0018)
 - Record the session state for v1.1.0 planning
+- **adr:** Accept ADR-0018
+- Record the v1.1.0 implementation state
 
 ## [1.0.1] - 2026-10-18
 
