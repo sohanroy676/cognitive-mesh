@@ -7,6 +7,8 @@
 
 ## Done
 
+- v1.2.0 released 2026-10-18: main `d20f09c` pushed, CI run 39116536227 passed; annotated tag `v1.2.0` on `d20f09c`, tag run 39116840371 passed. Merged suite 1137 passed, 7 skipped. Still not run: `corroborated` in the real CLI with a real review or `check` outcome.
+
 - Plan drafting, step A (`fix/plan-draft-repair`, merged as `2330139`). Fixed hint text on the repair round (allowed keys and types, exact shape, the referenced step's output fields), a drafted reference to a step also adds it to `depends_on`, and a validated example plan in the prompt (`EXAMPLE_REPLY`, checked by a test). Full suite: 1122 passed, 7 skipped.
   - `llama3.2`, request "Explain what the cart module depends on and why", `plan --root tests/fixtures/e2e_app`, each accepted plan then run with `run --root`:
     - Before any change, 10 drafts in two batches: 5 passed validation, all 5 ran. Rejections: undeclared output field, wrong shape, `model_type`, `extra_forbidden` x2.
