@@ -7,17 +7,19 @@ Error messages hold fixed text and plan ids only, never the request or the model
 """
 
 import json
+from collections.abc import Sequence
 
 from pydantic import ValidationError
 
 from cognitive_mesh.agents import AgentRegistry
 from cognitive_mesh.orchestrator.models import MAX_STEPS, PlanError, TaskPlan
-from cognitive_mesh.orchestrator.planner import plan_task
+from cognitive_mesh.orchestrator.planner import plan_task, refuse_repeated_work
 from cognitive_mesh.providers import ModelClient, ModelRequest, ModelResponse, ProviderError
 
 MAX_REQUEST_CHARS = 2_000
 MAX_REPLY_CHARS = 20_000
 MAX_DRAFTS = 2  # the first draft, then one repair with the validator's reason
+MAX_FILES_IN_PROMPT = 300
 
 SYSTEM_PROMPT = (
     "You draft a task plan for a code-analysis tool. The JSON you receive has a 'request' string "
@@ -74,25 +76,31 @@ def generate_plan(
     *,
     task_id: str = "generated",
     timeout_s: float = 30.0,
+    files: Sequence[str] | None = None,
 ) -> tuple[TaskPlan, ModelResponse]:
     """Return a validated (but unreviewed) plan and the response that produced it.
 
-    A draft the validators refuse gets one repair round, with the refusal passed back as data.
-    Provider failures are never retried here.
+    `files` is the application's file list. When given, the model is shown it and an explain_file
+    step must name one of its files. A draft the validators refuse gets one repair round, with the
+    refusal passed back as data. Provider failures are never retried here.
     """
     text = request.strip()
     if not text:
         raise PlanGenerationError("the request is empty")
     if len(text) > MAX_REQUEST_CHARS:
         raise PlanGenerationError(f"the request is longer than {MAX_REQUEST_CHARS} characters")
+    known = frozenset(files) if files is not None else None
     last = PlanGenerationError("the model's plan was rejected")
     previous: str | None = None
     for _ in range(MAX_DRAFTS):
         body: dict[str, object] = {"request": text, "capabilities": _catalog(registry)}
+        if files is not None:
+            body["files"] = sorted(files)[:MAX_FILES_IN_PROMPT]
+            body["files_truncated"] = len(files) > MAX_FILES_IN_PROMPT
         if previous is not None:
             body["previous_rejection"] = previous
         try:
-            return _draft(client, json.dumps(body), registry, task_id, timeout_s)
+            return _draft(client, json.dumps(body), registry, task_id, timeout_s, known)
         except _Rejected as exc:
             last = exc.error
             previous = str(exc.error)
@@ -105,6 +113,7 @@ def _draft(
     registry: AgentRegistry,
     task_id: str,
     timeout_s: float,
+    known_files: frozenset[str] | None,
 ) -> tuple[TaskPlan, ModelResponse]:
     try:
         response = client.complete(
@@ -142,4 +151,23 @@ def _draft(
         plan_task(plan, registry)
     except PlanError as exc:
         raise _Rejected(PlanGenerationError(f"the model's plan was rejected: {exc}")) from None
+    try:
+        refuse_repeated_work(plan.steps)
+    except PlanError as exc:
+        raise _Rejected(PlanGenerationError(f"the model's plan was rejected: {exc}")) from None
+    if known_files is not None:
+        _refuse_unknown_files(plan, known_files)
     return plan, response
+
+
+def _refuse_unknown_files(plan: TaskPlan, known_files: frozenset[str]) -> None:
+    for step in plan.steps:
+        if step.capability != "explain_file" or "path" in step.input_refs:
+            continue
+        path = str(step.inputs.get("path", "")).removeprefix("module:")
+        if path not in known_files:
+            raise _Rejected(
+                PlanGenerationError(
+                    f"step {step.step_id!r} names a file that is not in the application"
+                )
+            )

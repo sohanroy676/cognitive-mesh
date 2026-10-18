@@ -59,6 +59,21 @@ def _output_fields(registry: AgentRegistry, capability: str) -> set[str] | None:
     return set.intersection(*fields) if fields else None
 
 
+def refuse_repeated_work(steps: tuple[PlanStep, ...]) -> None:
+    """Two steps that do the same thing with the same inputs and dependencies add nothing.
+
+    Checked for drafted plans only (orchestrator tests repeat no-input steps on purpose).
+    """
+    first_by_work: dict[str, str] = {}
+    for step in steps:
+        work = step.model_copy(update={"step_id": ""}).model_dump_json()
+        if work in first_by_work:
+            raise PlanError(
+                f"step {step.step_id!r} repeats the work of step {first_by_work[work]!r}"
+            )
+        first_by_work[work] = step.step_id
+
+
 def _capability_schema(registry: AgentRegistry, capability: str) -> dict[str, object]:
     """The input schema of a capability as the agents declare it; empty if none is found."""
     for agent in registry.find(capability):

@@ -118,6 +118,12 @@ def _build_parser() -> argparse.ArgumentParser:
     plan.add_argument("request", help="what you want done, in plain words")
     plan.add_argument("--task-id", default="generated", help="task id for the plan")
     plan.add_argument("--output", type=Path, metavar="FILE", help="write the plan to FILE")
+    plan.add_argument(
+        "--root",
+        type=Path,
+        metavar="DIR",
+        help="application directory: the model is shown its files and must name them",
+    )
     traces = sub.add_parser("traces", help="read recorded run traces")
     traces_sub = traces.add_subparsers(dest="traces_command", required=True)
     traces_list = traces_sub.add_parser("list", help="list recorded runs")
@@ -420,8 +426,17 @@ def _load_plan(path: Path) -> TaskPlan:
         raise PlanError(f"the plan file is not a valid plan ({kinds})") from None
 
 
-def _run_plan_request(request: str, task_id: str, output: Path | None) -> int:
+def _run_plan_request(request: str, task_id: str, output: Path | None, root: Path | None) -> int:
     """Draft a plan with the configured model. The plan is printed or written, never executed."""
+    from cognitive_mesh.ingestion import IngestionError, ingest_application
+
+    files: list[str] | None = None
+    if root is not None:
+        try:
+            files = [f.ref.path for f in ingest_application(root).files]
+        except IngestionError as exc:
+            print(_printable(str(exc)), file=sys.stderr)
+            return EXIT_INGESTION_ERROR
     try:
         settings = load_settings()
         client = build_model_client(settings)
@@ -435,6 +450,7 @@ def _run_plan_request(request: str, task_id: str, output: Path | None) -> int:
             client,
             task_id=task_id,
             timeout_s=settings.model_timeout_s,
+            files=files,
         )
     except PlanGenerationError as exc:
         print(_printable(str(exc)), file=sys.stderr)
@@ -1352,7 +1368,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "run":
         return _run_plan(args.plan, args.root, args.as_json, args.trace_db)
     if args.command == "plan":
-        return _run_plan_request(args.request, args.task_id, args.output)
+        return _run_plan_request(args.request, args.task_id, args.output, args.root)
     if args.command == "traces":
         if args.traces_command == "list":
             return _run_traces_list(args.db, args.as_json)

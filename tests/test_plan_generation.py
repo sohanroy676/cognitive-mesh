@@ -390,3 +390,59 @@ def test_a_provider_failure_is_not_repaired() -> None:
     with pytest.raises(PlanGenerationError, match="provider failed"):
         generate_plan("analyze deps", default_registry(), client)
     assert len(client.requests) == 1
+
+
+def test_two_steps_that_repeat_the_same_work_are_refused() -> None:
+    reply = {
+        "steps": [
+            {"step_id": "a", "capability": "unresolved_report"},
+            {"step_id": "b", "capability": "unresolved_report"},
+        ]
+    }
+    with pytest.raises(PlanGenerationError, match="repeats the work of step 'a'"):
+        draft(reply)
+
+
+def test_an_explain_file_path_outside_the_application_is_refused_when_files_are_known() -> None:
+    reply = {
+        "steps": [{"step_id": "x", "capability": "explain_file", "inputs": {"path": "nope.py"}}]
+    }
+    client = FakeClient(reply)
+    with pytest.raises(PlanGenerationError, match="is not in the application"):
+        generate_plan("explain", default_registry(), client, files=["pyproject.toml"])
+    assert len(client.requests) == 2  # refused, then one repair round
+
+
+def test_a_module_id_for_a_known_file_is_accepted() -> None:
+    reply = {
+        "steps": [
+            {
+                "step_id": "x",
+                "capability": "explain_file",
+                "inputs": {"path": "module:pyproject.toml"},
+            }
+        ]
+    }
+    plan, _ = generate_plan(
+        "explain", default_registry(), FakeClient(reply), files=["pyproject.toml"]
+    )
+    assert plan.steps[0].inputs == {"path": "module:pyproject.toml"}
+
+
+def test_the_file_list_is_sent_as_data_only_when_given() -> None:
+    with_files = FakeClient(GOOD)
+    generate_plan("analyze", default_registry(), with_files, files=["b.py", "a.py"])
+    body = json.loads(with_files.requests[0].prompt)
+    assert body["files"] == ["a.py", "b.py"] and body["files_truncated"] is False
+
+    without = FakeClient(GOOD)
+    generate_plan("analyze", default_registry(), without)
+    assert "files" not in json.loads(without.requests[0].prompt)
+
+
+def test_the_plan_command_with_a_missing_root_exits_3_before_any_model_call(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(["plan", "look", "--root", str(tmp_path / "nope")])
+    assert code == 3
+    capsys.readouterr()
