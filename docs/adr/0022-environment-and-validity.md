@@ -1,7 +1,7 @@
 # ADR-0022: Environment identifiers, validity periods and staleness
 
 ## Status
-Proposed (drafted 2026-10-18; needs the user's acceptance before any code). Part of v1.3.0, after ADR-0021.
+Accepted 2026-10-18 (the user took the recommendations on the three open questions below: ship the environment comparison tested with synthetic claims; withhold `expired` claims from the agent pack; set `valid_until` on `experience review` and `experience outcome`). Part of v1.3.0, after ADR-0021. No code written yet.
 
 ## Date
 2026-10-18
@@ -83,8 +83,7 @@ the rule without inventing claim types the system cannot produce, and without le
   synthetic claims only; `valid_until` exists only where a person or a future source sets it, so most claims will
   never expire by time; platform and version strings are coarse and can be equal on genuinely different machines.
 
-## Open questions for the user
-1. Is shipping the environment comparison with synthetic claims only acceptable, or should v1.3.0 wait for a real
-   environment-dependent claim type? (Recommended: ship; the roadmap tests it with a fixture.)
-2. Should `expired` claims be withheld from the agent pack (proposed) or offered with the label?
-3. Should `valid_until` be settable on `experience review` / `experience outcome` (proposed) or on a new command?
+## Answers to the open questions
+1. Ship with synthetic claims; the roadmap tests the environment path with a fixture.
+2. `expired` claims are withheld from the agent pack with a listed reason.
+3. `valid_until` is set on `experience review` and `experience outcome`.
