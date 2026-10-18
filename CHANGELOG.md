@@ -11,6 +11,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 ### Documentation
 - **adr:** Propose ADR-0025 and ADR-0026
 - Record stdlib environment claims
+- **adr:** Record ADR-0026 profiling outcome
 
 ## [1.4.0] - 2026-10-18
 
