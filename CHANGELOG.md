@@ -10,6 +10,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Propose bounded recall cost (ADR-0019)
 - **adr:** Accept ADR-0019
 - Record CI runs for the v1.0.1 release
+- **adr:** Propose ADR-0020 corroboration and lineage
 
 ## [1.1.0] - 2026-10-18
 
