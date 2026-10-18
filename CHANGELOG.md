@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.2.1] - 2026-10-18
 
 ### Added
 - **recall:** Follow claim subjects instead of the whole graph
@@ -15,6 +15,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record real-CLI corroborated check
 - Handoff after v1.2.1 and ADR-0021
 - Note the removed git push prompt
+- Mark v1.2.1 merged
 
 ### Maintenance
 - **settings:** Drop the git push permission prompt
