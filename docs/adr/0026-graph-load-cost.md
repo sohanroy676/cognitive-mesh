@@ -46,3 +46,34 @@ Measure first, then change only what the measurement shows.
 - The work is bounded by a measurement and an equality test, so it cannot silently change what recall returns.
 - It may end with no code change (stop rule); the result is then a documented, measured limit.
 - Real-model indexing cost (about 76 ms per document, extrapolated) is separate and not addressed here.
+
+## Outcome (2026-10-18, step 1 and the decision gate)
+Profiled with a scratch tool (not committed): synthetic runs of a 40-module application over 5 code versions, two
+`dependencies_of` steps per run and a failed `explain_file` every 10th run; Windows 11, CPython 3.12, one process,
+no model. Seconds; the `load_*` rows are the stages of `graph_store.load` in order.
+
+| stage | 1,000 runs | 5,000 runs | 20,000 runs | share at 20,000 |
+|---|---|---|---|---|
+| nodes / edges in the graph | 5,322 / 13,560 | 26,122 / 67,160 | 104,122 / 268,160 | |
+| `load_1` SQL read | 0.05 | 0.24 | 0.95 | 6% |
+| `load_2` validate node records | 0.04 | 0.24 | 1.85 | 11% |
+| `load_3` validate refs and edges | 0.27 | 1.58 | 6.91 | 41% |
+| `load_4` consistency check | 0.01 | 0.25 | 0.31 | 2% |
+| `load_5` content hash | 0.31 | 1.52 | 7.01 | 41% |
+| load total (sum of stages) | 0.68 | 3.83 | 17.03 | |
+| `ExperienceGraph` construction | 0.08 | 0.32 | 1.48 | not part of the load |
+| whole-graph `check_sources` | 0.63 | 3.06 | 15.02 | used by `experience claims/outcome/check` |
+| build from traces / save | 1.5 / 0.8 | 11.8 / 3.1 | 106 / 12.6 | |
+| peak working set (whole script) | 212 MB | 822 MB | 3,173 MB | |
+
+**Gate result:** no load stage reaches 60% (the largest are `load_3` and `load_5` at 41% each), so by the stop rule
+(point 4) **no code is changed**. NetworkX construction is 9% of the load, so building the adjacency lazily would not
+help. Verification is not weakened. The measured limit is documented in the README.
+
+What the numbers say, for a later decision (not decided here): the two stages that matter are the validation of
+edge records and the content hash, together 82% of the load; both are pure-Python passes over every record, so
+they grow linearly with the graph and could be reduced only by changing how records are validated or hashed, which
+point 3 forbids weakening. Peak memory (3.2 GB at 20,000 runs) was measured for the whole script, which holds the
+snapshot, the graph and the source-check results together; it is not split by stage. `recall` and `task` assess
+only the subjects their hits reach (ADR-0019), so they pay the load but not the 15 s whole-graph source check;
+`experience claims`, `outcome` and `check` still pay both.
