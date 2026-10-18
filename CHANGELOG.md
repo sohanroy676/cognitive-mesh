@@ -5,6 +5,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **plan:** Show a valid example plan in the draft prompt
+
 ### Documentation
 - Record the v1.1.0 release and its CI
 - **adr:** Propose bounded recall cost (ADR-0019)
