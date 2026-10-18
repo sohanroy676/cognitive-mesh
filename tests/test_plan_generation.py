@@ -312,3 +312,81 @@ def test_the_prompt_tells_the_model_about_references() -> None:
     generate_plan("x", _refs_registry(), client)
     assert "input_refs" in client.requests[0].system
     assert json.loads(client.requests[0].prompt)["capabilities"][0]["output_fields"] == ["value"]
+
+
+class SequenceClient(FakeClient):
+    """Replies in order, one per call; the last reply repeats."""
+
+    def __init__(self, replies: list[object]) -> None:
+        super().__init__(replies[-1])
+        self.replies = replies
+
+    def complete(self, request: ModelRequest) -> ModelResponse:
+        self.reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
+        return super().complete(request)
+
+
+BAD_EXTRA_INPUT = {
+    "steps": [
+        {
+            "step_id": "x",
+            "capability": "explain_file",
+            "inputs": {"path": "pyproject.toml", "bogus": 1},
+        }
+    ]
+}
+
+
+@pytest.mark.parametrize(
+    ("reply", "needle"),
+    [
+        (BAD_EXTRA_INPUT, "has an input that 'explain_file' does not take"),
+        (
+            {"steps": [{"step_id": "x", "capability": "explain_file", "inputs": {}}]},
+            "missing required input(s): path",
+        ),
+        (
+            {
+                "steps": [
+                    {"step_id": "a", "capability": "unresolved_report"},
+                    {
+                        "step_id": "b",
+                        "capability": "dependencies_of",
+                        "inputs": {"node_id": "a"},
+                        "depends_on": ["a"],
+                    },
+                ]
+            },
+            "is the step id 'a' used as a literal",
+        ),
+    ],
+)
+def test_inputs_the_agent_cannot_use_are_refused_before_anything_runs(
+    reply: object, needle: str
+) -> None:
+    with pytest.raises(PlanGenerationError, match=needle.replace("(", r"\(").replace(")", r"\)")):
+        draft(reply)
+
+
+def test_a_refused_draft_gets_one_repair_round_with_the_reason() -> None:
+    client = SequenceClient([BAD_EXTRA_INPUT, GOOD])
+    plan, _ = generate_plan("analyze deps", default_registry(), client)
+    assert [s.step_id for s in plan.steps] == ["report", "deps"]
+    assert len(client.requests) == 2
+    assert "previous_rejection" not in json.loads(client.requests[0].prompt)
+    repaired = json.loads(client.requests[1].prompt)
+    assert "has an input that 'explain_file' does not take" in repaired["previous_rejection"]
+
+
+def test_two_refused_drafts_stop_with_the_last_reason() -> None:
+    client = SequenceClient([BAD_EXTRA_INPUT, BAD_EXTRA_INPUT])
+    with pytest.raises(PlanGenerationError, match="does not take"):
+        generate_plan("analyze deps", default_registry(), client)
+    assert len(client.requests) == 2
+
+
+def test_a_provider_failure_is_not_repaired() -> None:
+    client = FakeClient(ProviderError(ProviderErrorKind.TIMEOUT, "slow"))
+    with pytest.raises(PlanGenerationError, match="provider failed"):
+        generate_plan("analyze deps", default_registry(), client)
+    assert len(client.requests) == 1

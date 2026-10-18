@@ -40,6 +40,8 @@ def plan_task(plan: TaskPlan, registry: AgentRegistry) -> ValidatedPlan:
     by_id = {s.step_id: s for s in steps}
     for step in steps:
         _check_refs(step, by_id, registry)
+    for step in steps:
+        _check_inputs(step, by_id, registry)
     return ValidatedPlan(task_id=plan.task_id, order=_topological_order(steps))
 
 
@@ -55,6 +57,39 @@ def _output_fields(registry: AgentRegistry, capability: str) -> set[str] | None:
             if cap.name == capability and isinstance(props, dict):
                 fields.append(set(props))
     return set.intersection(*fields) if fields else None
+
+
+def _capability_schema(registry: AgentRegistry, capability: str) -> dict[str, object]:
+    """The input schema of a capability as the agents declare it; empty if none is found."""
+    for agent in registry.find(capability):
+        for cap in agent.spec().capabilities:
+            if cap.name == capability:
+                return dict(cap.input_schema)
+    return {}
+
+
+def _check_inputs(step: PlanStep, by_id: dict[str, PlanStep], registry: AgentRegistry) -> None:
+    """Catch inputs the agent cannot use, before anything runs (a run would fail on them)."""
+    schema = _capability_schema(registry, step.capability)
+    props = schema.get("properties")
+    if isinstance(props, dict) and any(name not in props for name in step.inputs):
+        raise PlanError(
+            f"step {step.step_id!r} has an input that {step.capability!r} does not take"
+        )
+    for value in step.inputs.values():
+        if isinstance(value, str) and value in by_id and value != step.step_id:
+            raise PlanError(
+                f"step {step.step_id!r} has an input that is the step id {value!r} used as a "
+                "literal; use input_refs to take that step's output"
+            )
+    required = schema.get("required")
+    if isinstance(required, list):
+        given = set(step.inputs) | set(step.input_refs)
+        missing = sorted(str(name) for name in required if name not in given)
+        if missing:
+            raise PlanError(
+                f"step {step.step_id!r} is missing required input(s): {', '.join(missing)}"
+            )
 
 
 def _check_refs(step: PlanStep, by_id: dict[str, PlanStep], registry: AgentRegistry) -> None:

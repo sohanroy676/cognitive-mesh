@@ -308,19 +308,14 @@ def test_capability_vanishing_from_the_registry_is_a_failure_not_a_crash() -> No
     assert result.status is TaskStatus.FAILED
 
 
-def test_hostile_input_values_never_reach_run_records() -> None:
+def test_hostile_input_names_are_refused_and_never_echoed() -> None:
     registry = default_registry()
-    ingestion = ingest_application(FIXTURES / "dep_app")
     plan = plan_of(
         PlanStep(step_id="s", capability="dependencies_of", inputs={"node_id": 5, HOSTILE: 1})
     )
-    result = Orchestrator(registry).run(
-        plan_task(plan, registry),
-        AgentContext(ingestion=ingestion, graph=build_dependency_graph(ingestion)),
-    )
-    assert result.steps[0].failure_kind == FailureKind.INVALID_INPUT.value
-    assert HOSTILE not in result.model_dump_json()
-    assert result.status is TaskStatus.FAILED
+    with pytest.raises(PlanError) as refused:
+        plan_task(plan, registry)
+    assert HOSTILE not in str(refused.value)
 
 
 # ---- unavailable providers ------------------------------------------------------------------
