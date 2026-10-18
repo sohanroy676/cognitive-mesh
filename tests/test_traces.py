@@ -755,7 +755,9 @@ def test_cli_prints_the_run_and_warns_when_the_final_write_fails(
 def test_cli_does_not_run_when_the_run_cannot_be_recorded(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def broken(self: TraceRecorder, plan: ValidatedPlan, ingestion: object = None) -> str:
+    def broken(
+        self: TraceRecorder, plan: ValidatedPlan, ingestion: object = None, **_: object
+    ) -> str:
         raise TraceStoreError("cannot record the run (sqlite error)")
 
     monkeypatch.setattr(TraceRecorder, "begin", broken)

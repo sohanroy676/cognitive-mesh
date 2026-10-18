@@ -22,6 +22,7 @@ from cognitive_mesh.graph import (
     render_html,
     render_mermaid,
 )
+from cognitive_mesh.identity import AppIdentity, IdentityError, derive_identity
 from cognitive_mesh.ingestion import IngestionError, IngestionResult, ingest_application
 from cognitive_mesh.orchestrator import (
     Orchestrator,
@@ -83,6 +84,12 @@ def _printable(text: str) -> str:
     return "".join(ch if ch.isprintable() else ch.encode("unicode_escape").decode() for ch in text)
 
 
+_APP_ID_HELP = (
+    "label for the application (ADR-0021); default: the manifest name plus directory name, "
+    "else the directory name. A label, not proof of identity"
+)
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="cognitive-mesh")
     sub = parser.add_subparsers(dest="command")
@@ -109,6 +116,7 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("plan", type=Path, help="path to the plan JSON file")
     run.add_argument("--root", type=Path, required=True, help="application directory to analyze")
     run.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
+    run.add_argument("--app-id", metavar="NAME", help=_APP_ID_HELP)
     run.add_argument(
         "--trace-db", type=Path, metavar="FILE", help="record the run in this SQLite trace database"
     )
@@ -181,6 +189,7 @@ def _build_parser() -> argparse.ArgumentParser:
     task.add_argument("--index", type=Path, required=True, metavar="DIR", help="index directory")
     task.add_argument("--graph", type=Path, required=True, metavar="FILE", help="graph file")
     task.add_argument("--reviews", type=Path, metavar="FILE", help="reviews file (optional)")
+    task.add_argument("--app-id", metavar="NAME", help=_APP_ID_HELP)
     task.add_argument("--k", type=_hit_limit, default=5, help="at most this many hits (max 20)")
     task.add_argument(
         "--min-similarity",
@@ -535,11 +544,25 @@ def _load_run_inputs(
     return validated, ingestion, registry
 
 
-def _run_plan(plan_path: Path, root: Path, as_json: bool, trace_db: Path | None) -> int:
+def _identity_for(root: str, declared: str | None) -> AppIdentity | None | int:
+    """The application id label for a run (ADR-0021), or an exit code for a bad `--app-id`."""
+    try:
+        return derive_identity(root, declared)
+    except IdentityError as exc:
+        print(exc, file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+
+
+def _run_plan(
+    plan_path: Path, root: Path, as_json: bool, trace_db: Path | None, app_id: str | None
+) -> int:
     loaded = _load_run_inputs(plan_path, root)
     if isinstance(loaded, int):
         return loaded
     validated, ingestion, registry = loaded
+    identity = _identity_for(ingestion.root, app_id)
+    if isinstance(identity, int):
+        return identity
     context = AgentContext(ingestion=ingestion, graph=build_dependency_graph(ingestion))
     if trace_db is None:
         run = Orchestrator(registry).run(validated, context)
@@ -553,7 +576,7 @@ def _run_plan(plan_path: Path, root: Path, as_json: bool, trace_db: Path | None)
     with store:
         recorder = TraceRecorder(store)
         try:
-            run_id = recorder.begin(validated, ingestion)
+            run_id = recorder.begin(validated, ingestion, identity=identity)
         except TraceStoreError as exc:  # nothing ran: the user asked for a trace we cannot keep
             print(_printable(str(exc)), file=sys.stderr)
             return EXIT_TRACE_STORE_ERROR
@@ -602,6 +625,11 @@ def _print_trace(trace: RunTrace) -> None:
             f"  source: {_printable(trace.source_root)}  "
             f"fingerprint={_printable(trace.source_fingerprint or '')}"
         )
+    if trace.app_id is not None and trace.app_id_how is not None:
+        weak = " (weak: directory name only)" if trace.app_id_how.value == "directory" else ""
+        print(f"  application id: {_printable(trace.app_id)} [{trace.app_id_how.value}]{weak}")
+    elif trace.source_root is not None:
+        print("  application id: unrecorded (run made before application ids)")
     env = trace.environment
     print(
         f"  environment: cognitive-mesh {_printable(env.cognitive_mesh_version)}, "
@@ -814,6 +842,9 @@ def _run_task(args: argparse.Namespace) -> int:
     if isinstance(loaded, int):
         return loaded
     validated, ingestion, registry = loaded
+    identity = _identity_for(ingestion.root, args.app_id)
+    if isinstance(identity, int):
+        return identity
     graph = build_dependency_graph(ingestion)
     try:
         store = TraceStore.create(args.db)
@@ -822,7 +853,7 @@ def _run_task(args: argparse.Namespace) -> int:
         return EXIT_TRACE_STORE_ERROR
     with store:
         return _guarded(
-            lambda: _task_with_store(args, store, validated, ingestion, graph, registry)
+            lambda: _task_with_store(args, store, validated, ingestion, graph, registry, identity)
         )
 
 
@@ -833,6 +864,7 @@ def _task_with_store(
     ingestion: IngestionResult,
     graph: DependencyGraph,
     registry: AgentRegistry,
+    identity: AppIdentity | None,
 ) -> int:
     from cognitive_mesh import workflow
 
@@ -847,12 +879,17 @@ def _task_with_store(
         make_embedder=_make_embedder,
         k=args.k,
         min_similarity=args.min_similarity,
+        identity=identity,
     )
     pack = prepared.gated.pack
     recorder = TraceRecorder(store)
     try:
         run_id = recorder.begin(
-            validated, ingestion, recalled=pack, request_length=len(args.request)
+            validated,
+            ingestion,
+            recalled=pack,
+            request_length=len(args.request),
+            identity=identity,
         )
     except TraceStoreError as exc:  # nothing ran: the offered context could not be recorded
         print(_printable(str(exc)), file=sys.stderr)
@@ -866,8 +903,11 @@ def _task_with_store(
         saved = False
         print(f"warning: the trace was not saved: {_printable(str(exc))}", file=sys.stderr)
     if args.as_json:
-        print(json.dumps(_task_payload(prepared, run, run_id if saved else None), indent=2))
+        print(
+            json.dumps(_task_payload(prepared, run, run_id if saved else None, identity), indent=2)
+        )
     else:
+        _print_identity(identity)
         _print_context(prepared)
         _print_run(run)
         if saved:
@@ -877,10 +917,19 @@ def _task_with_store(
     return EXIT_OK if run.status is TaskStatus.SUCCEEDED else EXIT_TASK_NOT_SUCCEEDED
 
 
+def _print_identity(identity: AppIdentity | None) -> None:
+    if identity is None:
+        print("application id: none (offered context passes the older directory-name gate only)")
+        return
+    weak = "; weak, a directory name only" if identity.weak else ""
+    print(f"application id: {_printable(identity.app_id)} [{identity.how.value}{weak}]")
+
+
 def _task_payload(
-    prepared: "PreparedContext", run: TaskRun, trace_id: str | None
+    prepared: "PreparedContext", run: TaskRun, trace_id: str | None, identity: AppIdentity | None
 ) -> dict[str, object]:
     return {
+        "application_id": identity.model_dump(mode="json") if identity else None,
         "context": prepared.gated.pack.model_dump(mode="json"),
         "not_applicable": [n.model_dump(mode="json") for n in prepared.gated.not_applicable],
         "not_searched": list(prepared.not_searched),
@@ -1369,7 +1418,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "ingest":
         return _run_ingest(args.path, args.as_json, args.include_content)
     if args.command == "run":
-        return _run_plan(args.plan, args.root, args.as_json, args.trace_db)
+        return _run_plan(args.plan, args.root, args.as_json, args.trace_db, args.app_id)
     if args.command == "plan":
         return _run_plan_request(args.request, args.task_id, args.output, args.root)
     if args.command == "traces":

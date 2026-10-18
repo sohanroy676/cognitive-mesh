@@ -19,7 +19,8 @@ from cognitive_mesh.experience.outcomes import OutcomeStore
 FIXTURES = Path(__file__).parent / "fixtures"
 A = "module:src/dep_app/a.py"
 B = "module:src/dep_app/b.py"
-A_B = claim_id("depends_on", A, B, "imports")
+APP_ID = "dep-app@app"  # manifest name + directory name of the copied fixture (ADR-0021)
+A_B = claim_id("depends_on", A, B, "imports", APP_ID)
 
 
 @pytest.fixture

@@ -27,6 +27,7 @@ from cognitive_mesh.agents.context import (
 from cognitive_mesh.experience.assess import claim_parts
 from cognitive_mesh.experience.graph import ExperienceGraph
 from cognitive_mesh.graph import DependencyGraph, GraphError
+from cognitive_mesh.identity import AppIdentity
 from cognitive_mesh.retrieval.models import RecalledClaim, RecallResult
 from cognitive_mesh.traces import TraceNotFoundError, TraceStore, TraceStoreError
 
@@ -54,6 +55,8 @@ class GatedContext(BaseModel):
 REASON_SUBJECT = "the claim's subject is not in the current application"
 REASON_OTHER_DIRECTORY = "the run analysed a directory with a different name"
 REASON_NO_DIRECTORY = "the run recorded no directory"
+REASON_OTHER_APPLICATION = "the claim comes from a different application id"
+REASON_OTHER_APPLICATION_RAW = "the run analysed a different application id"
 
 
 def root_name(path: str) -> str:
@@ -112,14 +115,30 @@ def build_context(
     current_graph: DependencyGraph,
     store: TraceStore,
     current_root: str,
+    identity: AppIdentity | None = None,
 ) -> GatedContext:
-    """The gated pack for one task. `current_root` is the directory the task will run against."""
+    """The gated pack for one task. `current_root` is the directory the task will run against.
+
+    With an application id (ADR-0021), items recorded under another id are held back; items recorded
+    without one keep the older gate and are labelled `unrecorded`. The id is a label, not proof.
+    """
     here = root_name(current_root)
     unconfirmed = len(result.unconfirmed)
     held_back: list[NotApplicable] = []
     claims: list[ClaimItem] = []
     for recalled in result.claims:
-        subject, obj = claim_parts(experience, experience.node(recalled.assessment.claim_id))
+        node = experience.node(recalled.assessment.claim_id)
+        subject, obj = claim_parts(experience, node)
+        if identity is not None and node.app_id is not None and node.app_id != identity.app_id:
+            held_back.append(
+                NotApplicable(
+                    kind="claim",
+                    label=recalled.assessment.name,
+                    reason=REASON_OTHER_APPLICATION,
+                    similarity=max((v.similarity for v in recalled.retrieved_via), default=0.0),
+                )
+            )
+            continue
         if not _in_graph(current_graph, subject):
             held_back.append(
                 NotApplicable(
@@ -130,16 +149,39 @@ def build_context(
                 )
             )
             continue
-        claims.append(_claim_item(recalled, experience, subject, obj))
+        claim_item = _claim_item(recalled, experience, subject, obj)
+        claims.append(
+            claim_item.model_copy(
+                update={
+                    "identity": "matched"
+                    if node.app_id is not None and identity is not None
+                    else "unrecorded"
+                }
+            )
+        )
 
     raw: list[RawItem] = []
     for item in result.experiences_without_claims:
         try:
-            source_root = store.get(item.run_id).source_root
+            trace = store.get(item.run_id)
         except (TraceNotFoundError, TraceStoreError):
             unconfirmed += 1
             continue
-        if source_root is None or root_name(source_root) != here:
+        source_root = trace.source_root
+        matched: Literal["matched", "unrecorded"] = "unrecorded"
+        if identity is not None and trace.app_id is not None:
+            if trace.app_id != identity.app_id:
+                held_back.append(
+                    NotApplicable(
+                        kind="raw",
+                        label=f"{item.run_id}/{item.step_id}/{item.attempt_no}",
+                        reason=REASON_OTHER_APPLICATION_RAW,
+                        similarity=item.similarity,
+                    )
+                )
+                continue
+            matched = "matched"
+        elif source_root is None or root_name(source_root) != here:
             held_back.append(
                 NotApplicable(
                     kind="raw",
@@ -158,6 +200,7 @@ def build_context(
                 kind=item.kind,
                 result_status=item.result_status,
                 similarity=item.similarity,
+                identity=matched,
             )
         )
 

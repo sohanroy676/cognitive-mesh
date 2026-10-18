@@ -37,8 +37,14 @@ def _clip(text: str) -> str:
     return f"{text[:MAX_ID_TEXT]}~{hashlib.sha256(text.encode()).hexdigest()[:12]}"
 
 
-def claim_id(predicate: str, subject: str, obj: str, detail: str) -> str:
-    key = "\x1f".join((predicate, subject, obj, detail))
+def claim_id(predicate: str, subject: str, obj: str, detail: str, app_id: str | None = None) -> str:
+    """Claims are per application (ADR-0021); without an id the key is the pre-identity one."""
+    parts = (
+        (predicate, subject, obj, detail)
+        if app_id is None
+        else (predicate, subject, obj, detail, app_id)
+    )
+    key = "\x1f".join(parts)
     return f"claim:{hashlib.sha256(key.encode()).hexdigest()[:32]}"
 
 
@@ -117,6 +123,8 @@ def _add_run(acc: _Accumulator, trace: RunTrace, diagnostics: list[ExperienceDia
             kind=NodeKind.RUN,
             name=trace.task_id,
             ref=TraceRef(run_id=trace.run_id, source_fingerprint=trace.source_fingerprint),
+            app_id=trace.app_id,
+            app_id_how=trace.app_id_how,
         )
     )
     for step in trace.steps:
@@ -151,6 +159,7 @@ def _add_run(acc: _Accumulator, trace: RunTrace, diagnostics: list[ExperienceDia
                 name=doc.doc_id,
                 ref=ref,
                 coverage=_coverage(step.capability, result),
+                app_id=trace.app_id,
             )
         )
         acc.edge(
@@ -213,7 +222,9 @@ def _add_claims(
                 if item.depth != 1:  # only direct dependencies are claims
                     continue
                 obj = _target(acc, item.node_id)
-                cid = claim_id("depends_on", deps.node_id, item.node_id, item.edge_kind)
+                cid = claim_id(
+                    "depends_on", deps.node_id, item.node_id, item.edge_kind, trace.app_id
+                )
                 acc.node(
                     ExpNode(
                         id=cid,
@@ -223,6 +234,7 @@ def _add_claims(
                         detail=item.edge_kind,
                         validation="unvalidated",
                         subject=deps.node_id,
+                        app_id=trace.app_id,
                     )
                 )
                 acc.edge(cid, attempt_node, EdgeKind.EVIDENCED_BY, ref)
@@ -232,7 +244,7 @@ def _add_claims(
             report = UnresolvedReportOutput.model_validate(result.output)
             for entry in report.unresolved:
                 subject = _target(acc, entry.node_id)
-                cid = claim_id("is_unresolved", entry.node_id, "", "")
+                cid = claim_id("is_unresolved", entry.node_id, "", "", trace.app_id)
                 acc.node(
                     ExpNode(
                         id=cid,
@@ -241,6 +253,7 @@ def _add_claims(
                         predicate="is_unresolved",
                         validation="unvalidated",
                         subject=entry.node_id,
+                        app_id=trace.app_id,
                     )
                 )
                 acc.edge(cid, attempt_node, EdgeKind.EVIDENCED_BY, ref)

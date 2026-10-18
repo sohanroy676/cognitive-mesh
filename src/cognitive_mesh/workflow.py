@@ -17,6 +17,7 @@ from cognitive_mesh.experience.current import CurrentSource
 from cognitive_mesh.experience.graph import ExperienceGraph
 from cognitive_mesh.experience.reviews import ReviewStore
 from cognitive_mesh.graph import DependencyGraph
+from cognitive_mesh.identity import AppIdentity
 from cognitive_mesh.ingestion import IngestionResult
 from cognitive_mesh.retrieval import GatedContext, RecallResult, build_context, recall
 from cognitive_mesh.traces import TraceStore, source_fingerprint
@@ -57,6 +58,7 @@ def prepare_context(
     make_embedder: "Callable[[], Embedder]",
     k: int,
     min_similarity: float,
+    identity: AppIdentity | None = None,
 ) -> PreparedContext:
     fingerprint = source_fingerprint(ingestion)
     missing = tuple(
@@ -98,6 +100,6 @@ def prepare_context(
         min_similarity=min_similarity,
     )
     gated = build_context(
-        request, found, ExperienceGraph(loaded.snapshot), graph, store, ingestion.root
+        request, found, ExperienceGraph(loaded.snapshot), graph, store, ingestion.root, identity
     )
     return PreparedContext(gated, found, ())

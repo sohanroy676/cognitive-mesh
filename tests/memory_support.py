@@ -16,6 +16,7 @@ from cognitive_mesh.agents import (
     Basis,
     FailureKind,
 )
+from cognitive_mesh.identity import IdentityHow
 from cognitive_mesh.memory import TEXT_FORMAT_VERSION, ModelKey
 from cognitive_mesh.orchestrator import StepStatus
 from cognitive_mesh.traces import (
@@ -87,6 +88,7 @@ def add_run(
     finish: bool = True,
     fingerprint: str | None = None,
     source_root: str | None = None,
+    app_id: str | None = None,
 ) -> None:
     """Store one run. Each step is (step_id, capability, plan inputs, final result)."""
     task_id = f"{run_id}-task"
@@ -101,6 +103,8 @@ def add_run(
         started_at=T0,
         source_root=source_root,
         source_fingerprint=fingerprint,
+        app_id=app_id,
+        app_id_how=IdentityHow.DECLARED if app_id else None,
         environment=TraceEnvironment(
             cognitive_mesh_version="test", python_version="3.12", platform="test"
         ),

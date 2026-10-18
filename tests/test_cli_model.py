@@ -24,7 +24,9 @@ from cognitive_mesh.providers.http import HttpReply
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_app"
 DEP_FIXTURE = Path(__file__).parent / "fixtures" / "dep_app"
 PLANS = Path(__file__).parent / "fixtures" / "plans"
-FILE_CANARY = "sample-app"  # only in the explained file; must never be echoed
+# Only in the explained file; must never be echoed. (The project name is not used: it is stored on
+# purpose as the application id, ADR-0021.)
+FILE_CANARY = "requests>=2"
 BODY_CANARY = "CANARY-SERVER-BODY-4417"
 SUMMARY = '{"summary": "A tiny sample project.", "symbols": []}'
 OK_BODY = json.dumps({"message": {"role": "assistant", "content": SUMMARY}, "done": True}).encode()
