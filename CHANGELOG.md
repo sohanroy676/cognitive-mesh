@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.4.0] - 2026-10-18
 
 ### Added
 - **retrieval:** Ordered selection and task profiles
@@ -20,6 +20,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record compare_dependencies
 - **progress:** Record compare_dependencies run
 - **progress:** Record post-v1.4.0 measurements
+- Mark v1.4.0 done
 
 ### Maintenance
 - **agents:** Cover compare_dependencies and accept ADR-0024
