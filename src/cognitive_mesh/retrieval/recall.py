@@ -5,6 +5,7 @@ comes from the graph, the trace database, the reviews and the current source, an
 changes a status. No model provider is involved.
 """
 
+from datetime import date
 from typing import Protocol
 
 from cognitive_mesh.experience.assess import (
@@ -27,6 +28,7 @@ from cognitive_mesh.retrieval.models import (
     Unconfirmed,
 )
 from cognitive_mesh.traces import TraceStore
+from cognitive_mesh.validity import Environment
 
 NOT_IN_GRAPH = "not_in_graph"
 
@@ -68,6 +70,8 @@ def recall(
     current: CurrentSource | None = None,
     k: int,
     min_similarity: float,
+    today: date | None = None,
+    environment: Environment | None = None,
 ) -> RecallResult:
     found = searcher.search(query, store, k=k, min_similarity=min_similarity)
     graph = ExperienceGraph(snapshot)
@@ -86,7 +90,13 @@ def recall(
     statuses = check_attempts(graph, store, {*hit_attempts, *attempts_behind(graph, scoped)})
     report = SourceReport(statuses=statuses, claim_support={}, diagnostics=())
     assessments: dict[str, ClaimAssessment] = assess_claims(
-        graph, report, reviews or [], current, only={c.id for c in scoped}
+        graph,
+        report,
+        reviews or [],
+        current,
+        only={c.id for c in scoped},
+        today=today,
+        environment=environment,
     )
 
     via: dict[str, list[RetrievedVia]] = {}

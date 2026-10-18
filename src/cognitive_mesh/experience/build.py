@@ -26,6 +26,7 @@ from cognitive_mesh.experience.models import (
 )
 from cognitive_mesh.memory.documents import eligible_documents
 from cognitive_mesh.traces import RunTrace, TraceRecordError, TraceStatus, TraceStore
+from cognitive_mesh.validity import Environment, EnvScope
 
 MAX_ID_TEXT: Final = 160
 
@@ -103,6 +104,21 @@ def build_from_traces(store: TraceStore) -> Snapshot:
     return acc.snapshot(diagnostics)
 
 
+def _run_environment(trace: RunTrace) -> Environment | None:
+    """The recorded environment as the fixed identifiers; None if a value is unusable."""
+    env = trace.environment
+    try:
+        return Environment(
+            values={
+                "analyser_version": env.cognitive_mesh_version,
+                "python_version": env.python_version,
+                "platform": env.platform,
+            }
+        )
+    except ValidationError:
+        return None
+
+
 def _add_run(acc: _Accumulator, trace: RunTrace, diagnostics: list[ExperienceDiagnostic]) -> None:
     if trace.status is TraceStatus.INTERRUPTED:
         diagnostics.append(
@@ -125,6 +141,7 @@ def _add_run(acc: _Accumulator, trace: RunTrace, diagnostics: list[ExperienceDia
             ref=TraceRef(run_id=trace.run_id, source_fingerprint=trace.source_fingerprint),
             app_id=trace.app_id,
             app_id_how=trace.app_id_how,
+            environment=_run_environment(trace),
         )
     )
     for step in trace.steps:
@@ -235,6 +252,7 @@ def _add_claims(
                         validation="unvalidated",
                         subject=deps.node_id,
                         app_id=trace.app_id,
+                        scope=EnvScope.CODE,
                     )
                 )
                 acc.edge(cid, attempt_node, EdgeKind.EVIDENCED_BY, ref)
@@ -254,6 +272,7 @@ def _add_claims(
                         validation="unvalidated",
                         subject=entry.node_id,
                         app_id=trace.app_id,
+                        scope=EnvScope.CODE,
                     )
                 )
                 acc.edge(cid, attempt_node, EdgeKind.EVIDENCED_BY, ref)

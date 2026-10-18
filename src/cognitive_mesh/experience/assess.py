@@ -21,6 +21,7 @@ listed as dependent repeats and add nothing. It is a category, computed on every
 """
 
 from collections.abc import Collection, Iterable, Sequence
+from datetime import date
 from enum import StrEnum
 from typing import Final
 
@@ -37,6 +38,13 @@ from cognitive_mesh.experience.outcomes import (
 )
 from cognitive_mesh.experience.reviews import Review, Verdict
 from cognitive_mesh.experience.verify import SourceReport
+from cognitive_mesh.validity import (
+    Environment,
+    EnvScope,
+    Validity,
+    ValidityState,
+    assess_validity,
+)
 
 UNRESOLVED_CAPABILITY: Final = "capability:unresolved_report"
 
@@ -49,6 +57,10 @@ class ClaimStatus(StrEnum):
     UNSUPPORTED = "unsupported"
     STALE = "stale"
     SUPPORTED = "supported"
+    # ADR-0022: shown instead of validated/supported/stale/unsupported, never over a conflict
+    EXPIRED = "expired"
+    ENVIRONMENT_CHANGED = "environment_changed"
+    ENVIRONMENT_UNVERIFIED = "environment_unverified"
 
 
 class Corroboration(StrEnum):
@@ -102,6 +114,18 @@ STATUS_MEANING: Final[dict[ClaimStatus, str]] = {
     ClaimStatus.SUPPORTED: (
         "observed with traceable sources and not contradicted; whether it is still current is "
         "unknown because no --root was given"
+    ),
+    ClaimStatus.EXPIRED: (
+        "a review or outcome gave this claim a valid_until date and that date has passed; it is "
+        "listed, not dropped, and is neither validated nor corroborated"
+    ),
+    ClaimStatus.ENVIRONMENT_CHANGED: (
+        "the claim is valid only for the environment it was recorded in, and this environment "
+        "differs; it is neither validated nor corroborated"
+    ),
+    ClaimStatus.ENVIRONMENT_UNVERIFIED: (
+        "the claim is valid only for the environment it was recorded in, and the two could not "
+        "be fully compared; it is neither validated nor corroborated"
     ),
 }
 
@@ -170,6 +194,9 @@ class ClaimAssessment(_Frozen):
     reviews: tuple[Review, ...]
     counts: ClaimCounts
     differs_across_versions: bool
+    # ADR-0022: the rule that applied (None: not assessed) and the expiry it used, if any.
+    validity: Validity | None = None
+    valid_until: date | None = None
     corroboration: Corroboration = Corroboration.NONE
     corroboration_reason: str = ""
     corroboration_version: str | None = None  # the code version the category is about
@@ -375,6 +402,30 @@ def outcome_state(outcomes: Iterable[Outcome]) -> OutcomeState:
     return OutcomeState.NONE
 
 
+_VALIDITY_STATUS: Final = {
+    ValidityState.EXPIRED: ClaimStatus.EXPIRED,
+    ValidityState.ENVIRONMENT_CHANGED: ClaimStatus.ENVIRONMENT_CHANGED,
+    ValidityState.ENVIRONMENT_UNVERIFIED: ClaimStatus.ENVIRONMENT_UNVERIFIED,
+}
+
+
+def effective_valid_until(
+    reviews: Iterable[Review], outcomes: Iterable[Outcome], here: str | None
+) -> date | None:
+    """The expiry of the newest review or outcome that sets one (ADR-0022).
+
+    Only records for the current code version count when it is known. A newer record that sets a
+    later date renews the claim; a newer record without a date does not cancel an older expiry.
+    """
+    records: list[Review | Outcome] = [*reviews, *outcomes]
+    dated = [
+        (r.created_at, r.valid_until)
+        for r in records
+        if r.valid_until is not None and (here is None or r.fingerprint == here)
+    ]
+    return max(dated, key=lambda d: d[0])[1] if dated else None
+
+
 def assess_claim(
     graph: ExperienceGraph,
     claim: ExpNode,
@@ -382,6 +433,9 @@ def assess_claim(
     reviews: list[Review],
     current: CurrentSource | None,
     outcomes: Sequence[Outcome] = (),
+    *,
+    today: date | None = None,
+    environment: Environment | None = None,
 ) -> ClaimAssessment:
     subject, obj = claim_parts(graph, claim)
     here = current.fingerprint if current else None
@@ -464,6 +518,17 @@ def assess_claim(
     else:
         status = ClaimStatus.SUPPORTED
 
+    until = effective_valid_until(reviews, claim_outcomes, here)
+    validity = assess_validity(
+        claim.scope or EnvScope.UNSCOPED,
+        claim.environment or Environment(),
+        environment or Environment(),
+        until,
+        today,
+    )
+    if status not in (ClaimStatus.CONFLICTING, ClaimStatus.CONTESTED):
+        status = _VALIDITY_STATUS.get(validity.state, status)
+
     def reviewed(verdict: Verdict, *, now: bool) -> int:
         return sum(1 for r in reviews if r.verdict is verdict and (r.fingerprint == here) is now)
 
@@ -471,6 +536,10 @@ def assess_claim(
         supporting, contradicting, reviews, claim_outcomes, rederivation, here
     )
     shown = _reported(versions, here)
+    category, reason = shown.category, shown.reason
+    if status in _VALIDITY_STATUS.values() and category is Corroboration.CORROBORATED:
+        category = Corroboration.SINGLE
+        reason = f"{reason} (not corroborated while the claim is {status.value})"
 
     counts = ClaimCounts(
         supporting_ok=len(ok_support),
@@ -498,8 +567,10 @@ def assess_claim(
         reviews=tuple(reviews),
         counts=counts,
         differs_across_versions=counts.contradicting_other_version > 0,
-        corroboration=shown.category,
-        corroboration_reason=shown.reason,
+        validity=validity,
+        valid_until=until,
+        corroboration=category,
+        corroboration_reason=reason,
         corroboration_version=shown.fingerprint,
         sources=shown.sources,
         repeats=sum(len(g.records) - 1 for g in shown.sources),
@@ -517,13 +588,25 @@ def assess_claims(
     current: CurrentSource | None,
     outcomes: Sequence[Outcome] = (),
     only: Collection[str] | None = None,
+    *,
+    today: date | None = None,
+    environment: Environment | None = None,
 ) -> dict[str, ClaimAssessment]:
     """Every claim in the graph, keyed by claim id; with `only`, just those claim ids."""
     by_claim: dict[str, list[Review]] = {}
     for review in reviews:
         by_claim.setdefault(review.claim_id, []).append(review)
     return {
-        c.id: assess_claim(graph, c, report, by_claim.get(c.id, []), current, outcomes)
+        c.id: assess_claim(
+            graph,
+            c,
+            report,
+            by_claim.get(c.id, []),
+            current,
+            outcomes,
+            today=today,
+            environment=environment,
+        )
         for c in graph.claims()
         if only is None or c.id in only
     }

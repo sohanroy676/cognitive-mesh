@@ -46,6 +46,7 @@ from cognitive_mesh.traces import (
     TraceStoreError,
     utc_now,
 )
+from cognitive_mesh.validity import current_environment, utc_today
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -796,6 +797,7 @@ def _recall(args: argparse.Namespace) -> int:
 
     loaded = graph_store.load(args.graph)
     reviews, current = _evidence_inputs(args)
+    today = utc_today()
     with TraceStore.open_existing(args.db) as store:
         index = MemoryIndex.open_existing(args.index, _make_embedder())
         found = recall(
@@ -807,10 +809,13 @@ def _recall(args: argparse.Namespace) -> int:
             current=current,
             k=args.k,
             min_similarity=args.min_similarity,
+            today=today,
+            environment=current_environment(),
         )
     if args.as_json:
         print(json.dumps(found.model_dump(mode="json"), indent=2))
         return EXIT_OK
+    print(f"date used for expiry: {today.isoformat()} (UTC)")
     if current is None:
         print("no --root given: whether claims are current is unknown")
     else:
@@ -898,6 +903,7 @@ def _task_with_store(
         k=args.k,
         min_similarity=args.min_similarity,
         identity=identity,
+        today=utc_today(),
     )
     pack = prepared.gated.pack
     recorder = TraceRecorder(store)
@@ -1114,6 +1120,9 @@ def _print_assessment(a: "ClaimAssessment", indent: str = "    ") -> None:
             print(f"{indent}  {_printable(e.path)}{line} ({e.rule}) sha256={e.sha256[:12]}")
     if a.validated_by:
         print(f"{indent}validated by: {', '.join(a.validated_by)}")
+    if a.validity is not None and a.validity.state.value not in ("in_force", "unscoped"):
+        until = f" (valid_until {a.valid_until.isoformat()})" if a.valid_until else ""
+        print(f"{indent}validity: {a.validity.state.value}{until}: {a.validity.reason}")
     print(f"{indent}{a.status.value}: {a.meaning}")
 
 
@@ -1209,7 +1218,15 @@ def _experience_promote(args: argparse.Namespace) -> int:
         raise ExperienceNodeNotFoundError("the node is not a claim")
     reviews, current = _evidence_inputs(args)
     outcomes = _outcomes_input(args.outcomes) if args.outcomes.is_file() else []
-    assessment = assess_claims(graph, report, reviews, current, outcomes)[node.id]
+    assessment = assess_claims(
+        graph,
+        report,
+        reviews,
+        current,
+        outcomes,
+        today=utc_today(),
+        environment=current_environment(),
+    )[node.id]
     unmet = _unmet_checks(assessment)
     refusal_id = None
     if unmet and current is not None:
@@ -1337,7 +1354,10 @@ def _experience_claims(args: argparse.Namespace) -> int:
     _, graph, report = _experience_open(args)
     reviews, current = _evidence_inputs(args)
     outcomes = _outcomes_input(args.outcomes) if args.outcomes is not None else []
-    assessed = assess_claims(graph, report, reviews, current, outcomes)
+    today = utc_today()
+    assessed = assess_claims(
+        graph, report, reviews, current, outcomes, today=today, environment=current_environment()
+    )
     orphans = orphaned_reviews(graph, reviews)
     details = args.reviews is not None or args.root is not None
     rows = []
@@ -1375,6 +1395,7 @@ def _experience_claims(args: argparse.Namespace) -> int:
             "claims": rows,
             "hidden_unverified": hidden,
             "current_fingerprint": current.fingerprint if current else None,
+            "date_used": today.isoformat(),
             "orphaned_reviews": [r.model_dump(mode="json") for r in orphans],
             "status_meanings": meanings,
             "note": CLAIM_NOTE,
@@ -1390,6 +1411,7 @@ def _experience_claims(args: argparse.Namespace) -> int:
         )
         if details or a.status.value == "conflicting":
             _print_assessment(a)
+    print(f"date used for expiry: {today.isoformat()} (UTC)")
     if hidden:
         print(f"{hidden} claim(s) hidden because their trace source is not confirmed")
     if not rows and not hidden:

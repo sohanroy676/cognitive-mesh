@@ -5,11 +5,14 @@ environment-changed when an environment-scoped claim compares as different. Age,
 model opinion are never reasons. A missing clock or identifier gives an unknown, not a verdict.
 """
 
-from datetime import date
+import platform
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from typing import Final
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+
+from cognitive_mesh import __version__
 
 # The fixed identifier list (ADR-0022): nothing that identifies a host or a person is recorded.
 ENV_IDENTIFIERS: Final = ("analyser_version", "python_version", "platform")
@@ -69,6 +72,25 @@ class Validity(BaseModel):
     state: ValidityState
     reason: str  # fixed text naming the rule that fired; never a stored value
     comparison: EnvComparison | None = None
+
+
+def utc_today() -> date:
+    """The one clock read of a command (UTC); it is printed with the result."""
+    return datetime.now(UTC).date()
+
+
+def current_environment() -> Environment:
+    """This process's environment as the fixed identifiers; nothing names a host or a person."""
+    try:
+        return Environment(
+            values={
+                "analyser_version": __version__,
+                "python_version": platform.python_version(),
+                "platform": platform.system(),
+            }
+        )
+    except ValidationError:
+        return Environment()
 
 
 def compare_environment(recorded: Environment, current: Environment) -> EnvComparison:
