@@ -14,6 +14,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Accept ADR-0021 application identity
 - Record real-CLI corroborated check
 - Handoff after v1.2.1 and ADR-0021
+- Note the removed git push prompt
 
 ### Maintenance
 - **settings:** Drop the git push permission prompt
