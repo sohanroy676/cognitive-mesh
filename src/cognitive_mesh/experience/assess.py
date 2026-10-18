@@ -20,7 +20,7 @@ version: all analyzer records (trace observations and re-derivations) are one so
 listed as dependent repeats and add nothing. It is a category, computed on every call.
 """
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from enum import StrEnum
 from typing import Final
 
@@ -505,15 +505,32 @@ def assess_claims(
     reviews: list[Review],
     current: CurrentSource | None,
     outcomes: Sequence[Outcome] = (),
+    only: Collection[str] | None = None,
 ) -> dict[str, ClaimAssessment]:
-    """Every claim in the graph, keyed by claim id."""
+    """Every claim in the graph, keyed by claim id; with `only`, just those claim ids."""
     by_claim: dict[str, list[Review]] = {}
     for review in reviews:
         by_claim.setdefault(review.claim_id, []).append(review)
     return {
         c.id: assess_claim(graph, c, report, by_claim.get(c.id, []), current, outcomes)
         for c in graph.claims()
+        if only is None or c.id in only
     }
+
+
+def claims_of_subjects(graph: ExperienceGraph, subjects: Collection[str]) -> list[ExpNode]:
+    """The claims about these subjects (ADR-0019), read from each claim's stored subject."""
+    return [c for c in graph.claims() if c.subject in subjects]
+
+
+def attempts_behind(graph: ExperienceGraph, claims: Iterable[ExpNode]) -> set[str]:
+    """Attempts `assess_claim` reads for these claims: evidence and contradiction candidates."""
+    found: set[str] = set()
+    for claim in claims:
+        found.update(e.target for e in graph.evidence(claim.id))
+        subject, _ = claim_parts(graph, claim)
+        found.update(_contradiction_candidates(graph, claim, subject))
+    return found
 
 
 def orphaned_reviews(graph: ExperienceGraph, reviews: list[Review]) -> list[Review]:

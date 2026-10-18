@@ -15,10 +15,12 @@ from pydantic import ValidationError
 
 from cognitive_mesh.experience.models import (
     FORMAT_VERSION,
+    EdgeKind,
     ExpEdge,
     ExperienceDiagnostic,
     ExperienceGraphError,
     ExpNode,
+    NodeKind,
     Snapshot,
     TraceRef,
     content_sha256,
@@ -69,6 +71,11 @@ def check_consistent(snapshot: Snapshot) -> None:
         raise ExperienceGraphError("the experience graph holds a duplicate edge")
     if any(e.source not in known or e.target not in known for e in snapshot.edges):
         raise ExperienceGraphError("the experience graph holds an edge whose endpoint is missing")
+    names = {n.id: n.name for n in snapshot.nodes}
+    subjects = {e.source: names[e.target] for e in snapshot.edges if e.kind is EdgeKind.SUBJECT}
+    for node in snapshot.nodes:
+        if node.kind is NodeKind.CLAIM and node.subject != subjects.get(node.id):
+            raise ExperienceGraphError("the experience graph holds a claim whose subject differs")
 
 
 def _connect(path: Path) -> sqlite3.Connection:

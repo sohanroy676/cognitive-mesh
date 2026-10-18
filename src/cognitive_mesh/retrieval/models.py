@@ -64,6 +64,8 @@ class RecallResult(_Frozen):
     indexed_documents: int
     dropped_weak: int
     current_fingerprint: str | None  # None: no --root, so currency is unknown
+    subjects_followed: int = 0  # ADR-0019: only claims about these subjects were assessed
+    claims_assessed: int = 0
     claims: tuple[RecalledClaim, ...]
     experiences_without_claims: tuple[RawExperience, ...]
     unconfirmed: tuple[Unconfirmed, ...]

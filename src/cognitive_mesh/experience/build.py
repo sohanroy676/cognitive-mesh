@@ -222,6 +222,7 @@ def _add_claims(
                         predicate="depends_on",
                         detail=item.edge_kind,
                         validation="unvalidated",
+                        subject=deps.node_id,
                     )
                 )
                 acc.edge(cid, attempt_node, EdgeKind.EVIDENCED_BY, ref)
@@ -239,6 +240,7 @@ def _add_claims(
                         name=f"{entry.node_id} is_unresolved",
                         predicate="is_unresolved",
                         validation="unvalidated",
+                        subject=entry.node_id,
                     )
                 )
                 acc.edge(cid, attempt_node, EdgeKind.EVIDENCED_BY, ref)
