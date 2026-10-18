@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from cognitive_mesh.agents.context import NO_PRIOR_CONTEXT, RecalledContext
+from cognitive_mesh.agents.context import NO_PRIOR_CONTEXT, ContextProfile, RecalledContext
 from cognitive_mesh.experience import store as graph_store
 from cognitive_mesh.experience.current import CurrentSource
 from cognitive_mesh.experience.graph import ExperienceGraph
@@ -30,6 +30,12 @@ if TYPE_CHECKING:
 
 MAX_REQUEST_CHARS: Final = 2000
 MAX_K: Final = 20  # at most this many hits per task, so the pack stays small
+# ADR-0023: per-profile defaults for `k` and the cut-off; an explicit value still wins. Both are
+# rough starting points like the 0.2 cut-off (3 documents), not measured optima.
+PROFILE_DEFAULTS: Final[dict[str, tuple[int, float]]] = {
+    "precision": (5, 0.2),
+    "recall": (10, 0.1),
+}
 
 
 @dataclass(frozen=True)
@@ -64,6 +70,7 @@ def prepare_context(
     identity: AppIdentity | None = None,
     today: date | None = None,
     outcomes_file: Path | None = None,
+    profile: ContextProfile = "precision",
 ) -> PreparedContext:
     fingerprint = source_fingerprint(ingestion)
     missing = tuple(
@@ -81,6 +88,7 @@ def prepare_context(
             current_fingerprint=fingerprint,
             k=k,
             min_similarity=min_similarity,
+            profile=profile,
         )
         return PreparedContext(GatedContext(pack=pack, not_applicable=()), None, missing)
 
@@ -112,6 +120,13 @@ def prepare_context(
         environment=current_environment(),
     )
     gated = build_context(
-        request, found, ExperienceGraph(loaded.snapshot), graph, store, ingestion.root, identity
+        request,
+        found,
+        ExperienceGraph(loaded.snapshot),
+        graph,
+        store,
+        ingestion.root,
+        identity,
+        profile,
     )
     return PreparedContext(gated, found, ())

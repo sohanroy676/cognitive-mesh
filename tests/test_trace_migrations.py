@@ -78,10 +78,10 @@ def test_a_writer_upgrades_an_older_database_and_keeps_its_runs(
 ) -> None:
     before = sql(v1_db, "SELECT run_id, status, state FROM runs")
     # a later migration stacked on the real one
-    monkeypatch.setattr(store_module, "MIGRATIONS", {**store_module.MIGRATIONS, 3: ADD_NOTE})
+    monkeypatch.setattr(store_module, "MIGRATIONS", {**store_module.MIGRATIONS, 4: ADD_NOTE})
     with TraceStore.create(v1_db) as store:
         assert [r.run_id for r in store.list().runs] == [str(before[0][0])]
-    assert version(v1_db) == 4
+    assert version(v1_db) == 5
     assert "note" in columns(v1_db)
     assert sql(v1_db, "SELECT run_id, status, state FROM runs") == before
 
@@ -110,7 +110,7 @@ def test_the_real_migration_adds_run_context_and_keeps_old_runs(v1_db: Path) -> 
     with TraceStore.create(v1_db) as store:
         (summary,) = store.list().runs
         old = store.get(summary.run_id)
-    assert version(v1_db) == 3 == SCHEMA_VERSION
+    assert version(v1_db) == SCHEMA_VERSION
     assert sql(v1_db, "SELECT run_id, status, state FROM runs") == before
     assert sql(v1_db, "SELECT count(*) FROM run_context") == [(0,)]
     assert old.recalled is None and old.request_length is None  # an older run was offered nothing
@@ -179,7 +179,7 @@ def test_a_newer_database_is_refused_and_untouched(v1_db: Path) -> None:
 def test_an_upgraded_database_reads_in_a_new_connection(
     v1_db: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(store_module, "MIGRATIONS", {**store_module.MIGRATIONS, 3: ADD_NOTE})
+    monkeypatch.setattr(store_module, "MIGRATIONS", {**store_module.MIGRATIONS, 4: ADD_NOTE})
     TraceStore.create(v1_db).close()
     assert main(["traces", "list", "--db", str(v1_db)]) == EXIT_OK
 

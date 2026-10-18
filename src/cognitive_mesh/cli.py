@@ -194,13 +194,20 @@ def _build_parser() -> argparse.ArgumentParser:
     task.add_argument("--reviews", type=Path, metavar="FILE", help="reviews file (optional)")
     task.add_argument("--outcomes", type=Path, metavar="FILE", help="outcomes file (optional)")
     task.add_argument("--app-id", metavar="NAME", help=_APP_ID_HELP)
-    task.add_argument("--k", type=_hit_limit, default=5, help="at most this many hits (max 20)")
+    task.add_argument(
+        "--profile",
+        choices=("precision", "recall"),
+        default="precision",
+        help="how much context to admit (ADR-0023); sets the defaults of --k and --min-similarity",
+    )
+    task.add_argument(
+        "--k", type=_hit_limit, help="at most this many hits (max 20; default 5, recall 10)"
+    )
     task.add_argument(
         "--min-similarity",
         type=float,
-        default=DEFAULT_MIN_SIMILARITY,
         metavar="X",
-        help="drop hits below this cosine similarity, 0 to 1",
+        help="drop hits below this cosine similarity, 0 to 1 (default 0.2, recall 0.1)",
     )
     task.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
     experience = sub.add_parser("experience", help="build and query the experience graph")
@@ -621,8 +628,12 @@ def _print_offered_context(trace: RunTrace) -> None:
     print(
         f"  offered context: {len(pack.claims)} claim(s), {len(pack.raw)} raw trace(s); withheld "
         f"{withheld.unconfirmed} unconfirmed, {withheld.not_applicable} not applicable, "
-        f"{withheld.over_limit} over the size limit"
+        f"{withheld.over_limit} over the size limit; profile {pack.profile}"
     )
+    for d in withheld.dropped:
+        print(
+            f"    dropped for size: {d.kind} {_printable(d.item_id)} {_printable(d.status or '')}"
+        )
     if pack.empty:
         print(f"    {_printable(pack.message)}")
     for claim in pack.claims:
@@ -894,6 +905,7 @@ def _task_with_store(
 ) -> int:
     from cognitive_mesh import workflow
 
+    default_k, default_cutoff = workflow.PROFILE_DEFAULTS[args.profile]
     prepared = workflow.prepare_context(
         args.request,
         ingestion=ingestion,
@@ -903,11 +915,12 @@ def _task_with_store(
         graph_file=args.graph,
         reviews_file=args.reviews,
         make_embedder=_make_embedder,
-        k=args.k,
-        min_similarity=args.min_similarity,
+        k=args.k if args.k is not None else default_k,
+        min_similarity=(args.min_similarity if args.min_similarity is not None else default_cutoff),
         identity=identity,
         today=utc_today(),
         outcomes_file=args.outcomes,
+        profile=args.profile,
     )
     pack = prepared.gated.pack
     recorder = TraceRecorder(store)
@@ -998,6 +1011,11 @@ def _print_context(prepared: "PreparedContext") -> None:
         f"  withheld from the agents: {w.unconfirmed} unconfirmed, "
         f"{w.not_applicable} not applicable, {w.over_limit} over the size limit"
     )
+    print(f"  profile: {pack.profile}; conflicts kept: {pack.conflicts_kept}")
+    if pack.conflicts_over_limit:
+        print("  the conflicting claims alone exceed the size limit; all of them are included")
+    for d in w.dropped:
+        print(f"  dropped for size: {d.kind} {_printable(d.item_id)} {_printable(d.status or '')}")
     for held in prepared.gated.not_applicable:
         print(
             f"  retrieved but not applicable ({_printable(held.reason)}): "

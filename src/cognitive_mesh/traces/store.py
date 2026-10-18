@@ -51,6 +51,11 @@ CREATE TABLE run_context (
 ALTER TABLE runs ADD COLUMN app_id TEXT;
 ALTER TABLE runs ADD COLUMN app_id_how TEXT;
 """,
+    # 3 -> 4 (ADR-0023): the retrieval profile a run's context was assembled with, kept beside the
+    # pack so it can be queried and cross-checked. Older rows keep NULL = read as `precision`.
+    3: """
+ALTER TABLE run_context ADD COLUMN profile TEXT;
+""",
 }
 SCHEMA_VERSION = 1 + len(MIGRATIONS)
 _RESULT = TypeAdapter(AgentResult)
@@ -219,8 +224,14 @@ class TraceStore:
             )
             if header.recalled is not None and header.request_length is not None:
                 conn.execute(
-                    "INSERT INTO run_context (run_id, context_json, request_len) VALUES (?, ?, ?)",
-                    (header.run_id, header.recalled.model_dump_json(), header.request_length),
+                    "INSERT INTO run_context (run_id, context_json, request_len, profile)"
+                    " VALUES (?, ?, ?, ?)",
+                    (
+                        header.run_id,
+                        header.recalled.model_dump_json(),
+                        header.request_length,
+                        header.recalled.profile,
+                    ),
                 )
             conn.execute("COMMIT")
         except sqlite3.Error:
@@ -488,6 +499,13 @@ def _build_run(
             ),
             request_length=context_row["request_len"] if context_row is not None else None,
         )
+        if (
+            context_row is not None
+            and context_row["profile"] is not None
+            and trace.recalled is not None
+            and context_row["profile"] != trace.recalled.profile
+        ):
+            raise bad("the stored context profile disagrees with the stored pack")
         if status is not TraceStatus.INTERRUPTED and trace.to_task_run().status.value != status:
             raise bad("the stored status disagrees with the steps")
     except TraceRecordError:
