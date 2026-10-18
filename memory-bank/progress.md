@@ -7,6 +7,10 @@
 
 ## Done
 
+- Plan node-id fix (`fix/plan-node-id-format`, local only). Two fixes, each with tests: `dependencies_of` accepts a file path and resolves it to `module:<path>` only when that node exists; `explain_file` accepts `module:<path>` for the same file. The planner prompt states the node-id format. Full suite: 1103 passed, 7 skipped.
+  - Re-run of the `llama3.2` experiment (same request, 5 drafts, `COGMESH_MODEL_TIMEOUT_S=300`): before the fixes, 3 of 5 drafts passed validation and 0 of 3 accepted plans ran. After: 4 of 5 passed validation, and 3 of 4 accepted plans ran to success (2, 3 and 1 retry attempts). One failed on an extra input key (`extra_forbidden`), and one reply was not usable. Still open: the model sometimes writes a step id as a literal input instead of an `input_refs` reference, and extra input keys are not corrected.
+  - Sample size is 5 drafts on one request, so these are indicative only.
+
 - Verification items, 2026-10-18 (on `feature/v1.1.0-outcome-validation`, local only):
   - Not-a-claim branch of `experience outcome` tested (exit 13, nothing stored).
   - ADR-0019 (Proposed, branch `docs/adr-0019-recall-cost`): bounding whole-graph recall with a subject index. Numbers cited from verification item (b); no code change.
