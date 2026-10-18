@@ -7,6 +7,12 @@
 
 ## Done
 
+- Verification items, 2026-10-18 (on `feature/v1.1.0-outcome-validation`, local only):
+  - Not-a-claim branch of `experience outcome` tested (exit 13, nothing stored).
+  - ADR-0019 (Proposed, branch `docs/adr-0019-recall-cost`): bounding whole-graph recall with a subject index. Numbers cited from verification item (b); no code change.
+  - Concurrency repeats, 5 rounds: 10 parallel `experience review` (new file), 10 parallel `experience outcome` (new file), 6 `experience claims` readers with 1 `experience build` writer. Zero failed processes; each evidence file ended with exactly 10 rows. A first attempt hung: the harness piped large JSON output without reading it, a pipe-buffer deadlock in the harness, not in the product. Six direct readers were fine.
+  - Not done: small-model plan quality. Ollama is not installed or running here (port 11434 refused), so the `llama3.2` experiment needs a setup decision first.
+
 - v1.1.0 Outcome Validation (branch `feature/v1.1.0-outcome-validation`, local only; not merged, pushed or tagged). Design: ADR-0018 (accepted 2026-10-18).
   - `experience/outcomes.py`: append-only outcomes file (`COUT`, schema 1). Rows have source check / person / promotion and result succeeded / failed / ambiguous / rejected. Each row links to the previous row for the same claim and code version (the revision chain).
   - `assess.py`: outcomes count only for the current code version. The newest result per source decides. A person and a check that disagree give `conflicting`; a failure gives `contested`; ambiguous gives `unknown`; a success counts as validation (`validated_by: outcome`).
