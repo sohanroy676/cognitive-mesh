@@ -1,0 +1,17 @@
+{
+  "task_id": "compare-deps",
+  "state": {
+    "first": {"step_id": "da", "fields": "*"},
+    "second": {"step_id": "db", "fields": "*"}
+  },
+  "steps": [
+    {"step_id": "da", "capability": "dependencies_of", "inputs": {"node_id": "module:src/dep_app/b.py"}},
+    {"step_id": "db", "capability": "dependencies_of", "inputs": {"node_id": "module:src/dep_app/c.py"}},
+    {
+      "step_id": "cmp",
+      "capability": "compare_dependencies",
+      "depends_on": ["da", "db"],
+      "input_refs": {"first": {"state": "first"}, "second": {"state": "second"}}
+    }
+  ]
+}

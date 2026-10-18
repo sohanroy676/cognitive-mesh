@@ -8,6 +8,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 ### Added
 - **retrieval:** Ordered selection and task profiles
 - **orchestrator:** Declared task state between steps
+- **agents:** Add compare_dependencies
 
 ### Documentation
 - **progress:** Record CI runs for v1.3.0
@@ -15,6 +16,12 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Accept ADR-0023
 - Record v1.4.0 implementation and amend ADR-0023
 - Record v1.4.0 merge and CI run
+- **adr:** Propose ADR-0024 compare_dependencies
+- Record compare_dependencies
+- **progress:** Record compare_dependencies run
+
+### Maintenance
+- **agents:** Cover compare_dependencies and accept ADR-0024
 
 ## [1.3.0] - 2026-10-18
 

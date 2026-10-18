@@ -1,6 +1,6 @@
 """Deterministic role: answers dependency questions from the evidence-backed graph. No model."""
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from cognitive_mesh.agents.base import Agent, AgentFault, Capability, Handled, require_graph
 from cognitive_mesh.agents.context import NO_PRIOR_CONTEXT
@@ -31,6 +31,27 @@ def resolve_node_id(graph: DependencyGraph, raw: str) -> str:
             continue
         return candidate
     raise AgentFault(FailureKind.INVALID_INPUT, "unknown node id") from None
+
+
+class CompareDependenciesInput(_Strict):
+    """Two `dependencies_of` outputs, normally taken from earlier steps through declared state."""
+
+    first: dict[str, JsonValue]
+    second: dict[str, JsonValue]
+    limit: int = Field(default=200, ge=1, le=1000)
+
+
+class CompareDependenciesOutput(_Strict):
+    first_node: str
+    second_node: str
+    shared: list[str]
+    only_first: list[str]
+    only_second: list[str]
+    shared_total: int
+    only_first_total: int
+    only_second_total: int
+    truncated: bool  # one of the lists above was cut at `limit`
+    inputs_truncated: bool  # an input report was itself cut off, so the lists may be incomplete
 
 
 class DependenciesOfInput(_Strict):
@@ -100,6 +121,28 @@ def _unique(items: list[EvidenceRef]) -> tuple[EvidenceRef, ...]:
     return tuple(dict.fromkeys(items))
 
 
+def _report_ids(name: str, report: dict[str, JsonValue]) -> tuple[str, set[str], bool]:
+    """(node id, dependency node ids, report was truncated) of a dependencies_of output.
+
+    A malformed report fails with a message that names the input, never its content.
+    """
+    node = report.get("node_id")
+    items = report.get("dependencies")
+    if not isinstance(node, str) or not isinstance(items, list):
+        raise AgentFault(
+            FailureKind.INVALID_INPUT, f"input {name!r} is not a dependencies_of report"
+        )
+    ids: set[str] = set()
+    for item in items:
+        target = item.get("node_id") if isinstance(item, dict) else None
+        if not isinstance(target, str):
+            raise AgentFault(
+                FailureKind.INVALID_INPUT, f"input {name!r} has a dependency without a node id"
+            )
+        ids.add(target)
+    return node, ids, report.get("truncated") is True
+
+
 class DependencyAnalyst(Agent):
     id = "dependency_analyst"
     role = "Dependency analyst"
@@ -114,6 +157,13 @@ class DependencyAnalyst(Agent):
                     input_model=DependenciesOfInput,
                     output_model=DependenciesOfOutput,
                     handler=self._dependencies_of,
+                ),
+                Capability(
+                    name="compare_dependencies",
+                    description="Compare two dependencies_of reports; no model.",
+                    input_model=CompareDependenciesInput,
+                    output_model=CompareDependenciesOutput,
+                    handler=self._compare_dependencies,
                 ),
                 Capability(
                     name="compare_with_recalled",
@@ -167,6 +217,29 @@ class DependencyAnalyst(Agent):
             dependencies=items,
         )
         return Handled(output, _unique([ref for item in items for ref in item.evidence]))
+
+    @staticmethod
+    def _compare_dependencies(args: CompareDependenciesInput, context: AgentContext) -> Handled:
+        first_node, first_ids, first_cut = _report_ids("first", args.first)
+        second_node, second_ids, second_cut = _report_ids("second", args.second)
+        lists = {
+            "shared": sorted(first_ids & second_ids),
+            "only_first": sorted(first_ids - second_ids),
+            "only_second": sorted(second_ids - first_ids),
+        }
+        output = CompareDependenciesOutput(
+            first_node=first_node,
+            second_node=second_node,
+            shared=lists["shared"][: args.limit],
+            only_first=lists["only_first"][: args.limit],
+            only_second=lists["only_second"][: args.limit],
+            shared_total=len(lists["shared"]),
+            only_first_total=len(lists["only_first"]),
+            only_second_total=len(lists["only_second"]),
+            truncated=any(len(v) > args.limit for v in lists.values()),
+            inputs_truncated=first_cut or second_cut,
+        )
+        return Handled(output)
 
     @staticmethod
     def _compare_with_recalled(args: CompareWithRecalledInput, context: AgentContext) -> Handled:

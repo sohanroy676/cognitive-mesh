@@ -119,3 +119,15 @@ def test_a_plan_with_declared_state_loads_and_runs(tmp_path: Path) -> None:
 def test_invalid_declared_state_is_a_plan_error(tmp_path: Path) -> None:
     path = write_plan(tmp_path, {"deps": {"step_id": "ghost"}})
     assert main(["run", str(path), "--root", str(FIXTURES / "dep_app")]) == EXIT_PLAN_ERROR
+
+
+def test_the_compare_plan_runs_through_the_cli_with_state(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan = FIXTURES / "plans" / "compare_deps.json"
+    assert main(["run", str(plan), "--root", str(FIXTURES / "dep_app"), "--json"]) == EXIT_OK
+    run = json.loads(capsys.readouterr().out)
+    last = run["run"]["steps"][-1] if "run" in run else run["steps"][-1]
+    assert last["status"] == "succeeded"
+    assert last["attempts"][-1]["output"]["shared"] == ["module:src/dep_app/util.py"]
+    assert {s["state"] for s in last["input_sources"]} == {"first", "second"}
