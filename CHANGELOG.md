@@ -18,6 +18,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record v1.4.0 merge and CI run
 - **adr:** Propose ADR-0024 compare_dependencies
 - Record compare_dependencies
+- **progress:** Record compare_dependencies run
 
 ### Maintenance
 - **agents:** Cover compare_dependencies and accept ADR-0024
