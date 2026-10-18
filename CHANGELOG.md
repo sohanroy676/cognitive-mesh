@@ -13,6 +13,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Propose application identity (ADR-0021)
 - **adr:** Accept ADR-0021 application identity
 - Record real-CLI corroborated check
+- Handoff after v1.2.1 and ADR-0021
 
 ## [1.2.0] - 2026-10-18
 
