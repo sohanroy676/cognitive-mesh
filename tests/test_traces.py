@@ -74,6 +74,10 @@ class _Empty(BaseModel):
     pass
 
 
+class _Note(BaseModel):
+    note: str | None = None
+
+
 class Fake(Agent):
     """An agent driven by a script: (task, call number) -> result or exception."""
 
@@ -88,7 +92,7 @@ class Fake(Agent):
                 Capability(
                     name="work",
                     description="test",
-                    input_model=_Empty,
+                    input_model=_Note,
                     output_model=_Empty,
                     handler=lambda i, ctx: Handled(_Empty()),
                 )
