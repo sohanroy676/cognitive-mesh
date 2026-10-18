@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.1.0] - 2026-10-18
 
 ### Added
 - **experience:** Record outcomes and promote only validated claims
@@ -19,6 +19,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record the plan node-id fix and the re-run
 - Record the plan repair and the re-run
 - Record the round-two plan results
+- **readme:** Release notes for v1.1.0
 
 ### Fixed
 - **plan:** Accept a file path as a module node id
