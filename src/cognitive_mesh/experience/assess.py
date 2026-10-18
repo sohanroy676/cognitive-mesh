@@ -9,8 +9,13 @@ Per code version (fingerprint) F, a claim has `pro(F)`: an ok observation on F, 
 on F, or (when the current source is given and F is its fingerprint) a re-derivation that holds. It
 has `con(F)`: a complete ok observation on F that lacks the claim, a rejected review on F, or a
 re-derivation on F that is refuted. A claim is `conflicting` when some F has both.
+
+Outcomes (ADR-0018) apply to the current code version only, like reviews: a recorded failure makes
+the claim `contested`, an ambiguous one `unknown`, a recorded success counts as validation, and a
+person and a check that disagree are `conflicting`.
 """
 
+from collections.abc import Iterable, Sequence
 from enum import StrEnum
 from typing import Final
 
@@ -19,6 +24,12 @@ from pydantic import BaseModel, ConfigDict
 from cognitive_mesh.experience.current import CurrentSource, Holding, Rederivation
 from cognitive_mesh.experience.graph import ExperienceGraph
 from cognitive_mesh.experience.models import EdgeKind, ExpNode, NodeKind, SourceStatus
+from cognitive_mesh.experience.outcomes import (
+    EVIDENCE_RESULTS,
+    Outcome,
+    OutcomeResult,
+    OutcomeSource,
+)
 from cognitive_mesh.experience.reviews import Review, Verdict
 from cognitive_mesh.experience.verify import SourceReport
 
@@ -27,10 +38,22 @@ UNRESOLVED_CAPABILITY: Final = "capability:unresolved_report"
 
 class ClaimStatus(StrEnum):
     CONFLICTING = "conflicting"
+    CONTESTED = "contested"
     VALIDATED = "validated"
+    UNKNOWN = "unknown"
     UNSUPPORTED = "unsupported"
     STALE = "stale"
     SUPPORTED = "supported"
+
+
+class OutcomeState(StrEnum):
+    """What the recorded outcomes say about the current code version (ADR-0018)."""
+
+    NONE = "none"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    AMBIGUOUS = "ambiguous"
+    CONFLICT = "conflict"  # a person and a check disagree
 
 
 STATUS_MEANING: Final[dict[ClaimStatus, str]] = {
@@ -38,9 +61,19 @@ STATUS_MEANING: Final[dict[ClaimStatus, str]] = {
         "for one code version there is both support and a contradiction (an observation that "
         "lacks the claim, a rejecting review, or a refuting re-derivation); both sides are listed"
     ),
+    ClaimStatus.CONTESTED: (
+        "a recorded outcome for the current code version says the work this claim supported "
+        "failed; "
+        "earlier states stay in the outcome history"
+    ),
     ClaimStatus.VALIDATED: (
-        "holds for the current code version (--root) by re-derivation or a confirming review; "
-        "this is not proof that the claim is true"
+        "holds for the current code version (--root) by re-derivation, a confirming review, or a "
+        "recorded successful outcome; this is not proof that the claim is true"
+    ),
+    ClaimStatus.UNKNOWN: (
+        "a recorded outcome for the current code version is ambiguous (the check did not settle "
+        "it); "
+        "it neither confirms nor weakens the claim"
     ),
     ClaimStatus.UNSUPPORTED: "no recorded observation of this claim can be traced to its source",
     ClaimStatus.STALE: (
@@ -93,7 +126,9 @@ class ClaimAssessment(_Frozen):
     status: ClaimStatus
     meaning: str
     current_fingerprint: str | None  # None: no --root, currency unknown
-    validated_by: tuple[str, ...]  # "rederived", "reviewed"
+    validated_by: tuple[str, ...]  # "rederived", "reviewed", "outcome"
+    outcome: OutcomeState = OutcomeState.NONE
+    outcomes: tuple[Outcome, ...] = ()  # every outcome for this claim, for the history
     rederivation: Rederivation | None
     supporting: tuple[SupportingAttempt, ...]
     contradicting: tuple[ContradictingAttempt, ...]
@@ -130,15 +165,42 @@ def _contradiction_candidates(
     return []
 
 
+def outcome_state(outcomes: Iterable[Outcome]) -> OutcomeState:
+    """What the outcomes say, from the newest evidence of each source (ADR-0018).
+
+    `outcomes` must be oldest first. A person and a check that disagree (one succeeded, the other
+    failed) are a conflict. An ambiguous result never reinforces a claim, and a refused promotion
+    (`rejected`) is not evidence.
+    """
+    latest: dict[OutcomeSource, OutcomeResult] = {}
+    for outcome in outcomes:
+        if outcome.result in EVIDENCE_RESULTS:
+            latest[outcome.source] = outcome.result
+    results = set(latest.values())
+    if results >= {OutcomeResult.SUCCEEDED, OutcomeResult.FAILED}:
+        return OutcomeState.CONFLICT
+    if OutcomeResult.FAILED in results:
+        return OutcomeState.FAILED
+    if OutcomeResult.SUCCEEDED in results:
+        return OutcomeState.SUCCEEDED
+    if OutcomeResult.AMBIGUOUS in results:
+        return OutcomeState.AMBIGUOUS
+    return OutcomeState.NONE
+
+
 def assess_claim(
     graph: ExperienceGraph,
     claim: ExpNode,
     report: SourceReport,
     reviews: list[Review],
     current: CurrentSource | None,
+    outcomes: Sequence[Outcome] = (),
 ) -> ClaimAssessment:
     subject, obj = claim_parts(graph, claim)
     here = current.fingerprint if current else None
+    claim_outcomes = [o for o in outcomes if o.claim_id == claim.id]
+    current_outcomes = [o for o in claim_outcomes if here is not None and o.fingerprint == here]
+    state = outcome_state(current_outcomes)
 
     evidence_ids = [e.target for e in graph.evidence(claim.id)]
     supporting: list[SupportingAttempt] = []
@@ -197,11 +259,17 @@ def assess_claim(
         validated_by.append("rederived")
     if here and any(r.verdict is Verdict.CONFIRMED and r.fingerprint == here for r in reviews):
         validated_by.append("reviewed")
+    if state is OutcomeState.SUCCEEDED:
+        validated_by.append("outcome")
 
-    if pro & con:
+    if pro & con or state is OutcomeState.CONFLICT:
         status = ClaimStatus.CONFLICTING
+    elif state is OutcomeState.FAILED:
+        status = ClaimStatus.CONTESTED
     elif validated_by:
         status = ClaimStatus.VALIDATED
+    elif state is OutcomeState.AMBIGUOUS:
+        status = ClaimStatus.UNKNOWN
     elif not ok_support:
         status = ClaimStatus.UNSUPPORTED
     elif here is not None and here not in {s.fingerprint for s in ok_support}:
@@ -230,6 +298,8 @@ def assess_claim(
         meaning=STATUS_MEANING[status],
         current_fingerprint=here,
         validated_by=tuple(validated_by) if status is ClaimStatus.VALIDATED else (),
+        outcome=state,
+        outcomes=tuple(claim_outcomes),
         rederivation=rederivation,
         supporting=tuple(supporting),
         contradicting=tuple(contradicting),
@@ -244,13 +314,14 @@ def assess_claims(
     report: SourceReport,
     reviews: list[Review],
     current: CurrentSource | None,
+    outcomes: Sequence[Outcome] = (),
 ) -> dict[str, ClaimAssessment]:
     """Every claim in the graph, keyed by claim id."""
     by_claim: dict[str, list[Review]] = {}
     for review in reviews:
         by_claim.setdefault(review.claim_id, []).append(review)
     return {
-        c.id: assess_claim(graph, c, report, by_claim.get(c.id, []), current)
+        c.id: assess_claim(graph, c, report, by_claim.get(c.id, []), current, outcomes)
         for c in graph.claims()
     }
 

@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from cognitive_mesh.experience import ExperienceGraph, SourceReport
     from cognitive_mesh.experience.assess import ClaimAssessment
     from cognitive_mesh.experience.current import CurrentSource
+    from cognitive_mesh.experience.outcomes import Outcome
     from cognitive_mesh.experience.reviews import Review
     from cognitive_mesh.experience.store import LoadedGraph
     from cognitive_mesh.memory import Embedder
@@ -71,6 +72,8 @@ EXIT_EXPERIENCE_ERROR = 12
 EXIT_EXPERIENCE_NODE_NOT_FOUND = 13
 EXIT_EXPERIENCE_SOURCES = 14
 EXIT_REVIEW_STORE_ERROR = 15
+EXIT_OUTCOME_STORE_ERROR = 16
+EXIT_PROMOTION_REFUSED = 17
 MAX_PLAN_BYTES = 256 * 1024
 DEFAULT_MIN_SIMILARITY = 0.2  # from one live run on 3 documents (ADR-0014); a rough starting point
 
@@ -199,6 +202,46 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help="application directory: check claims against it now",
     )
+    exp_claims.add_argument(
+        "--outcomes", type=Path, metavar="FILE", help="outcomes file: include recorded outcomes"
+    )
+    exp_outcome = exp_sub.add_parser("outcome", help="record a check's or a person's outcome")
+    exp_outcome.add_argument("claim_id", help="a claim id, e.g. claim:HASH")
+    exp_outcome.add_argument("--source", choices=("check", "person"), required=True)
+    exp_outcome.add_argument(
+        "--result", choices=("succeeded", "failed", "ambiguous"), required=True
+    )
+    exp_outcome.add_argument(
+        "--detail", required=True, help="the check's command or the reason; stored as data"
+    )
+    exp_outcome.add_argument("--by", required=True, metavar="NAME", help="unauthenticated label")
+    exp_outcome.add_argument(
+        "--root", type=Path, required=True, metavar="DIR", help="the application as observed"
+    )
+    exp_outcome.add_argument("--graph", type=Path, required=True, metavar="FILE", help="graph file")
+    exp_outcome.add_argument(
+        "--outcomes", type=Path, required=True, metavar="FILE", help="outcomes file (created)"
+    )
+    exp_outcome.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
+    exp_promote = exp_sub.add_parser("promote", help="accept a claim only if validated now")
+    exp_promote.add_argument("claim_id", help="a claim id, e.g. claim:HASH")
+    exp_promote.add_argument("--by", required=True, metavar="NAME", help="unauthenticated label")
+    exp_promote.add_argument(
+        "--root", type=Path, required=True, metavar="DIR", help="the application to check against"
+    )
+    exp_promote.add_argument(
+        "--db", type=Path, required=True, metavar="FILE", help="trace database"
+    )
+    exp_promote.add_argument("--graph", type=Path, required=True, metavar="FILE", help="graph file")
+    exp_promote.add_argument("--reviews", type=Path, metavar="FILE", help="reviews file (optional)")
+    exp_promote.add_argument(
+        "--outcomes",
+        type=Path,
+        required=True,
+        metavar="FILE",
+        help="outcomes file: read if present; a refusal is recorded here (created)",
+    )
+    exp_promote.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
     exp_review = exp_sub.add_parser("review", help="record a person's verdict on a claim")
     exp_review.add_argument("claim_id", help="a claim id, e.g. claim:HASH")
     exp_review.add_argument("--verdict", choices=("confirmed", "rejected"), required=True)
@@ -879,6 +922,8 @@ def _run_experience(args: argparse.Namespace) -> int:
         "claims": _experience_claims,
         "check": _experience_check,
         "review": _experience_review,
+        "outcome": _experience_outcome,
+        "promote": _experience_promote,
     }
     return _guarded(lambda: handlers[args.experience_command](args))
 
@@ -886,6 +931,7 @@ def _run_experience(args: argparse.Namespace) -> int:
 def _guarded(action: "Callable[[], int]") -> int:
     """Run a graph/evidence command and map its known failures to exit codes."""
     from cognitive_mesh.experience import ExperienceGraphError, ExperienceNodeNotFoundError
+    from cognitive_mesh.experience.outcomes import OutcomeStoreError
     from cognitive_mesh.experience.reviews import ReviewStoreError
     from cognitive_mesh.memory import MemoryIndexError
 
@@ -903,6 +949,9 @@ def _guarded(action: "Callable[[], int]") -> int:
     except ReviewStoreError as exc:
         print(_printable(str(exc)), file=sys.stderr)
         return EXIT_REVIEW_STORE_ERROR
+    except OutcomeStoreError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_OUTCOME_STORE_ERROR
     except IngestionError as exc:
         print(_printable(str(exc)), file=sys.stderr)
         return EXIT_INGESTION_ERROR
@@ -927,6 +976,14 @@ def _evidence_inputs(
             reviews = review_store.list_reviews()
     current = observe_current(args.root) if args.root is not None else None
     return reviews, current
+
+
+def _outcomes_input(path: Path) -> "list[Outcome]":
+    """Every outcome in an existing outcomes file, oldest first. Failures raise to `_guarded`."""
+    from cognitive_mesh.experience.outcomes import OutcomeStore
+
+    with OutcomeStore.open_existing(path) as outcome_store:
+        return outcome_store.list_outcomes()
 
 
 def _fp(fingerprint: str | None) -> str:
@@ -957,6 +1014,12 @@ def _print_assessment(a: "ClaimAssessment", indent: str = "    ") -> None:
         print(
             f"{indent}review #{r.id} {r.verdict.value} ({where}, version={_fp(r.fingerprint)}) "
             f"by {_printable(r.reviewer)}: {_printable(r.note)}"
+        )
+    for o in a.outcomes:
+        where = "current" if o.fingerprint == a.current_fingerprint else "other version"
+        print(
+            f"{indent}outcome #{o.id} {o.result.value} ({o.source.value}, {where}, "
+            f"version={_fp(o.fingerprint)}) by {_printable(o.recorder)}: {_printable(o.detail)}"
         )
     if a.rederivation is not None:
         print(f"{indent}re-derived from the current source: {a.rederivation.holding.value}")
@@ -991,6 +1054,100 @@ def _experience_review(args: argparse.Namespace) -> int:
         )
         print("a review is a person's assertion, unauthenticated; it does not prove the claim")
     return EXIT_OK
+
+
+def _experience_outcome(args: argparse.Namespace) -> int:
+    from cognitive_mesh.experience import ExperienceNodeNotFoundError, NodeKind
+    from cognitive_mesh.experience.current import observe_current
+    from cognitive_mesh.experience.outcomes import OutcomeResult, OutcomeSource, OutcomeStore
+
+    graph = _load_graph(args.graph)
+    node = graph.node(args.claim_id)
+    if node.kind is not NodeKind.CLAIM:
+        raise ExperienceNodeNotFoundError("the node is not a claim")
+    current = observe_current(args.root)
+    with OutcomeStore.create(args.outcomes) as outcome_store:
+        row = outcome_store.add(
+            node.id,
+            current.fingerprint,
+            OutcomeSource(args.source),
+            OutcomeResult(args.result),
+            args.detail,
+            args.by,
+        )
+    if args.as_json:
+        print(json.dumps(row.model_dump(mode="json"), indent=2))
+    else:
+        print(
+            f"outcome #{row.id} recorded: {row.result.value} ({row.source.value}) for "
+            f"{_printable(node.name)} at code version {row.fingerprint[:12]}"
+        )
+        print("an outcome is a recorded check or a person's account; it does not prove the claim")
+    return EXIT_OK
+
+
+def _unmet_checks(a: "ClaimAssessment") -> list[str]:
+    """What a promotion needs and lacks. Empty means it may proceed (ADR-0018)."""
+    from cognitive_mesh.experience.assess import ClaimStatus, OutcomeState
+    from cognitive_mesh.experience.current import Holding
+    from cognitive_mesh.experience.reviews import Verdict
+
+    if a.status is ClaimStatus.VALIDATED:
+        return []
+    unmet = [f"status is {a.status.value}, not validated"]
+    if a.rederivation is None or a.rederivation.holding is not Holding.HOLDS:
+        unmet.append("no re-derivation holds for the current code (--root)")
+    if not any(
+        r.verdict is Verdict.CONFIRMED and r.fingerprint == a.current_fingerprint for r in a.reviews
+    ):
+        unmet.append("no confirming review for the current code version")
+    if a.outcome is not OutcomeState.SUCCEEDED:
+        unmet.append("no successful outcome for the current code version")
+    return unmet
+
+
+def _experience_promote(args: argparse.Namespace) -> int:
+    from cognitive_mesh.experience import ExperienceNodeNotFoundError, NodeKind
+    from cognitive_mesh.experience.assess import assess_claims
+    from cognitive_mesh.experience.outcomes import OutcomeResult, OutcomeSource, OutcomeStore
+
+    _, graph, report = _experience_open(args)
+    node = graph.node(args.claim_id)
+    if node.kind is not NodeKind.CLAIM:
+        raise ExperienceNodeNotFoundError("the node is not a claim")
+    reviews, current = _evidence_inputs(args)
+    outcomes = _outcomes_input(args.outcomes) if args.outcomes.is_file() else []
+    assessment = assess_claims(graph, report, reviews, current, outcomes)[node.id]
+    unmet = _unmet_checks(assessment)
+    refusal_id = None
+    if unmet and current is not None:
+        with OutcomeStore.create(args.outcomes) as outcome_store:
+            refusal_id = outcome_store.add(
+                node.id,
+                current.fingerprint,
+                OutcomeSource.PROMOTION,
+                OutcomeResult.REJECTED,
+                "; ".join(unmet),
+                args.by,
+            ).id
+    accepted = not unmet
+    if args.as_json:
+        payload = {
+            "claim_id": node.id,
+            "accepted": accepted,
+            "status": assessment.status.value,
+            "unmet": unmet,
+            "refusal_outcome_id": refusal_id,
+        }
+        print(json.dumps(payload, indent=2))
+    elif accepted:
+        print(f"promotion accepted: {_printable(node.name)} is validated for the current code")
+    else:
+        print(f"promotion refused: {_printable(node.name)}")
+        for reason in unmet:
+            print(f"  unmet: {reason}")
+        print(f"a refused promotion is recorded as outcome #{refusal_id}")
+    return EXIT_OK if accepted else EXIT_PROMOTION_REFUSED
 
 
 def _load_graph(path: Path) -> "ExperienceGraph":
@@ -1087,7 +1244,8 @@ def _experience_claims(args: argparse.Namespace) -> int:
 
     _, graph, report = _experience_open(args)
     reviews, current = _evidence_inputs(args)
-    assessed = assess_claims(graph, report, reviews, current)
+    outcomes = _outcomes_input(args.outcomes) if args.outcomes is not None else []
+    assessed = assess_claims(graph, report, reviews, current, outcomes)
     orphans = orphaned_reviews(graph, reviews)
     details = args.reviews is not None or args.root is not None
     rows = []
