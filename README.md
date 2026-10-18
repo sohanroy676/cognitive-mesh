@@ -10,7 +10,7 @@ specialized agents, and keeps traceable memory of what it did and why.
 > supplies recalled experience to a later task exist. What a model does with that context is unverified.
 > This README is updated with every version; the roadmap is not evidence that a feature exists.
 
-## What works today (v1.0.0)
+## What works today (v1.1.0)
 
 | Version | Capability | Status |
 |---|---|---|
@@ -28,12 +28,14 @@ specialized agents, and keeps traceable memory of what it did and why.
 | v0.8.0 | Experience graph: runs, steps, final attempts, entities and claims from deterministic outputs, each edge with a source reference; persisted in its own SQLite file with a content hash; `experience build\|show\|claims\|check`; elements whose trace row is missing, changed or unreadable are marked and hidden unless asked for | Criteria pass locally, including a run of the real CLI from an empty directory; merged to main and pushed; CI runs 39053270212 and 39053504333 passed; tagged `v0.8.0` (tag run 39053616562 passed) |
 | v0.9.0 | Evidence-aware retrieval: `recall` follows vector hits into the experience graph and reports each claim with a status (`validated`, `supported`, `stale`, `conflicting`, `unsupported`), the observations and reviews behind it, and both sides of any conflict; raw and unconfirmed experiences are listed separately; `experience review` records a person's verdict; needs no model provider | Criteria pass locally, including a run of the real CLI with the real embedding model; merged to main (`12706e6`) and pushed; CI run 39055678848 passed; release merge CI run 39055806280 passed; tagged `v0.9.0` (tag run 39055934929 passed) |
 | v1.0.0 | Core end-to-end prototype: `task` runs a plan with the experience recalled for a request as read-only context (claims with status, meaning and source run ids; failed and model-written runs as labelled raw traces; unconfirmed and not-applicable hits counted and kept out), a deterministic `compare_with_recalled` capability re-checks recalled claims against the current code, `code_explainer` receives the same pack as untrusted data, and the pack each run was offered is stored with the run (trace schema 2); needs no model provider unless the plan has a model step | Criteria pass locally, including real-CLI runs with the real embedding model in separate processes and an opt-in live test; merged to main (`109f7b8`) and pushed; CI run 39060264282 passed; release merge `21bf079` (CI run 39060614195 passed); tagged `v1.0.0` (tag run 39060736575 passed) |
+| v1.1.0 | Outcome validation (ADR-0018): an outcome is a check's result (a command the person ran, its exit code) or a person's account; outcomes are append-only per code version, and each row links to the one before it; a failed outcome makes a claim `contested`, an ambiguous one `unknown`, a person and a check that disagree `conflicting`, and a successful one validates the claim for that version only; `experience promote` accepts a claim only if it is validated for the current code, and otherwise refuses, lists the unmet checks and records the refusal. Also in this release: drafted plans are checked before they run (inputs against the capability schema, no repeated steps, node ids), one repair round for a refused draft, and `plan --root` shows the model the application's files | Criteria pass locally (the full suite passes; new tests cover the store, the rules, the statuses, the CLI and the plan fixes); merged to main (`00c9185`) and pushed; CI run 39108887919 passed; the release merge and tag `v1.1.0` follow CI on that merge |
 
 Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
 `docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
 `docs/adr/0008-dependency-graph-visualization.md`, `docs/adr/0009-agent-architecture.md`, `docs/adr/0010-orchestrator.md`, `docs/adr/0011-episodic-trace-store.md`, `docs/adr/0012-ollama-client.md`, `docs/adr/0013-groq-client.md`, `docs/adr/0014-semantic-memory-retrieval.md`, `docs/adr/0015-experience-graph.md`, `docs/adr/0016-evidence-aware-retrieval.md`, `docs/adr/0017-context-supply.md`.
 
 ### Known limitations
+- Outcomes (v1.1.0, ADR-0018): an outcome is a check's exit code or a person's account, and the `--by` label is unauthenticated. Nothing runs checks for you, and a run's own success never counts. Outcomes count only for the code version named by `--root`; without `--root` they are shown and change nothing. A `promote` that succeeds states that a claim is validated now; it stores no separate "promoted" knowledge. The revision history is the outcome chain, enforced append-only by database triggers. Not verified: more than 10 concurrent outcome writers (10 were tested, 5 rounds), macOS, a fresh clone. Plan drafting with `llama3.2` (a 3B model on this CPU) is indicative only: 3 of 5 drafts with `--root` passed validation and ran; a draft can still give a wrong-shape reply or an input reference to a step it does not depend on.
 - Scale and identity (checked 2026-10-18, synthetic traces, see `memory-bank/progress.md`): `recall` and `task` rebuild the whole experience graph on every call, so they grow with the number of recorded runs (about 15 s at 5,000 runs, about 66 s and 2.4 GB peak at 20,000, fake embedder). The relevance gate cannot tell two applications apart when they share a directory name and module paths, so they share context (pinned by `tests/test_e2e_identity_limit.py`; a foreign claim is still re-derived and never `validated` for code that lacks it); identity is planned with v1.3.0.
 - Local directories only; results are in memory, except run traces recorded with `--trace-db` (v0.6.0).
 - Secret detection is pattern- and entropy-based and not exhaustive (it can miss short, low-entropy or hex-only secrets and can redact an innocent random id). Sending file contents to Groq needs `COGMESH_ALLOW_REMOTE_CONTENT=true`.
@@ -163,8 +165,10 @@ uv run cognitive-mesh experience build --db FILE --graph FILE [--json]   # needs
 uv run cognitive-mesh experience claims --db FILE --graph FILE [--include-unverified] [--json]
 uv run cognitive-mesh experience show NODE_ID --db FILE --graph FILE [--transitive] [--incoming] [--include-unverified] [--json]
 uv run cognitive-mesh experience check --db FILE --graph FILE [--json]
-uv run cognitive-mesh experience claims --db FILE --graph FILE [--reviews FILE] [--root DIR] [--json]   # adds evidence status
+uv run cognitive-mesh experience claims --db FILE --graph FILE [--reviews FILE] [--root DIR] [--outcomes FILE] [--json]   # adds evidence status and recorded outcomes
 uv run cognitive-mesh experience review CLAIM_ID --verdict confirmed|rejected --note TEXT --by NAME --root DIR --graph FILE --reviews FILE [--json]
+uv run cognitive-mesh experience outcome CLAIM_ID --source check|person --result succeeded|failed|ambiguous --detail TEXT --by NAME --root DIR --graph FILE --outcomes FILE [--json]
+uv run cognitive-mesh experience promote CLAIM_ID --by NAME --root DIR --db FILE --graph FILE --outcomes FILE [--reviews FILE] [--json]   # exit 17 if refused; the refusal is recorded
 uv run cognitive-mesh recall "QUERY" --db FILE --index DIR --graph FILE [--reviews FILE] [--root DIR] [--k N] [--min-similarity X] [--json]   # needs no provider
 uv run cognitive-mesh task "REQUEST" --plan PLAN.json --root DIR --db FILE --index DIR --graph FILE [--reviews FILE] [--k N] [--min-similarity X] [--json]   # recalled context + run; no provider unless the plan has a model step
 ```
@@ -184,8 +188,8 @@ secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and
 
 ## Roadmap (summary)
 
-v0.7.0 (semantic retrieval) and v0.8.0 (experience graph) are merged and tagged. v0.9.0 (evidence-aware retrieval) is merged and tagged. v1.0.0 (end-to-end prototype) is merged and tagged.
-Next: close the v1.0.0 "not verified" items, then v1.1.0 outcome validation. See `ROADMAP.md`.
+v0.7.0 (semantic retrieval) and v0.8.0 (experience graph) are merged and tagged. v0.9.0 (evidence-aware retrieval) is merged and tagged. v1.0.0 (end-to-end prototype) is merged and tagged. v1.1.0 (outcome validation, ADR-0018) is merged; its tag follows CI on the release merge.
+Next: close the "not verified" items listed above, then v1.2.0 and onward. See `ROADMAP.md`.
 
 ## Principles
 
