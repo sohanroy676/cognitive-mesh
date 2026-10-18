@@ -7,6 +7,12 @@
 
 ## Done
 
+- Session 2026-10-18 (after v1.0.1). Branches are local only; nothing pushed, merged or tagged.
+  - `docs/record-ci-v1.0.1`: CI record for v1.0.1 (entry above).
+  - `fix/groq-status-in-error`: a rejected provider call reached the run as `provider_error (other)` with no status. `ProviderError` now carries the HTTP status as an int, and the agent failure message shows it (`the model provider failed (other, HTTP 413)`). Tests: `test_providers_errors.py`, `test_agent_code_explainer.py`. Full suite: 1056 passed, 7 skipped. The 7 skips are 3 environment checks (symlinks, control characters in file names) plus the 4 live tests; the 1057/5 count in the v1.0.0 notes was from a different machine.
+  - `docs/adr-0018-outcome-validation`: ADR-0018 (Proposed) for v1.1.0. Outcome evidence, append-only events and revisions, conflict rule, refused promotion. No v1.1.0 code until the user accepts it.
+  - Still open from the verification list: graph-cost ADR, concurrency repeats, plan quality with `llama3.2`. Not started.
+
 - v1.0.0 verification pass (branches `chore/verify-v1.0.0` for docs and the identity test, `fix/trace-store-create-race` for the fixes) — 2026-10-18. Nothing here was merged, pushed or tagged. Results, including failures:
   - (e) Fresh clone of GitHub main `c362e99`: `uv sync --locked` 17 s, 1030 passed 5 skipped (140 s), ruff/format/mypy clean, e2e_app walkthrough with the real MiniLM matched the recorded results (cart->pricing `stale`, cart->tax `validated`, 6 documents indexed).
   - (d) `--reviews` in a real `task`: a rejecting review made the cart->tax claim `[conflicting]` in the pack and in `traces show`; a missing reviews file exits 15. `experience claims --include-unverified --reviews` and `experience show --incoming` work (`recall` has no `--include-unverified`).
