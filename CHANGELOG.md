@@ -5,6 +5,11 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [1.1.0] - 2026-10-18
 
+### Documentation
+- Record the v1.1.0 release and its CI
+
+## [1.1.0] - 2026-10-18
+
 ### Added
 - **experience:** Record outcomes and promote only validated claims
 - **plan:** Refuse repeated steps and unknown files in drafts
