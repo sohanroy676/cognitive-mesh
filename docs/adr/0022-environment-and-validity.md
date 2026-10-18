@@ -1,7 +1,7 @@
 # ADR-0022: Environment identifiers, validity periods and staleness
 
 ## Status
-Accepted 2026-10-18; implemented on branch `feature/v1.3.0-environment-validity` (not merged). Effective expiry: the newest review or outcome on the current code version that sets a date (a later date renews; a newer record without a date does not cancel). Recall does not yet pass outcomes to the assessment. (the user took the recommendations on the three open questions below: ship the environment comparison tested with synthetic claims; withhold `expired` claims from the agent pack; set `valid_until` on `experience review` and `experience outcome`). Part of v1.3.0, after ADR-0021. No code written yet.
+Accepted 2026-10-18; implemented on branch `feature/v1.3.0-environment-validity` (not merged). Effective expiry: the newest review or outcome on the current code version that sets a date (a later date renews; a newer record without a date does not cancel). `recall` and `task` read outcomes through `--outcomes` (fix branch `fix/recall-outcomes`). (the user took the recommendations on the three open questions below: ship the environment comparison tested with synthetic claims; withhold `expired` claims from the agent pack; set `valid_until` on `experience review` and `experience outcome`). Part of v1.3.0, after ADR-0021. No code written yet.
 
 ## Date
 2026-10-18

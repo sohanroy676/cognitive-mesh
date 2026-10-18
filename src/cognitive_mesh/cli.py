@@ -168,6 +168,7 @@ def _build_parser() -> argparse.ArgumentParser:
     recall.add_argument("--index", type=Path, required=True, metavar="DIR", help="index directory")
     recall.add_argument("--graph", type=Path, required=True, metavar="FILE", help="graph file")
     recall.add_argument("--reviews", type=Path, metavar="FILE", help="reviews file (optional)")
+    recall.add_argument("--outcomes", type=Path, metavar="FILE", help="outcomes file (optional)")
     recall.add_argument(
         "--root", type=Path, metavar="DIR", help="application directory: check claims against it"
     )
@@ -191,6 +192,7 @@ def _build_parser() -> argparse.ArgumentParser:
     task.add_argument("--index", type=Path, required=True, metavar="DIR", help="index directory")
     task.add_argument("--graph", type=Path, required=True, metavar="FILE", help="graph file")
     task.add_argument("--reviews", type=Path, metavar="FILE", help="reviews file (optional)")
+    task.add_argument("--outcomes", type=Path, metavar="FILE", help="outcomes file (optional)")
     task.add_argument("--app-id", metavar="NAME", help=_APP_ID_HELP)
     task.add_argument("--k", type=_hit_limit, default=5, help="at most this many hits (max 20)")
     task.add_argument(
@@ -806,6 +808,7 @@ def _recall(args: argparse.Namespace) -> int:
             store,
             loaded.snapshot,
             reviews=reviews,
+            outcomes=_outcomes_input(args.outcomes) if args.outcomes is not None else None,
             current=current,
             k=args.k,
             min_similarity=args.min_similarity,
@@ -904,6 +907,7 @@ def _task_with_store(
         min_similarity=args.min_similarity,
         identity=identity,
         today=utc_today(),
+        outcomes_file=args.outcomes,
     )
     pack = prepared.gated.pack
     recorder = TraceRecorder(store)
