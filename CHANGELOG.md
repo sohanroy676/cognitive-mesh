@@ -5,10 +5,14 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **recall:** Follow claim subjects instead of the whole graph
+
 ### Documentation
 - Record CI for v1.2.0
 - **adr:** Propose application identity (ADR-0021)
 - **adr:** Accept ADR-0021 application identity
+- Record real-CLI corroborated check
 
 ## [1.2.0] - 2026-10-18
 
