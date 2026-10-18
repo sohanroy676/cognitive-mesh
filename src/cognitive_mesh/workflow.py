@@ -16,6 +16,7 @@ from cognitive_mesh.agents.context import NO_PRIOR_CONTEXT, RecalledContext
 from cognitive_mesh.experience import store as graph_store
 from cognitive_mesh.experience.current import CurrentSource
 from cognitive_mesh.experience.graph import ExperienceGraph
+from cognitive_mesh.experience.outcomes import OutcomeStore
 from cognitive_mesh.experience.reviews import ReviewStore
 from cognitive_mesh.graph import DependencyGraph
 from cognitive_mesh.identity import AppIdentity
@@ -62,6 +63,7 @@ def prepare_context(
     min_similarity: float,
     identity: AppIdentity | None = None,
     today: date | None = None,
+    outcomes_file: Path | None = None,
 ) -> PreparedContext:
     fingerprint = source_fingerprint(ingestion)
     missing = tuple(
@@ -90,6 +92,10 @@ def prepare_context(
     if reviews_file is not None:
         with ReviewStore.open_existing(reviews_file) as review_store:
             reviews = review_store.list_reviews()
+    outcomes = []
+    if outcomes_file is not None:
+        with OutcomeStore.open_existing(outcomes_file) as outcome_store:
+            outcomes = outcome_store.list_outcomes()
     current = CurrentSource(fingerprint, graph)
     index = MemoryIndex.open_existing(index_dir, make_embedder())
     found = recall(
@@ -98,6 +104,7 @@ def prepare_context(
         store,
         loaded.snapshot,
         reviews=reviews,
+        outcomes=outcomes,
         current=current,
         k=k,
         min_similarity=min_similarity,

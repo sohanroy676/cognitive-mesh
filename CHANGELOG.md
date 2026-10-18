@@ -17,6 +17,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Accept ADR-0022
 - Record v1.3.0 environment and validity work
 
+### Fixed
+- **recall:** Pass outcomes to the claim assessment
+
 ## [1.2.1] - 2026-10-18
 
 ### Added

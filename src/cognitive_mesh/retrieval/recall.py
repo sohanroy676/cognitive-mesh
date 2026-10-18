@@ -17,6 +17,7 @@ from cognitive_mesh.experience.assess import (
 from cognitive_mesh.experience.current import CurrentSource
 from cognitive_mesh.experience.graph import ExperienceGraph
 from cognitive_mesh.experience.models import EdgeKind, Snapshot, SourceStatus
+from cognitive_mesh.experience.outcomes import Outcome
 from cognitive_mesh.experience.reviews import Review
 from cognitive_mesh.experience.verify import SourceReport, check_attempts
 from cognitive_mesh.memory.models import MemoryHit, SearchResult
@@ -67,6 +68,7 @@ def recall(
     snapshot: Snapshot,
     *,
     reviews: list[Review] | None = None,
+    outcomes: list[Outcome] | None = None,
     current: CurrentSource | None = None,
     k: int,
     min_similarity: float,
@@ -94,6 +96,7 @@ def recall(
         report,
         reviews or [],
         current,
+        outcomes or [],
         only={c.id for c in scoped},
         today=today,
         environment=environment,
