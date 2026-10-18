@@ -16,13 +16,16 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record the verification items for v1.1.0
 - Record the small-model plan experiment
 - Record the plan node-id fix and the re-run
+- Record the plan repair and the re-run
 
 ### Fixed
 - **plan:** Accept a file path as a module node id
 - **plan:** Let explain_file take a module node id
+- **plan:** Refuse unusable inputs and repair a refused draft once
 
 ### Maintenance
 - **cli:** Cover outcome on a node that is not a claim
+- **traces:** Declare the note input on the fake capability
 
 ## [1.0.1] - 2026-10-18
 
