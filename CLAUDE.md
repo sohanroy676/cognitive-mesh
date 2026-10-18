@@ -21,7 +21,7 @@ Read on demand: `memory-bank/progress.md`, `memory-bank/systemPatterns.md` (fill
 
 - Rules in `.claude/rules/` load automatically: security, commit style, testing, self-review, git workflow, session efficiency. They were ported from `.clinerules/`.
 - Slash commands in `.claude/commands/`: `/new-feature`, `/debug`, `/commit` (ported from `.clinerules/workflows/`).
-- `.claude/settings.json` denies reading secret/build files (ported from `.clineignore`) and prompts before `git push`, `reset --hard`, and `rebase`.
+- `.claude/settings.json` denies reading secret/build files (ported from `.clineignore`) and prompts before `reset --hard` and `rebase`. It no longer prompts before `git push` (removed by the user on 2026-10-18); the rule that the agent never pushes without explicit approval still applies.
 
 ## Key constraints (summary; details in rules and AGENTS.md)
 
