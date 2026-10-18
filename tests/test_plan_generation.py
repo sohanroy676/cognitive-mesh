@@ -446,3 +446,62 @@ def test_the_plan_command_with_a_missing_root_exits_3_before_any_model_call(
     code = main(["plan", "look", "--root", str(tmp_path / "nope")])
     assert code == 3
     capsys.readouterr()
+
+
+def _refused(reply: object) -> str:
+    client = SequenceClient([reply, reply])
+    with pytest.raises(PlanGenerationError) as info:
+        generate_plan("analyze deps", default_registry(), client)
+    return str(info.value)
+
+
+def test_an_extra_step_key_is_refused_with_the_allowed_keys_and_not_the_model_name() -> None:
+    reply = {"steps": [{"step_id": "a", "capability": "unresolved_report", CANARY: 1}]}
+    message = _refused(reply)
+    assert "step_id, capability, inputs, depends_on, input_refs" in message
+    assert CANARY not in message
+
+
+def test_a_wrong_field_type_is_refused_with_the_expected_types() -> None:
+    reply = {"steps": [{"step_id": 7, "capability": "unresolved_report"}]}
+    message = _refused(reply)
+    assert "model_type" in message or "string_type" in message
+    assert "inputs and input_refs are objects" in message
+
+
+def test_a_wrong_shape_reply_is_told_the_exact_shape() -> None:
+    message = _refused([{"step_id": "a", "capability": "unresolved_report"}])
+    assert '{"steps": [' in message
+
+
+def test_the_repair_round_passes_the_hint_as_data() -> None:
+    bad = {"steps": [{"step_id": "a", "capability": "unresolved_report", CANARY: 1}]}
+    client = SequenceClient([bad, GOOD])
+    generate_plan("analyze deps", default_registry(), client)
+    previous = json.loads(client.requests[1].prompt)["previous_rejection"]
+    assert "step_id, capability, inputs, depends_on, input_refs" in previous
+    assert CANARY not in previous
+
+
+def test_an_undeclared_output_field_is_refused_with_the_fields_the_step_has() -> None:
+    with pytest.raises(PlanGenerationError, match=r"its output fields: value"):
+        generate_plan("x", _refs_registry(), FakeClient(_refs_reply("nope")))
+
+
+def test_a_reference_to_a_step_missing_from_depends_on_gets_the_dependency_added() -> None:
+    reply = _refs_reply("value")
+    steps = reply["steps"]
+    assert isinstance(steps, list)
+    steps[1].pop("depends_on")
+    plan, _ = generate_plan("x", _refs_registry(), FakeClient(reply))
+    assert plan.steps[1].depends_on == ("a",)
+
+
+def test_a_reference_to_a_step_that_does_not_exist_is_still_refused() -> None:
+    reply = _refs_reply("value")
+    steps = reply["steps"]
+    assert isinstance(steps, list)
+    steps[1]["input_refs"]["text"]["step_id"] = "ghost"
+    steps[1].pop("depends_on")
+    with pytest.raises(PlanGenerationError):
+        generate_plan("x", _refs_registry(), FakeClient(reply))
