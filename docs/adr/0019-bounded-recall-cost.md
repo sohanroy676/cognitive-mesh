@@ -39,6 +39,19 @@ section, once v1.1.0 is merged) and open a v1.x implementation item with this de
 3. **Fallback.** A recall with no subject hit keeps the current behaviour (whole-graph), reported as such, so
    nothing relevant is silently dropped.
 
+## Amendment (v1.2.1, implemented 2026-10-18)
+- The claim node stores `subject` (the dependency-graph node id); graph format 3, older files refused. A load
+  refuses a claim whose `subject` differs from the name of its `subject` edge target.
+- `recall` follows the subjects of the claims its hits are evidence for. It checks sources and assesses only
+  those claims, the attempts that state them and the attempts `assess_claim` reads as contradiction candidates
+  (for `is_unresolved` claims, every `unresolved_report` attempt). `RecallResult` reports
+  `subjects_followed` and `claims_assessed`.
+- **Fallback changed:** when no hit reaches a claim, nothing can be reported either way, so recall assesses
+  no claim instead of scanning the whole graph. The result is identical to a whole-graph recall (that is what
+  the tests compare), so the reported whole-graph fallback in point 3 would only have added cost.
+- Not reduced: loading the graph file and building `ExperienceGraph` still grow with the whole graph, and
+  `experience claims`/`outcome`/`check` still use whole-graph checks.
+
 ## Alternatives considered
 - **Keep whole-graph recall and document the limit.** No risk to correctness, but a `task` over tens of thousands of
   runs stays at about 70 s and 2.9 GB. Acceptable for a prototype, not for the stated use.

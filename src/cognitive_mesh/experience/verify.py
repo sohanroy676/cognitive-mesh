@@ -5,6 +5,8 @@ function the vector index uses (`memory.documents.verify_source`); everything el
 the attempts it rests on. A claim is `ok` while at least one attempt that stated it still matches.
 """
 
+from collections.abc import Collection, Iterable
+
 from pydantic import BaseModel, ConfigDict
 
 from cognitive_mesh.experience.graph import ExperienceGraph
@@ -58,12 +60,13 @@ def _aggregate(statuses: list[SourceStatus]) -> SourceStatus:
     return SourceStatus.UNREADABLE  # nothing to rest on
 
 
-def check_sources(snapshot: Snapshot, store: TraceStore) -> SourceReport:
-    graph = ExperienceGraph(snapshot)
-    cache: dict[str, dict[str, MemoryDocument] | None] = {}
+def _check_attempts(
+    attempts: Iterable[ExpNode],
+    store: TraceStore,
+    cache: dict[str, dict[str, MemoryDocument] | None],
+) -> dict[str, SourceStatus]:
     statuses: dict[str, SourceStatus] = {}
-
-    for node in graph.nodes(NodeKind.ATTEMPT):
+    for node in attempts:
         ref = node.ref
         if ref is None or ref.step_id is None or ref.attempt_no is None or ref.text_sha256 is None:
             statuses[node.id] = SourceStatus.UNREADABLE
@@ -72,6 +75,24 @@ def check_sources(snapshot: Snapshot, store: TraceStore) -> SourceReport:
             store, cache, ref.run_id, ref.step_id, ref.attempt_no, ref.text_sha256
         )
         statuses[node.id] = SourceStatus(check.value)
+    return statuses
+
+
+def check_attempts(
+    graph: ExperienceGraph, store: TraceStore, attempt_ids: Collection[str]
+) -> dict[str, SourceStatus]:
+    """Source status of just these attempts (ADR-0019): same check as `check_sources`, scoped.
+
+    Ids that are not attempt nodes of the graph are ignored.
+    """
+    wanted = [graph.node(i) for i in sorted(attempt_ids) if graph.has_node(i)]
+    return _check_attempts((n for n in wanted if n.kind is NodeKind.ATTEMPT), store, {})
+
+
+def check_sources(snapshot: Snapshot, store: TraceStore) -> SourceReport:
+    graph = ExperienceGraph(snapshot)
+    cache: dict[str, dict[str, MemoryDocument] | None] = {}
+    statuses = _check_attempts(graph.nodes(NodeKind.ATTEMPT), store, cache)
 
     for node in graph.nodes(NodeKind.RUN):
         statuses[node.id] = _run_status(store, cache, node)

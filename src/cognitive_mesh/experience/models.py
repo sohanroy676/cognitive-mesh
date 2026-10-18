@@ -12,7 +12,7 @@ from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-FORMAT_VERSION: Final = 2
+FORMAT_VERSION: Final = 3
 CLAIM_NOTE: Final = "claims are unvalidated: repeated observation is not proof of truth"
 REPETITION_NOTE: Final = "repeated observation is counted, never treated as proof of truth"
 
@@ -91,6 +91,10 @@ class ExpNode(_Frozen):
     predicate: Literal["depends_on", "is_unresolved"] | None = None
     detail: str | None = None  # depends_on: the kind of the dependency edge
     validation: Literal["unvalidated"] | None = None
+    # Claims only (ADR-0019): the dependency-graph node id the claim is about, kept so recall can
+    # find the claims of a subject without scanning the graph. Must equal the name of the
+    # claim's `subject` target; a file where they differ is refused.
+    subject: str | None = None
     # Attempts of deterministic listing capabilities only: was the listing cut off (ADR-0016)?
     coverage: Literal["complete", "truncated"] | None = None
 
