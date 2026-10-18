@@ -7,7 +7,7 @@
 
 ## Done
 
-- Plan drafting, step A (`fix/plan-draft-repair`, local only, not merged). Fixed hint text on the repair round (allowed keys and types, exact shape, the referenced step's output fields), a drafted reference to a step also adds it to `depends_on`, and a validated example plan in the prompt (`EXAMPLE_REPLY`, checked by a test). Full suite: 1122 passed, 7 skipped.
+- Plan drafting, step A (`fix/plan-draft-repair`, merged as `2330139`). Fixed hint text on the repair round (allowed keys and types, exact shape, the referenced step's output fields), a drafted reference to a step also adds it to `depends_on`, and a validated example plan in the prompt (`EXAMPLE_REPLY`, checked by a test). Full suite: 1122 passed, 7 skipped.
   - `llama3.2`, request "Explain what the cart module depends on and why", `plan --root tests/fixtures/e2e_app`, each accepted plan then run with `run --root`:
     - Before any change, 10 drafts in two batches: 5 passed validation, all 5 ran. Rejections: undeclared output field, wrong shape, `model_type`, `extra_forbidden` x2.
     - After the hints and `depends_on` completion, 5 drafts: 2 passed, 1 ran (`limit` int_type failure on the other).
@@ -15,7 +15,7 @@
   - Indicative only: one request, 5 drafts per condition, so the hints alone showed no effect and the example's effect could be noise. Re-measure with a second request before relying on it.
 
 
-- v1.2.0 implemented 2026-10-18 on `feature/v1.2.0-corroboration` (ADR-0020 accepted by the user; local only, not merged or pushed). `experience/assess.py` gains `corroborate` (pure): method classes `analyzer`/`person`/`check`, per code version, categories `none|single|corroborated|contradicted` with a reason sentence; `ClaimAssessment` has `corroboration`, `corroboration_reason`, `sources`, `repeats`, `contradicted_by`, `no_lineage`, `versions_supported`, `by_version`; `experience claims` and the context pack show it; graph format unchanged. Tests: `tests/test_corroboration.py` (14) plus one pack test; full suite 1129 passed, 7 skipped; ruff, format, mypy clean.
+- v1.2.0 implemented 2026-10-18 on `feature/v1.2.0-corroboration` (ADR-0020 accepted by the user), merged to local `main` as `7dd54ce` with `fix/plan-draft-repair` (`2330139`); merged suite 1137 passed, 7 skipped. `experience/assess.py` gains `corroborate` (pure): method classes `analyzer`/`person`/`check`, per code version, categories `none|single|corroborated|contradicted` with a reason sentence; `ClaimAssessment` has `corroboration`, `corroboration_reason`, `sources`, `repeats`, `contradicted_by`, `no_lineage`, `versions_supported`, `by_version`; `experience claims` and the context pack show it; graph format unchanged. Tests: `tests/test_corroboration.py` (14) plus one pack test; full suite 1129 passed, 7 skipped; ruff, format, mypy clean.
   - Hand check (scratch dir, `dep_app`, `run ok.json --trace-db T` twice, `experience build`, `experience claims --root app`): each unresolved claim "1 independent source(s), 2 dependent repeat(s), single", sources `run:...`, `run:...`, `rederivation`. After appending a line to `b.py`, a third run and a rebuild without `--root`: "single (3 still confirmed, 2 code version(s))", status `supported`.
   - Not run: `corroborated` in the real CLI with a real review or outcome (covered by tests only), `task` with a real model.
   - Design change from the first plan: independence is by method class, not by fingerprint (the analyzer is deterministic, so a new commit must not raise confidence).
