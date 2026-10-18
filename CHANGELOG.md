@@ -5,11 +5,18 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **plan:** Show a valid example plan in the draft prompt
+
 ### Documentation
 - Record the v1.1.0 release and its CI
 - **adr:** Propose bounded recall cost (ADR-0019)
 - **adr:** Accept ADR-0019
 - Record CI runs for the v1.0.1 release
+- **progress:** Record plan drafting step A
+
+### Fixed
+- **plan:** Name the refusal and complete depends_on in drafts
 
 ## [1.1.0] - 2026-10-18
 

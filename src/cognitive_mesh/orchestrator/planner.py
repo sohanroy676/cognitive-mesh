@@ -120,7 +120,7 @@ def _check_refs(step: PlanStep, by_id: dict[str, PlanStep], registry: AgentRegis
         if fields is not None and ref.field not in fields:
             raise PlanError(
                 f"{where} references field {ref.field!r}, which step {ref.step_id!r} "
-                "does not declare in its output"
+                f"does not declare in its output; its output fields: {', '.join(sorted(fields))}"
             )
 
 
