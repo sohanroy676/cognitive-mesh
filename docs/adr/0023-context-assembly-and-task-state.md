@@ -1,7 +1,7 @@
 # ADR-0023: Context assembly profiles, conflict-safe selection and declared task state
 
 ## Status
-Proposed (design choices confirmed by the user 2026-10-18: profile per task, trace schema bump acceptable, the limit counts items; text awaits review and acceptance before any code)
+Accepted (design choices confirmed by the user 2026-10-18: profile per task, trace schema bump acceptable, the limit counts items; text reviewed and accepted by the user 2026-10-18, before any code was written)
 
 ## Date
 2026-10-18
