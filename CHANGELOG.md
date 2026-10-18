@@ -14,6 +14,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Propose ADR-0023 context assembly and task state
 - **adr:** Accept ADR-0023
 - Record v1.4.0 implementation and amend ADR-0023
+- Record v1.4.0 merge and CI run
 
 ## [1.3.0] - 2026-10-18
 
