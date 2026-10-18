@@ -48,6 +48,12 @@
   - `fix/groq-status-in-error`: a rejected provider call reached the run as `provider_error (other)` with no status. `ProviderError` now carries the HTTP status as an int, and the agent failure message shows it (`the model provider failed (other, HTTP 413)`). Tests: `test_providers_errors.py`, `test_agent_code_explainer.py`. Full suite: 1056 passed, 7 skipped. The 7 skips are 3 environment checks (symlinks, control characters in file names) plus the 4 live tests; the 1057/5 count in the v1.0.0 notes was from a different machine.
   - `docs/adr-0018-outcome-validation`: ADR-0018 (Proposed) for v1.1.0. Outcome evidence, append-only events and revisions, conflict rule, refused promotion. No v1.1.0 code until the user accepts it.
   - Still open from the verification list: graph-cost ADR, concurrency repeats, plan quality with `llama3.2`. Not started.
+=======
+- CI record for the v1.0.1 release (branch `docs/record-ci-v1.0.1`, 2026-10-18). Runs on `main` and tags, all from the GitHub Actions `CI` workflow:
+  - Handoff merge `94c42f5`, run 39080315003: passed.
+  - Release merge `b785293`, run 39085788748: passed. The first run, 39081067182, failed on the untagged changelog section: git-cliff dated it with the UTC date at CI time, which was after midnight UTC, while the committed file said 2026-10-17. Fixed on `fix/changelog-release-date`.
+  - Tag `v1.0.1`, run 39085935196: passed on rerun. The first attempt failed at the Secret scan step with a GitHub API rate limit on the runner, not a leak.
+  - Takeaway: the UTC-date pitfall is recorded in `activeContext.md`; a release section needs tagging soon after the merge, or the date checked against `date -u +%F`.
 
 - v1.0.0 verification pass (branches `chore/verify-v1.0.0` for docs and the identity test, `fix/trace-store-create-race` for the fixes) — 2026-10-18. Nothing here was merged, pushed or tagged. Results, including failures:
   - (e) Fresh clone of GitHub main `c362e99`: `uv sync --locked` 17 s, 1030 passed 5 skipped (140 s), ruff/format/mypy clean, e2e_app walkthrough with the real MiniLM matched the recorded results (cart->pricing `stale`, cart->tax `validated`, 6 documents indexed).
