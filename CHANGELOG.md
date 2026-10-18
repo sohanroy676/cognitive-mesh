@@ -13,6 +13,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Propose bounded recall cost (ADR-0019)
 - **adr:** Accept ADR-0019
 - Record CI runs for the v1.0.1 release
+- **progress:** Record plan drafting step A
 
 ### Fixed
 - **plan:** Name the refusal and complete depends_on in drafts
