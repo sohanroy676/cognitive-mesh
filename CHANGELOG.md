@@ -7,6 +7,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - **adr:** Propose outcome validation (ADR-0018)
+- Record the session state for v1.1.0 planning
 
 ## [1.0.1] - 2026-10-18
 
