@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from cognitive_mesh.agents import AgentContext
 from cognitive_mesh.agents.context import (
-    MAX_CLAIMS,
+    MAX_CLAIMS_HARD,
     NO_PRIOR_CONTEXT,
     PACK_HEADER,
     RAW_LABEL,
@@ -65,7 +65,7 @@ def test_a_pack_with_content_is_not_empty() -> None:
 
 
 def test_size_is_bounded() -> None:
-    claims = tuple(_claim(i) for i in range(MAX_CLAIMS + 1))
+    claims = tuple(_claim(i) for i in range(MAX_CLAIMS_HARD + 1))
     with pytest.raises(ValidationError):
         RecalledContext(claims=claims, empty=False)
 

@@ -14,11 +14,14 @@ from pydantic import BaseModel, ConfigDict
 
 from cognitive_mesh.agents.context import (
     MAX_CLAIMS,
+    MAX_DROPPED_LISTED,
     MAX_RAW,
     MAX_REFS_PER_CLAIM,
     NO_PRIOR_CONTEXT,
     ClaimItem,
+    ContextProfile,
     ContradictingRun,
+    DroppedItem,
     RawItem,
     RecalledContext,
     SourceRun,
@@ -63,6 +66,48 @@ _WITHHELD_BY_VALIDITY = {
     ClaimStatus.ENVIRONMENT_CHANGED.value: REASON_ENVIRONMENT_CHANGED,
 }
 REASON_OTHER_APPLICATION_RAW = "the run analysed a different application id"
+
+
+# ADR-0023: the written selection order. Lower sorts first; conflicts are never cut for size.
+CONFLICT_STATUSES = frozenset({ClaimStatus.CONFLICTING.value, ClaimStatus.CONTESTED.value})
+_STATUS_GROUP = {
+    **{s: 0 for s in CONFLICT_STATUSES},
+    **{
+        s.value: 1
+        for s in (
+            ClaimStatus.STALE,
+            ClaimStatus.EXPIRED,
+            ClaimStatus.ENVIRONMENT_CHANGED,
+            ClaimStatus.ENVIRONMENT_UNVERIFIED,
+            ClaimStatus.UNKNOWN,
+        )
+    },
+    ClaimStatus.VALIDATED.value: 2,
+    ClaimStatus.SUPPORTED.value: 3,
+    ClaimStatus.UNSUPPORTED.value: 4,
+}
+_CORROBORATION_RANK = {"corroborated": 0, "contradicted": 1, "single": 2, "none": 3}
+
+
+def claim_order_key(item: ClaimItem) -> tuple[int, int, float, str]:
+    """Status group, then corroboration, then best similarity (descending), then claim id."""
+    return (
+        _STATUS_GROUP.get(item.status, len(_STATUS_GROUP)),
+        _CORROBORATION_RANK.get(item.corroboration, len(_CORROBORATION_RANK)),
+        -item.best_similarity,
+        item.claim_id,
+    )
+
+
+def select_claims(
+    claims: list[ClaimItem],
+) -> tuple[list[ClaimItem], list[ClaimItem], int, bool]:
+    """(kept, dropped, conflicts kept, conflicts alone over the limit). Pure and deterministic."""
+    ordered = sorted(claims, key=claim_order_key)
+    conflicts = [c for c in ordered if c.status in CONFLICT_STATUSES]
+    others = [c for c in ordered if c.status not in CONFLICT_STATUSES]
+    room = max(0, MAX_CLAIMS - len(conflicts))
+    return conflicts + others[:room], others[room:], len(conflicts), len(conflicts) > MAX_CLAIMS
 
 
 def root_name(path: str) -> str:
@@ -122,11 +167,14 @@ def build_context(
     store: TraceStore,
     current_root: str,
     identity: AppIdentity | None = None,
+    profile: ContextProfile = "precision",
 ) -> GatedContext:
     """The gated pack for one task. `current_root` is the directory the task will run against.
 
     With an application id (ADR-0021), items recorded under another id are held back; items recorded
     without one keep the older gate and are labelled `unrecorded`. The id is a label, not proof.
+    The `recall` profile (ADR-0023) also offers raw traces of id-less runs from a directory with
+    another name, labelled `unrecorded`; every other gate is the same in both profiles.
     """
     here = root_name(current_root)
     unconfirmed = len(result.unconfirmed)
@@ -198,7 +246,9 @@ def build_context(
                 )
                 continue
             matched = "matched"
-        elif source_root is None or root_name(source_root) != here:
+        elif (source_root is None or root_name(source_root) != here) and (
+            profile == "precision" or trace.app_id is not None
+        ):
             held_back.append(
                 NotApplicable(
                     kind="raw",
@@ -221,8 +271,16 @@ def build_context(
             )
         )
 
-    over_limit = max(0, len(claims) - MAX_CLAIMS) + max(0, len(raw) - MAX_RAW)
-    claims, raw = claims[:MAX_CLAIMS], raw[:MAX_RAW]
+    claims, dropped_claims, conflicts_kept, conflicts_over = select_claims(claims)
+    raw.sort(key=lambda r: (-r.similarity, r.run_id, r.step_id, r.attempt_no))
+    raw, dropped_raw = raw[:MAX_RAW], raw[MAX_RAW:]
+    dropped = tuple(
+        [DroppedItem(kind="claim", item_id=c.claim_id, status=c.status) for c in dropped_claims]
+        + [
+            DroppedItem(kind="raw", item_id=f"{r.run_id}/{r.step_id}/{r.attempt_no}")
+            for r in dropped_raw
+        ]
+    )
     empty = not claims and not raw
     pack = RecalledContext(
         message=NO_PRIOR_CONTEXT if empty else "",
@@ -230,10 +288,16 @@ def build_context(
         current_fingerprint=result.current_fingerprint,
         k=result.k,
         min_similarity=result.min_similarity,
+        profile=profile,
+        conflicts_kept=conflicts_kept,
+        conflicts_over_limit=conflicts_over,
         claims=tuple(claims),
         raw=tuple(raw),
         withheld=Withheld(
-            unconfirmed=unconfirmed, not_applicable=len(held_back), over_limit=over_limit
+            unconfirmed=unconfirmed,
+            not_applicable=len(held_back),
+            over_limit=len(dropped),
+            dropped=dropped[:MAX_DROPPED_LISTED],
         ),
         empty=empty,
     )

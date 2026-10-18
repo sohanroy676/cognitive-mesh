@@ -1,7 +1,7 @@
 # ADR-0023: Context assembly profiles, conflict-safe selection and declared task state
 
 ## Status
-Proposed (design choices confirmed by the user 2026-10-18: profile per task, trace schema bump acceptable, the limit counts items; text awaits review and acceptance before any code)
+Accepted (design choices confirmed by the user 2026-10-18: profile per task, trace schema bump acceptable, the limit counts items; text reviewed and accepted by the user 2026-10-18, before any code was written)
 
 ## Date
 2026-10-18
@@ -51,10 +51,15 @@ agents import nothing from `experience`.
   supplied it. A reference to a step that failed, was blocked or never ran, or to a field that is absent,
   fails the step with a fixed message; state is never defaulted. Nothing persists beyond the run; there is no
   long-lived agent, and a task with no `state` behaves exactly as before.
-- **Trace schema 3 -> 4** (a `MIGRATIONS` entry; additive): `run_context` gains the profile, the number of
-  conflicts kept, `conflicts_over_limit` and the dropped ids; `step` input-source records gain the fields used
-  (already recorded for `input_refs`, extended to whole-output refs). Old runs read as profile `precision`,
-  no drops recorded, not back-filled. `traces show` and `task` print profile and drops.
+- **Trace schema 3 -> 4** (a `MIGRATIONS` entry; additive): `run_context` gains a `profile` column, written
+  with the pack and cross-checked against the stored pack on read (a mismatch is a malformed record). The
+  pack JSON itself carries the profile, the number of conflicts kept, `conflicts_over_limit` and the dropped
+  ids, so older rows (column NULL, fields absent) read as profile `precision` with no drops recorded, not
+  back-filled. `task` prints the profile and each dropped id. Amendment at implementation time: step
+  `input_sources` are not persisted by the trace store (ADR-0010 amendment, unchanged), so the state
+  sources a step used appear in `run --json` / `task --json` output (`input_sources`, with `state`, step,
+  fields and basis) but not in the trace database; persisting them would be a further schema change and is
+  not done here.
 - **Not done:** token counting, summarising, embedding-based redundancy removal, automatic profile choice,
   state shared across runs (that is memory and has its own rules), a per-step profile.
 

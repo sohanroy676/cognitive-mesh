@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, computed_field
 
@@ -10,6 +11,7 @@ from cognitive_mesh.agents import AgentResult, Basis, ModelInfo
 MAX_STEPS = 100
 MAX_ATTEMPTS_CAP = 5
 MAX_AGENTS_PER_STEP = 3  # the first agent plus at most two fallbacks
+MAX_STATE_ENTRIES = 50
 
 _ID = r"^[A-Za-z0-9_-]{1,48}$"
 
@@ -51,14 +53,28 @@ class InputRef(_Frozen):
     field: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 
 
+class StateEntry(_Frozen):
+    """Declared task state (ADR-0023): named output fields of one step, or all of them (`*`)."""
+
+    step_id: str = Field(pattern=_ID)
+    fields: tuple[str, ...] | Literal["*"] = "*"
+
+
+class StateRef(_Frozen):
+    """An input taken from a declared state entry; the entry's step must be in `depends_on`."""
+
+    state: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+
+
 class InputSource(_Frozen):
     """Where a resolved input came from, including how trustworthy the producing result was."""
 
     input: str
     step_id: str
-    field: str
+    field: str  # for a state reference: the fields joined by ",", or "*"
     basis: Basis
     model: ModelInfo | None = None
+    state: str | None = None  # the declared state entry this input came from, if any
 
 
 class PlanStep(_Frozen):
@@ -67,7 +83,7 @@ class PlanStep(_Frozen):
     inputs: dict[str, JsonValue] = Field(default_factory=dict)  # literal; untrusted
     # Inputs filled at run time from an earlier step's output; disjoint from `inputs`, and the
     # referenced step must also be in `depends_on`.
-    input_refs: dict[str, InputRef] = Field(default_factory=dict)
+    input_refs: dict[str, InputRef | StateRef] = Field(default_factory=dict)
     depends_on: tuple[str, ...] = ()
     max_attempts: int | None = Field(default=None, ge=1, le=MAX_ATTEMPTS_CAP)
 
@@ -75,6 +91,7 @@ class PlanStep(_Frozen):
 class TaskPlan(_Frozen):
     task_id: str = Field(pattern=_ID)
     steps: tuple[PlanStep, ...]
+    state: dict[str, StateEntry] = Field(default_factory=dict)  # ADR-0023; empty = as before
 
 
 class RetryPolicy(_Frozen):

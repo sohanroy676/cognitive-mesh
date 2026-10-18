@@ -20,6 +20,12 @@ NO_PRIOR_CONTEXT: Final = "no prior context"
 MAX_CLAIMS: Final = 50
 MAX_RAW: Final = 50
 MAX_REFS_PER_CLAIM: Final = 20  # supporting or contradicting records listed per claim
+# ADR-0023: conflicts are exempt from MAX_CLAIMS, so the pack type allows more; recall returns at
+# most 20 hits, so this bound is a safety net, not a target.
+MAX_CLAIMS_HARD: Final = 1000
+MAX_DROPPED_LISTED: Final = 100  # dropped items listed by id; `over_limit` stays the full count
+
+ContextProfile = Literal["precision", "recall"]
 
 
 class _Frozen(BaseModel):
@@ -80,12 +86,21 @@ class RawItem(_Frozen):
     label: str = RAW_LABEL
 
 
+class DroppedItem(_Frozen):
+    """An item that passed the gates but did not fit the size limit (ADR-0023). Ids only."""
+
+    kind: Literal["claim", "raw"]
+    item_id: str  # a claim id, or run/step/attempt for a raw item
+    status: str | None = None  # a claim's status; None for raw items
+
+
 class Withheld(_Frozen):
     """Hits that were found but not passed on. Counted so the omission is visible."""
 
     unconfirmed: int = 0  # source missing, changed, unreadable or not in the graph
     not_applicable: int = 0  # failed the relevance gate for the current application
     over_limit: int = 0  # passed the gate but did not fit the size bound of the pack
+    dropped: tuple[DroppedItem, ...] = ()  # the first MAX_DROPPED_LISTED of those, by id
 
 
 class RecalledContext(_Frozen):
@@ -95,7 +110,12 @@ class RecalledContext(_Frozen):
     current_fingerprint: str | None = None
     k: int = 0
     min_similarity: float = 0.0
-    claims: tuple[ClaimItem, ...] = Field(default=(), max_length=MAX_CLAIMS)
+    profile: ContextProfile = "precision"  # chosen by the person per task (ADR-0023)
+    # Conflicting and contested claims are never cut for size;
+    # True when they alone exceed MAX_CLAIMS.
+    conflicts_kept: int = 0
+    conflicts_over_limit: bool = False
+    claims: tuple[ClaimItem, ...] = Field(default=(), max_length=MAX_CLAIMS_HARD)
     raw: tuple[RawItem, ...] = Field(default=(), max_length=MAX_RAW)
     withheld: Withheld = Withheld()
     empty: bool = True

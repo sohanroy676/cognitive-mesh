@@ -15,6 +15,7 @@ from cognitive_mesh.cli import (
     main,
 )
 from cognitive_mesh.orchestrator import (
+    InputRef,
     PlanGenerationError,
     TaskPlan,
     generate_plan,
@@ -304,7 +305,9 @@ def _refs_reply(field: str) -> dict[str, object]:
 
 def test_a_drafted_plan_may_use_input_references() -> None:
     plan, _ = generate_plan("x", _refs_registry(), FakeClient(_refs_reply("value")))
-    assert plan.steps[1].input_refs["text"].field == "value"
+    ref = plan.steps[1].input_refs["text"]
+    assert isinstance(ref, InputRef)
+    assert ref.field == "value"
 
 
 def test_a_drafted_reference_to_a_field_that_does_not_exist_is_rejected() -> None:
