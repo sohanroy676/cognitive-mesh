@@ -7,6 +7,10 @@
 
 ## Done
 
+- v1.1.0 released 2026-10-18: outcome validation (ADR-0018) and the plan drafting fixes, merged to `main` (fast-forward, `fe9721e`) and pushed. CI on `main` passed (run 39109293292). Tag `v1.1.0` is annotated on `fe9721e` and pushed. Its first tag run (39109510574) failed at the Secret scan with a GitHub API rate limit on the runner (the gitleaks action could not look up a user, then reported a missing license), not a leak; `gh run rerun --failed` passed.
+  - Full suite at the release code: 1114 passed, 7 skipped.
+  - Open, for the next session: ADR-0019 (accepted) is on local branch `docs/adr-0019-recall-cost` and not pushed; CI record for v1.0.1 is on local branch `docs/record-ci-v1.0.1`; `llama3.2` plan drafts still show wrong-shape replies and invalid step references; application identity (v1.3.0).
+
 - Plan gaps, round 2 (`fix/plan-node-id-format`, local only). (a) A drafted plan with repeated work (same capability, inputs, depends_on) is refused; hand-written plans are not checked, because orchestrator tests repeat no-input steps on purpose. (b) `plan --root DIR` (optional) shows the model the application's file list as data and refuses an explain_file path outside it, with one repair round. Without `--root`, nothing changes. Full suite: 1114 passed, 7 skipped.
   - `llama3.2`, same request, 5 drafts with `--root` on the sample app: 3 of 5 passed validation (2 rejected: a reply with a wrong shape, and an input reference to a step it does not depend on); the 3 accepted plans all ran to success (2, 3 and 2 attempts). Indicative only: 5 drafts, one request.
   - Not fixed: the wrong-shape reply and the self-dependency reference still cost a draft each (the repair round does not always recover them).
