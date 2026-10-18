@@ -13,8 +13,9 @@ from typing import Final, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from cognitive_mesh.identity import IdentityHow
+from cognitive_mesh.validity import Environment, EnvScope
 
-FORMAT_VERSION: Final = 4
+FORMAT_VERSION: Final = 5
 CLAIM_NOTE: Final = "claims are unvalidated: repeated observation is not proof of truth"
 REPETITION_NOTE: Final = "repeated observation is counted, never treated as proof of truth"
 
@@ -104,6 +105,11 @@ class ExpNode(_Frozen):
     # would otherwise depend on which run came first.
     app_id: str | None = None
     app_id_how: IdentityHow | None = None
+    # ADR-0022. Claims: what the claim is valid for (None = unscoped; `build` always sets it).
+    # Run nodes: the environment the analysis ran in. Claims of scope `environment` also carry
+    # the environment they are valid for; none is produced yet.
+    scope: EnvScope | None = None
+    environment: Environment | None = None
 
 
 class ExpEdge(_Frozen):

@@ -8,6 +8,7 @@ so a damaged memory is never mistaken for an empty one.
 import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
@@ -21,6 +22,7 @@ from cognitive_mesh.identity import AppIdentity
 from cognitive_mesh.ingestion import IngestionResult
 from cognitive_mesh.retrieval import GatedContext, RecallResult, build_context, recall
 from cognitive_mesh.traces import TraceStore, source_fingerprint
+from cognitive_mesh.validity import current_environment
 
 if TYPE_CHECKING:
     from cognitive_mesh.memory import Embedder
@@ -59,6 +61,7 @@ def prepare_context(
     k: int,
     min_similarity: float,
     identity: AppIdentity | None = None,
+    today: date | None = None,
 ) -> PreparedContext:
     fingerprint = source_fingerprint(ingestion)
     missing = tuple(
@@ -98,6 +101,8 @@ def prepare_context(
         current=current,
         k=k,
         min_similarity=min_similarity,
+        today=today,
+        environment=current_environment(),
     )
     gated = build_context(
         request, found, ExperienceGraph(loaded.snapshot), graph, store, ingestion.root, identity

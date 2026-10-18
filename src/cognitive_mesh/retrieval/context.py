@@ -24,7 +24,7 @@ from cognitive_mesh.agents.context import (
     SourceRun,
     Withheld,
 )
-from cognitive_mesh.experience.assess import claim_parts
+from cognitive_mesh.experience.assess import ClaimStatus, claim_parts
 from cognitive_mesh.experience.graph import ExperienceGraph
 from cognitive_mesh.graph import DependencyGraph, GraphError
 from cognitive_mesh.identity import AppIdentity
@@ -56,6 +56,12 @@ REASON_SUBJECT = "the claim's subject is not in the current application"
 REASON_OTHER_DIRECTORY = "the run analysed a directory with a different name"
 REASON_NO_DIRECTORY = "the run recorded no directory"
 REASON_OTHER_APPLICATION = "the claim comes from a different application id"
+REASON_EXPIRED = "the claim's valid_until date has passed"
+REASON_ENVIRONMENT_CHANGED = "the claim is valid for a different environment"
+_WITHHELD_BY_VALIDITY = {
+    ClaimStatus.EXPIRED.value: REASON_EXPIRED,
+    ClaimStatus.ENVIRONMENT_CHANGED.value: REASON_ENVIRONMENT_CHANGED,
+}
 REASON_OTHER_APPLICATION_RAW = "the run analysed a different application id"
 
 
@@ -135,6 +141,17 @@ def build_context(
                     kind="claim",
                     label=recalled.assessment.name,
                     reason=REASON_OTHER_APPLICATION,
+                    similarity=max((v.similarity for v in recalled.retrieved_via), default=0.0),
+                )
+            )
+            continue
+        withheld_for = _WITHHELD_BY_VALIDITY.get(recalled.assessment.status.value)
+        if withheld_for is not None:
+            held_back.append(
+                NotApplicable(
+                    kind="claim",
+                    label=recalled.assessment.name,
+                    reason=withheld_for,
                     similarity=max((v.similarity for v in recalled.retrieved_via), default=0.0),
                 )
             )

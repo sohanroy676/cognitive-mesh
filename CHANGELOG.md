@@ -7,11 +7,15 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Added
 - **identity:** Record an application id per run
+- **validity:** Add scope, environment comparison and expiry rules
+- **validity:** Add valid_until to reviews and outcomes
+- **validity:** Scope, environment and expiry in claim assessment
 
 ### Documentation
 - Record application identity work (v1.3.0 part 1)
 - **adr:** Propose ADR-0022 environment and validity
 - **adr:** Accept ADR-0022
+- Record v1.3.0 environment and validity work
 
 ## [1.2.1] - 2026-10-18
 

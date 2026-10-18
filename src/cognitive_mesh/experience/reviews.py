@@ -9,7 +9,7 @@ because validated knowledge must not sit next to raw traces.
 import contextlib
 import re
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from pathlib import Path
 from types import TracebackType
@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from cognitive_mesh.ingestion.secrets import redact_secrets
 
-SCHEMA_VERSION: Final = 1
+SCHEMA_VERSION: Final = 2  # 2 (ADR-0022): the nullable `valid_until` column
 APPLICATION_ID: Final = 0x434D4552  # "CMER": tells a reviews file from any other SQLite file
 MAX_NOTE_CHARS: Final = 1000
 MAX_REVIEWER_CHARS: Final = 100
@@ -36,7 +36,8 @@ CREATE TABLE reviews (
     verdict TEXT NOT NULL CHECK (verdict IN ('confirmed', 'rejected')),
     note TEXT NOT NULL,
     reviewer TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    valid_until TEXT
 );
 CREATE INDEX reviews_by_claim ON reviews (claim_id);
 CREATE TRIGGER reviews_no_update BEFORE UPDATE ON reviews
@@ -45,6 +46,15 @@ CREATE TRIGGER reviews_no_delete BEFORE DELETE ON reviews
 BEGIN SELECT RAISE(ABORT, 'reviews are append-only'); END;
 PRAGMA user_version = {SCHEMA_VERSION};
 """
+
+# A version-1 file read without upgrading has no `valid_until` column: no review expires.
+_SELECT_V1 = (
+    "SELECT id, claim_id, fingerprint, verdict, note, reviewer, created_at, NULL FROM reviews"
+)
+_SELECT_V2 = (
+    "SELECT id, claim_id, fingerprint, verdict, note, reviewer, created_at, valid_until"
+    " FROM reviews"
+)
 
 
 class ReviewStoreError(Exception):
@@ -68,6 +78,7 @@ class Review(BaseModel):
     note: str
     reviewer: str
     created_at: datetime
+    valid_until: date | None = None  # ADR-0022: set only by the reviewer
 
 
 def _clean(text: str, limit: int, what: str) -> str:
@@ -92,6 +103,23 @@ def _is_fresh(conn: sqlite3.Connection) -> bool:
         _pragma_int(conn, "application_id") == 0
         and not conn.execute("SELECT count(*) FROM sqlite_master").fetchone()[0]
     )
+
+
+def _upgrade(conn: sqlite3.Connection) -> None:
+    """Version 1 -> 2 in one transaction; the version is re-read under the lock, so a process
+    that lost the race to upgrade does nothing."""
+    if _pragma_int(conn, "user_version") == SCHEMA_VERSION:
+        return
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        if _pragma_int(conn, "user_version") == 1:
+            conn.execute("ALTER TABLE reviews ADD COLUMN valid_until TEXT")
+            conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        conn.execute("COMMIT")
+    except sqlite3.Error:
+        with contextlib.suppress(sqlite3.Error):
+            conn.execute("ROLLBACK")
+        raise
 
 
 def _create_schema(conn: sqlite3.Connection) -> None:
@@ -129,6 +157,7 @@ class ReviewStore:
                 _create_schema(conn)
             else:
                 cls._check_header(conn)
+                _upgrade(conn)
         except sqlite3.Error:
             conn.close()
             raise ReviewStoreError("cannot open the reviews file (sqlite error)") from None
@@ -162,7 +191,7 @@ class ReviewStore:
             raise ReviewStoreError(
                 f"the reviews file has version {version}, newer than this program supports"
             )
-        if version != SCHEMA_VERSION:
+        if version not in (1, SCHEMA_VERSION):
             raise ReviewStoreError(f"unsupported reviews file version ({version})")
 
     def close(self) -> None:
@@ -188,6 +217,7 @@ class ReviewStore:
         reviewer: str,
         *,
         now: datetime | None = None,
+        valid_until: date | None = None,
     ) -> Review:
         if not self._writable:
             raise ReviewStoreError("the reviews file was opened read-only")
@@ -198,12 +228,14 @@ class ReviewStore:
         clean_note = _clean(note, MAX_NOTE_CHARS, "note")
         clean_by = _clean(reviewer, MAX_REVIEWER_CHARS, "reviewer")
         stamp = (now or datetime.now(UTC)).astimezone(UTC)
+        if valid_until is not None and valid_until < stamp.date():
+            raise ReviewStoreError("valid_until is before today")
         try:
             self._conn.execute("BEGIN IMMEDIATE")
             try:
                 cur = self._conn.execute(
                     "INSERT INTO reviews (claim_id, fingerprint, verdict, note, reviewer,"
-                    " created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    " created_at, valid_until) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         claim_id,
                         fingerprint,
@@ -211,6 +243,7 @@ class ReviewStore:
                         clean_note,
                         clean_by,
                         stamp.isoformat(),
+                        valid_until.isoformat() if valid_until else None,
                     ),
                 )
                 self._conn.execute("COMMIT")
@@ -228,21 +261,19 @@ class ReviewStore:
             note=clean_note,
             reviewer=clean_by,
             created_at=stamp,
+            valid_until=valid_until,
         )
 
     def list_reviews(self, claim_id: str | None = None) -> list[Review]:
         """Oldest first. A malformed row is an error, never skipped."""
         try:
+            # a version-1 file read without upgrading has no such column: no review expires
+            columns = _SELECT_V2 if _pragma_int(self._conn, "user_version") >= 2 else _SELECT_V1
             if claim_id is None:
-                rows = self._conn.execute(
-                    "SELECT id, claim_id, fingerprint, verdict, note, reviewer, created_at"
-                    " FROM reviews ORDER BY id"
-                ).fetchall()
+                rows = self._conn.execute(f"{columns} ORDER BY id").fetchall()
             else:
                 rows = self._conn.execute(
-                    "SELECT id, claim_id, fingerprint, verdict, note, reviewer, created_at"
-                    " FROM reviews WHERE claim_id = ? ORDER BY id",
-                    (claim_id,),
+                    f"{columns} WHERE claim_id = ? ORDER BY id", (claim_id,)
                 ).fetchall()
         except sqlite3.Error:
             raise ReviewStoreError("cannot read the reviews (sqlite error)") from None
@@ -256,6 +287,7 @@ class ReviewStore:
                     note=r[4],
                     reviewer=r[5],
                     created_at=datetime.fromisoformat(r[6]),
+                    valid_until=date.fromisoformat(r[7]) if r[7] else None,
                 )
                 for r in rows
             ]
