@@ -150,3 +150,10 @@ def test_held_back_hits_are_listed_for_the_person_but_not_for_the_agents(tmp_pat
     assert (held.kind, held.reason, held.similarity) == ("claim", REASON_SUBJECT, 0.77)
     assert GONE in held.label
     assert held.label not in got.pack.model_dump_json()  # the agents never see it
+
+
+def test_repeated_runs_do_not_raise_the_corroboration_in_the_pack(tmp_path: Path) -> None:
+    runs = {f"r{i}": ([deps_step(f"r{i}", "s1", A, [B])], FP1) for i in range(4)}
+    (claim,) = pack(tmp_path, runs, Scripted([("r0", "s1", 1, 0.8)])).claims
+    assert claim.corroboration == "single"
+    assert "1 independent source" in claim.corroboration_reason

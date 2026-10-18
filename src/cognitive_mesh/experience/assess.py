@@ -13,6 +13,11 @@ re-derivation on F that is refuted. A claim is `conflicting` when some F has bot
 Outcomes (ADR-0018) apply to the current code version only, like reviews: a recorded failure makes
 the claim `contested`, an ambiguous one `unknown`, a recorded success counts as validation, and a
 person and a check that disagree are `conflicting`.
+
+Corroboration (ADR-0020) is separate from the status. Independence is by method class per code
+version: all analyzer records (trace observations and re-derivations) are one source, all people
+(reviews and person outcomes) are one, and `check` outcomes are one. Repeats inside a class are
+listed as dependent repeats and add nothing. It is a category, computed on every call.
 """
 
 from collections.abc import Iterable, Sequence
@@ -44,6 +49,21 @@ class ClaimStatus(StrEnum):
     UNSUPPORTED = "unsupported"
     STALE = "stale"
     SUPPORTED = "supported"
+
+
+class Corroboration(StrEnum):
+    NONE = "none"
+    SINGLE = "single"
+    CORROBORATED = "corroborated"
+    CONTRADICTED = "contradicted"
+
+
+class SourceClass(StrEnum):
+    """The only independence rule (ADR-0020): records of one class are one source."""
+
+    ANALYZER = "analyzer"
+    PERSON = "person"
+    CHECK = "check"
 
 
 class OutcomeState(StrEnum):
@@ -108,6 +128,21 @@ class ContradictingAttempt(_Frozen):
     same_version: bool  # False: a different or unrecorded code version (differs_across_versions)
 
 
+class SourceGroup(_Frozen):
+    """One independent source: a class and every record (all but one are dependent repeats)."""
+
+    source_class: SourceClass
+    records: tuple[str, ...]
+
+
+class VersionCorroboration(_Frozen):
+    fingerprint: str | None
+    category: Corroboration
+    sources: tuple[SourceGroup, ...]
+    contradicted_by: tuple[SourceClass, ...]
+    reason: str
+
+
 class ClaimCounts(_Frozen):
     supporting_ok: int
     supporting_not_ok: int
@@ -135,6 +170,147 @@ class ClaimAssessment(_Frozen):
     reviews: tuple[Review, ...]
     counts: ClaimCounts
     differs_across_versions: bool
+    corroboration: Corroboration = Corroboration.NONE
+    corroboration_reason: str = ""
+    corroboration_version: str | None = None  # the code version the category is about
+    sources: tuple[SourceGroup, ...] = ()  # independent sources on that version
+    repeats: int = 0  # dependent repeats on that version
+    contradicted_by: tuple[SourceClass, ...] = ()
+    no_lineage: tuple[str, ...] = ()  # attempts that count for nothing: source not ok, no version
+    versions_supported: int = 0  # persistence across code versions, not corroboration
+    by_version: tuple[VersionCorroboration, ...] = ()
+
+
+_RANK: Final = {
+    Corroboration.CONTRADICTED: 3,
+    Corroboration.CORROBORATED: 2,
+    Corroboration.SINGLE: 1,
+    Corroboration.NONE: 0,
+}
+
+
+def _sentence(
+    fingerprint: str | None,
+    category: Corroboration,
+    sources: Sequence[SourceGroup],
+    against: Sequence[SourceClass],
+    other_versions: int,
+    no_lineage: int,
+) -> str:
+    where = f"on code version {fingerprint[:12]}" if fingerprint else "with no code version"
+    parts = [
+        f"{g.source_class.value} ({len(g.records)} record{'s' if len(g.records) != 1 else ''})"
+        for g in sources
+    ]
+    text = f"{category.value}: "
+    if parts:
+        text += f"supported {where} by {' and '.join(parts)}, "
+        text += f"{len(sources)} independent source{'s' if len(sources) != 1 else ''}"
+    else:
+        text += f"no supporting record {where}"
+    if against:
+        text += "; contradicted by " + ", ".join(c.value for c in against)
+    if other_versions:
+        text += f"; also supported on {other_versions} other code version(s)"
+    if no_lineage:
+        text += f"; {no_lineage} attempt(s) with no lineage were not counted"
+    return text
+
+
+def corroborate(
+    supporting: Sequence[SupportingAttempt],
+    contradicting: Sequence[ContradictingAttempt],
+    reviews: Sequence[Review],
+    outcomes: Sequence[Outcome],
+    rederivation: Rederivation | None,
+    here: str | None,
+) -> tuple[tuple[VersionCorroboration, ...], tuple[str, ...]]:
+    """Per code version, which independent source classes support or contradict the claim.
+
+    Returns the versions (always including `here` when given) and the attempts that have no
+    lineage (source not confirmed, or no recorded code version) and so count for nothing.
+    """
+    support: dict[str, dict[SourceClass, list[str]]] = {}
+    against: dict[str, set[SourceClass]] = {}
+
+    def pro(fp: str, cls: SourceClass, record: str) -> None:
+        support.setdefault(fp, {}).setdefault(cls, []).append(record)
+
+    def con(fp: str, cls: SourceClass) -> None:
+        against.setdefault(fp, set()).add(cls)
+
+    no_lineage: list[str] = []
+    for s in supporting:
+        if s.source is SourceStatus.OK and s.fingerprint:
+            pro(s.fingerprint, SourceClass.ANALYZER, f"run:{s.run_id}")
+        else:
+            no_lineage.append(s.attempt_id)
+    if rederivation is not None and here:
+        if rederivation.holding is Holding.HOLDS:
+            pro(here, SourceClass.ANALYZER, "rederivation")
+        elif rederivation.holding is Holding.REFUTED:
+            con(here, SourceClass.ANALYZER)
+    for c in contradicting:
+        if c.fingerprint:
+            con(c.fingerprint, SourceClass.ANALYZER)
+    for r in reviews:
+        if r.verdict is Verdict.CONFIRMED:
+            pro(r.fingerprint, SourceClass.PERSON, f"review:#{r.id}")
+        elif r.verdict is Verdict.REJECTED:
+            con(r.fingerprint, SourceClass.PERSON)
+    for o in outcomes:
+        if o.source is OutcomeSource.PROMOTION or not o.fingerprint:
+            continue
+        cls = SourceClass.PERSON if o.source is OutcomeSource.PERSON else SourceClass.CHECK
+        if o.result is OutcomeResult.SUCCEEDED:
+            pro(o.fingerprint, cls, f"outcome:#{o.id}")
+        elif o.result is OutcomeResult.FAILED:
+            con(o.fingerprint, cls)
+
+    fingerprints = sorted(set(support) | ({here} if here else set()))
+    built: list[VersionCorroboration] = []
+    for fp in fingerprints:
+        groups = tuple(
+            SourceGroup(source_class=cls, records=tuple(records))
+            for cls, records in sorted(support.get(fp, {}).items())
+        )
+        blocked = tuple(sorted(against.get(fp, set())))
+        if blocked:
+            category = Corroboration.CONTRADICTED
+        elif len(groups) >= 2:
+            category = Corroboration.CORROBORATED
+        elif groups:
+            category = Corroboration.SINGLE
+        else:
+            category = Corroboration.NONE
+        others = len([f for f in support if f != fp])
+        built.append(
+            VersionCorroboration(
+                fingerprint=fp,
+                category=category,
+                sources=groups,
+                contradicted_by=blocked,
+                reason=_sentence(fp, category, groups, blocked, others, len(no_lineage)),
+            )
+        )
+    if not built:
+        built.append(
+            VersionCorroboration(
+                fingerprint=None,
+                category=Corroboration.NONE,
+                sources=(),
+                contradicted_by=(),
+                reason=_sentence(None, Corroboration.NONE, (), (), 0, len(no_lineage)),
+            )
+        )
+    return tuple(built), tuple(no_lineage)
+
+
+def _reported(versions: Sequence[VersionCorroboration], here: str | None) -> VersionCorroboration:
+    """The current version when known, else the strongest one (contradiction ranks first)."""
+    if here:
+        return next(v for v in versions if v.fingerprint == here)
+    return max(versions, key=lambda v: (_RANK[v.category], len(v.sources)))
 
 
 def claim_parts(graph: ExperienceGraph, claim: ExpNode) -> tuple[str | None, str | None]:
@@ -280,6 +456,11 @@ def assess_claim(
     def reviewed(verdict: Verdict, *, now: bool) -> int:
         return sum(1 for r in reviews if r.verdict is verdict and (r.fingerprint == here) is now)
 
+    versions, no_lineage = corroborate(
+        supporting, contradicting, reviews, claim_outcomes, rederivation, here
+    )
+    shown = _reported(versions, here)
+
     counts = ClaimCounts(
         supporting_ok=len(ok_support),
         supporting_not_ok=len(supporting) - len(ok_support),
@@ -306,6 +487,15 @@ def assess_claim(
         reviews=tuple(reviews),
         counts=counts,
         differs_across_versions=counts.contradicting_other_version > 0,
+        corroboration=shown.category,
+        corroboration_reason=shown.reason,
+        corroboration_version=shown.fingerprint,
+        sources=shown.sources,
+        repeats=sum(len(g.records) - 1 for g in shown.sources),
+        contradicted_by=shown.contradicted_by,
+        no_lineage=no_lineage,
+        versions_supported=sum(1 for v in versions if v.sources),
+        by_version=versions,
     )
 
 

@@ -87,6 +87,8 @@ def _claim_item(
         status=a.status.value,
         meaning=a.meaning,
         validated_by=a.validated_by,
+        corroboration=a.corroboration.value,
+        corroboration_reason=a.corroboration_reason,
         supporting=tuple(SourceRun(run_id=s.run_id, doc_id=s.doc_id) for s in ok_support)[
             :MAX_REFS_PER_CLAIM
         ],

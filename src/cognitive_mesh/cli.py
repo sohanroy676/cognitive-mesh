@@ -1009,6 +1009,9 @@ def _fp(fingerprint: str | None) -> str:
 def _print_assessment(a: "ClaimAssessment", indent: str = "    ") -> None:
     """Everything behind a status: both sides, the reviews, and what the status means."""
     c = a.counts
+    print(f"{indent}corroboration: {a.corroboration_reason}")
+    for g in a.sources:
+        print(f"{indent}  source {g.source_class.value}: {_printable(', '.join(g.records))}")
     print(
         f"{indent}support: {c.supporting_ok} confirmed, {c.supporting_not_ok} not confirmed, "
         f"{c.distinct_fingerprints} code version(s); against: {c.contradicting_same_version} "
@@ -1308,9 +1311,9 @@ def _experience_claims(args: argparse.Namespace) -> int:
     for row, n_versions in zip(rows, versions, strict=True):
         a = assessed[str(row["id"])]
         print(
-            f"{row['status']}  observed {row['observations']}x "
-            f"({row['still_confirmed']} still confirmed, {n_versions} "
-            f"code version(s))  {_printable(str(row['name']))}  [{a.status.value}]"
+            f"{row['status']}  {len(a.sources)} independent source(s), {a.repeats} dependent "
+            f"repeat(s), {a.corroboration.value} ({row['still_confirmed']} still confirmed, "
+            f"{n_versions} code version(s))  {_printable(str(row['name']))}  [{a.status.value}]"
         )
         if details or a.status.value == "conflicting":
             _print_assessment(a)

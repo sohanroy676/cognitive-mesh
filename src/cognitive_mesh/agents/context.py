@@ -51,6 +51,8 @@ class ClaimItem(_Frozen):
     status: str  # a ClaimStatus value; fixed meaning below
     meaning: str
     validated_by: tuple[str, ...] = ()
+    corroboration: str = "none"  # a Corroboration value (ADR-0020); repeats never raise it
+    corroboration_reason: str = ""
     supporting: tuple[SourceRun, ...] = ()
     supporting_total: int = 0
     contradicting: tuple[ContradictingRun, ...] = ()
