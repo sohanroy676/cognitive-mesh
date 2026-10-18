@@ -15,6 +15,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Accept ADR-0023
 - Record v1.4.0 implementation and amend ADR-0023
 - Record v1.4.0 merge and CI run
+- **adr:** Propose ADR-0024 compare_dependencies
 
 ## [1.3.0] - 2026-10-18
 
