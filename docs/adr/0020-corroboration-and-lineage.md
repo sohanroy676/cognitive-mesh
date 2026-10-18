@@ -1,7 +1,7 @@
 # ADR-0020: Corroboration and lineage
 
 ## Status
-Proposed (drafted 2026-10-18; awaiting the user's acceptance. No code is changed by this ADR.)
+Accepted (drafted 2026-10-18; accepted by the user 2026-10-18. Implemented in v1.2.0.)
 
 ## Date
 2026-10-18
