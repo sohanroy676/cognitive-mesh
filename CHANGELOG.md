@@ -10,6 +10,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - Record CI for v1.2.0
+- Record real-CLI corroborated check
 
 ## [1.2.0] - 2026-10-18
 
