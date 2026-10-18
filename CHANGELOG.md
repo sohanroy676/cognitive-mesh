@@ -5,6 +5,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **recall:** Follow claim subjects instead of the whole graph
+
 ### Documentation
 - Record CI for v1.2.0
 
