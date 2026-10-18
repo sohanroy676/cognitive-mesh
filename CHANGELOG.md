@@ -15,6 +15,11 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record the v1.1.0 implementation state
 - Record the verification items for v1.1.0
 - Record the small-model plan experiment
+- Record the plan node-id fix and the re-run
+
+### Fixed
+- **plan:** Accept a file path as a module node id
+- **plan:** Let explain_file take a module node id
 
 ### Maintenance
 - **cli:** Cover outcome on a node that is not a claim
