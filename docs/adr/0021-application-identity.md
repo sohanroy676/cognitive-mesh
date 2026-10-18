@@ -1,7 +1,7 @@
 # ADR-0021: Application identity
 
 ## Status
-Proposed (drafted 2026-10-18; not accepted, no code written). Needs the user's decision on the open questions below.
+Accepted (drafted and accepted 2026-10-18 under the user's delegation to choose the best option; no code written yet). The three open questions are answered below.
 
 ## Date
 2026-10-18
@@ -54,7 +54,11 @@ question (ADR-0022, not drafted here).
   rewrite of append-only files).
 - Accepted limitation: identity is declared or derived, not authenticated; renaming a project splits its history.
 
-## Open questions for the user
-1. Is `--app-id` plus manifest-derived names the right default, or should identity be explicit-only?
-2. Orphan old reviews/outcomes (proposed) or re-key them once with a recorded migration?
-3. Should environment identifiers and expiry (rest of v1.3.0) go in a separate ADR-0022 after this one (proposed)?
+## Answers to the open questions
+1. **Declared plus derived.** Explicit-only would leave every existing workflow with no id; the derived id (with its
+   stored `how`) gives most applications a usable id with no extra flag, and the weak `directory` label keeps its
+   limit visible.
+2. **Orphan, do not re-key.** Reviews and outcomes are append-only and tied to a claim id; rewriting them would
+   break the rule that history is never silently changed. Orphans are listed (the existing orphan listing), never dropped.
+3. **Separate ADR-0022** for environment identifiers, validity periods and expiry. Identity can ship and be tested
+   alone; the staleness rules need their own documented rule (the roadmap forbids inferring staleness without one).
