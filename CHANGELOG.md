@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
+## [Unreleased]
+
+### Added
+- **experience:** Stdlib edges are environment-scoped claims
+
+### Documentation
+- **adr:** Propose ADR-0025 and ADR-0026
+- Record stdlib environment claims
+
 ## [1.4.0] - 2026-10-18
 
 ### Added

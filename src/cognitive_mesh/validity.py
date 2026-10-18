@@ -6,6 +6,7 @@ model opinion are never reasons. A missing clock or identifier gives an unknown,
 """
 
 import platform
+import re
 from datetime import UTC, date, datetime
 from enum import StrEnum
 from typing import Final
@@ -15,8 +16,23 @@ from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 from cognitive_mesh import __version__
 
 # The fixed identifier list (ADR-0022): nothing that identifies a host or a person is recorded.
-ENV_IDENTIFIERS: Final = ("analyser_version", "python_version", "platform")
+# `python_minor` (ADR-0025) is the "3.12" of "3.12.3": what a stdlib-membership claim depends on.
+ENV_IDENTIFIERS: Final = (
+    "analyser_version",
+    "python_version",
+    "python_minor",
+    "platform",
+)
 MAX_VALUE_CHARS: Final = 100
+
+
+_MINOR = re.compile(r"^(\d{1,3})\.(\d{1,3})(?:\.|$)")
+
+
+def python_minor(version: str) -> str | None:
+    """`3.12` from `3.12.3`; None when the string has no major.minor (never guessed)."""
+    match = _MINOR.match(version)
+    return f"{match.group(1)}.{match.group(2)}" if match else None
 
 
 class EnvScope(StrEnum):
@@ -86,11 +102,17 @@ def current_environment() -> Environment:
             values={
                 "analyser_version": __version__,
                 "python_version": platform.python_version(),
+                **_minor_value(platform.python_version()),
                 "platform": platform.system(),
             }
         )
     except ValidationError:
         return Environment()
+
+
+def _minor_value(version: str) -> dict[str, str]:
+    minor = python_minor(version)
+    return {"python_minor": minor} if minor else {}
 
 
 def compare_environment(recorded: Environment, current: Environment) -> EnvComparison:

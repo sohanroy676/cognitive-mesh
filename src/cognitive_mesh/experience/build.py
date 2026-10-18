@@ -26,7 +26,7 @@ from cognitive_mesh.experience.models import (
 )
 from cognitive_mesh.memory.documents import eligible_documents
 from cognitive_mesh.traces import RunTrace, TraceRecordError, TraceStatus, TraceStore
-from cognitive_mesh.validity import Environment, EnvScope
+from cognitive_mesh.validity import Environment, EnvScope, python_minor
 
 MAX_ID_TEXT: Final = 160
 
@@ -57,7 +57,14 @@ class _Accumulator:
         self.edges: dict[tuple[str, str, EdgeKind], list[TraceRef]] = {}
 
     def node(self, node: ExpNode) -> None:
-        self.nodes.setdefault(node.id, node)
+        old = self.nodes.get(node.id)
+        if old is None:
+            self.nodes[node.id] = node
+        elif node.scope is EnvScope.ENVIRONMENT and old.environment != node.environment:
+            # ADR-0025: runs on different Python minors saw this claim. It is one claim, but no
+            # single environment is recorded for it, so it compares as unknown and is never
+            # validated; the run nodes behind its `evidenced_by` edges keep each environment.
+            self.nodes[node.id] = old.model_copy(update={"environment": Environment()})
 
     def edge(self, source: str, target: str, kind: EdgeKind, ref: TraceRef) -> None:
         refs = self.edges.setdefault((source, target, kind), [])
@@ -102,6 +109,17 @@ def build_from_traces(store: TraceStore) -> Snapshot:
             continue
         _add_run(acc, trace, diagnostics)
     return acc.snapshot(diagnostics)
+
+
+def _is_python_stdlib(node_id: str) -> bool:
+    """`stdlib:NAME` objects of the Python analyser; `stdlib:node:*` depends on Node, not Python."""
+    return node_id.startswith("stdlib:") and not node_id.startswith("stdlib:node:")
+
+
+def _claim_environment(trace: RunTrace) -> Environment:
+    """What an environment-scoped stdlib claim is valid for: the recorded Python minor, if any."""
+    minor = python_minor(trace.environment.python_version)
+    return Environment(values={"python_minor": minor}) if minor else Environment()
 
 
 def _run_environment(trace: RunTrace) -> Environment | None:
@@ -252,7 +270,12 @@ def _add_claims(
                         validation="unvalidated",
                         subject=deps.node_id,
                         app_id=trace.app_id,
-                        scope=EnvScope.CODE,
+                        scope=EnvScope.ENVIRONMENT
+                        if _is_python_stdlib(item.node_id)
+                        else EnvScope.CODE,
+                        environment=_claim_environment(trace)
+                        if _is_python_stdlib(item.node_id)
+                        else None,
                     )
                 )
                 acc.edge(cid, attempt_node, EdgeKind.EVIDENCED_BY, ref)
