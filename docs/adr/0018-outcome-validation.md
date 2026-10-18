@@ -1,7 +1,7 @@
 # ADR-0018: Outcome validation and memory revision
 
 ## Status
-Proposed (design choices confirmed by the user in plan mode 2026-10-18; not accepted yet. No v1.1.0 code is written until the user accepts this text.)
+Accepted (design choices confirmed by the user in plan mode 2026-10-18; text accepted by the user 2026-10-18, before any v1.1.0 code was written)
 
 ## Date
 2026-10-18
