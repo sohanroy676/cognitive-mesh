@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.3.0] - 2026-10-18
 
 ### Added
 - **identity:** Record an application id per run
@@ -16,6 +16,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Propose ADR-0022 environment and validity
 - **adr:** Accept ADR-0022
 - Record v1.3.0 environment and validity work
+- Mark v1.3.0 done and write the handoff
 
 ### Fixed
 - **recall:** Pass outcomes to the claim assessment
