@@ -13,6 +13,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record the session state for v1.1.0 planning
 - **adr:** Accept ADR-0018
 - Record the v1.1.0 implementation state
+- Record the verification items for v1.1.0
 
 ### Maintenance
 - **cli:** Cover outcome on a node that is not a claim
