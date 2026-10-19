@@ -7,6 +7,10 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Added
 - **experience:** Stdlib edges are environment-scoped claims
+- **experience:** Hash stored record texts, graph format 6
+
+### Changed
+- **experience:** Parse and dump each distinct ref once
 
 ### Documentation
 - **adr:** Propose ADR-0025 and ADR-0026
@@ -15,6 +19,10 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **progress:** Record CI for e19c0c6
 - **adr:** Propose ADR-0027 graph load verification cost
 - **adr:** Accept ADR-0027
+- Record ADR-0027 outcome and format 6
+
+### Maintenance
+- **experience:** Pin graph hash and ref order before ADR-0027
 
 ## [1.4.0] - 2026-10-18
 
