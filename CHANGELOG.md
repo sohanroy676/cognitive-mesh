@@ -20,6 +20,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Propose ADR-0027 graph load verification cost
 - **adr:** Accept ADR-0027
 - Record ADR-0027 outcome and format 6
+- Record measured whole-graph stages and peak memory
 
 ### Maintenance
 - **experience:** Pin graph hash and ref order before ADR-0027
