@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.4.1] - 2026-10-19
 
 ### Added
 - **experience:** Stdlib edges are environment-scoped claims
@@ -21,6 +21,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Accept ADR-0027
 - Record ADR-0027 outcome and format 6
 - Record measured whole-graph stages and peak memory
+- Prepare release v1.4.1 and handoff
 
 ### Maintenance
 - **experience:** Pin graph hash and ref order before ADR-0027
