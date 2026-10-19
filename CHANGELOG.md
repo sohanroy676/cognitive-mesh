@@ -3,6 +3,20 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
+## [1.4.2] - 2026-10-19
+
+### Changed
+- **experience:** Share contradiction listings, scope show and promote
+
+### Documentation
+- Record CI runs for v1.4.1
+- **adr:** Propose ADR-0028 whole-graph assessment cost
+- Record ADR-0028 proposal in memory bank
+- **adr:** Accept ADR-0028
+- Record ADR-0028 outcome and measurements
+- Record ADR-0028 follow-up checks at scale and with real MiniLM
+- Prepare release v1.4.2 and handoff
+
 ## [1.4.1] - 2026-10-19
 
 ### Added

@@ -1231,13 +1231,21 @@ def _unmet_checks(a: "ClaimAssessment") -> list[str]:
 
 def _experience_promote(args: argparse.Namespace) -> int:
     from cognitive_mesh.experience import ExperienceNodeNotFoundError, NodeKind
-    from cognitive_mesh.experience.assess import assess_claims
+    from cognitive_mesh.experience.assess import assess_claims, attempts_behind
     from cognitive_mesh.experience.outcomes import OutcomeResult, OutcomeSource, OutcomeStore
+    from cognitive_mesh.experience.verify import SourceReport, check_attempts
 
-    _, graph, report = _experience_open(args)
-    node = graph.node(args.claim_id)
-    if node.kind is not NodeKind.CLAIM:
-        raise ExperienceNodeNotFoundError("the node is not a claim")
+    graph = _load_graph(args.graph)
+    with TraceStore.open_existing(args.db) as store:
+        node = graph.node(args.claim_id)
+        if node.kind is not NodeKind.CLAIM:
+            raise ExperienceNodeNotFoundError("the node is not a claim")
+        # ADR-0028: only the attempts this claim is judged by are checked, as `recall` does
+        report = SourceReport(
+            statuses=check_attempts(graph, store, attempts_behind(graph, [node])),
+            claim_support={},
+            diagnostics=(),
+        )
     reviews, current = _evidence_inputs(args)
     outcomes = _outcomes_input(args.outcomes) if args.outcomes.is_file() else []
     assessment = assess_claims(
@@ -1332,9 +1340,18 @@ def _experience_build(args: argparse.Namespace) -> int:
 
 
 def _experience_show(args: argparse.Namespace) -> int:
-    _, graph, report = _experience_open(args)
-    node = graph.node(args.node)
-    reached = graph.reachable(node.id, forward=not args.incoming, transitive=args.transitive)
+    from cognitive_mesh.experience.verify import SourceReport, check_nodes
+
+    graph = _load_graph(args.graph)
+    with TraceStore.open_existing(args.db) as store:
+        node = graph.node(args.node)
+        reached = graph.reachable(node.id, forward=not args.incoming, transitive=args.transitive)
+        # ADR-0028: only the shown node and what it reaches are checked, not the whole graph
+        report = SourceReport(
+            statuses=check_nodes(graph, store, {node.id, *(r.node.id for r in reached)}),
+            claim_support={},
+            diagnostics=(),
+        )
     shown = [r for r in reached if args.include_unverified or report.is_supported(r.node.id)]
     hidden = len(reached) - len(shown)
     if args.as_json:

@@ -89,6 +89,59 @@ def check_attempts(
     return _check_attempts((n for n in wanted if n.kind is NodeKind.ATTEMPT), store, {})
 
 
+def check_nodes(
+    graph: ExperienceGraph, store: TraceStore, node_ids: Collection[str]
+) -> dict[str, SourceStatus]:
+    """Source status of just these nodes (ADR-0028): what `check_sources` gives for each of them.
+
+    Follows the same rules, but reads only the attempts the requested nodes rest on. A run is
+    judged from the documents of all its attempts in the graph, as in the whole-graph check, and
+    an entity (capability, agent, target) from every attempt and claim that points at it.
+    """
+    cache: dict[str, dict[str, MemoryDocument] | None] = {}
+    memo: dict[str, SourceStatus] = {}
+    by_run: dict[str, list[str]] | None = None
+
+    def attempt(node: ExpNode) -> SourceStatus:
+        return _check_attempts([node], store, cache)[node.id]
+
+    def run(node: ExpNode) -> SourceStatus:
+        nonlocal by_run
+        if by_run is None:
+            by_run = {}
+            for a in graph.nodes(NodeKind.ATTEMPT):
+                if a.ref is not None:
+                    by_run.setdefault(a.ref.run_id, []).append(a.id)
+        for attempt_id in by_run.get(node.ref.run_id, []) if node.ref else []:
+            status_of(attempt_id)
+        return _run_status(store, cache, node)
+
+    def status_of(node_id: str) -> SourceStatus:
+        if node_id in memo:
+            return memo[node_id]
+        node = graph.node(node_id)
+        if node.kind is NodeKind.ATTEMPT:
+            found = attempt(node)
+        elif node.kind is NodeKind.RUN:
+            found = run(node)
+        elif node.kind is NodeKind.STEP:
+            final = graph.out_edges(node_id, {EdgeKind.FINAL_ATTEMPT})
+            found = _aggregate([status_of(e.target) for e in final])
+        elif node.kind is NodeKind.CLAIM:
+            found = _aggregate([status_of(e.target) for e in graph.evidence(node_id)])
+        else:  # entities: capability, agent, target
+            around = [
+                e.source
+                for e in graph.in_edges(node_id)
+                if graph.node(e.source).kind in (NodeKind.ATTEMPT, NodeKind.CLAIM)
+            ]
+            found = _aggregate([status_of(a) for a in around])
+        memo[node_id] = found
+        return found
+
+    return {node_id: status_of(node_id) for node_id in node_ids}
+
+
 def check_sources(snapshot: Snapshot, store: TraceStore) -> SourceReport:
     graph = ExperienceGraph(snapshot)
     cache: dict[str, dict[str, MemoryDocument] | None] = {}

@@ -277,9 +277,8 @@ def corroborate(
             pro(here, SourceClass.ANALYZER, "rederivation")
         elif rederivation.holding is Holding.REFUTED:
             con(here, SourceClass.ANALYZER)
-    for c in contradicting:
-        if c.fingerprint:
-            con(c.fingerprint, SourceClass.ANALYZER)
+    for fp in {c.fingerprint for c in contradicting if c.fingerprint}:
+        con(fp, SourceClass.ANALYZER)
     for r in reviews:
         if r.verdict is Verdict.CONFIRMED:
             pro(r.fingerprint, SourceClass.PERSON, f"review:#{r.id}")
@@ -426,6 +425,52 @@ def effective_valid_until(
     return max(dated, key=lambda d: d[0])[1] if dated else None
 
 
+class _Listings:
+    """What one `assess_claims` call computes once for many claims (ADR-0028).
+
+    Claims about one subject (and one application) are contradicted by the same listings, and
+    `ContradictingAttempt` is frozen, so the listings and their objects are built once and shared.
+    Valid for one graph and one source report only; nothing outlives the call.
+    """
+
+    def __init__(self, graph: ExperienceGraph, report: SourceReport) -> None:
+        self._graph = graph
+        self._report = report
+        self._usable: dict[tuple[str | None, str | None, str | None], tuple[str, ...]] = {}
+        self._objects: dict[tuple[str, bool], ContradictingAttempt] = {}
+
+    def usable(self, claim: ExpNode, subject: str | None) -> tuple[str, ...]:
+        """Candidate attempts that are complete listings whose source is ok, in graph order."""
+        key = (claim.predicate, subject if claim.predicate == "depends_on" else None, claim.app_id)
+        found = self._usable.get(key)
+        if found is None:
+            graph, statuses = self._graph, self._report.statuses
+            found = tuple(
+                a
+                for a in _contradiction_candidates(graph, claim, subject)
+                if graph.node(a).coverage == "complete" and statuses.get(a) is SourceStatus.OK
+            )
+            self._usable[key] = found
+        return found
+
+    def attempt(self, attempt_id: str, *, same_version_of: set[str]) -> ContradictingAttempt:
+        node = self._graph.node(attempt_id)
+        fp = node.ref.source_fingerprint if node.ref else None
+        same = fp is not None and fp in same_version_of
+        key = (attempt_id, same)
+        made = self._objects.get(key)
+        if made is None:
+            made = ContradictingAttempt(
+                attempt_id=attempt_id,
+                run_id=node.ref.run_id if node.ref else "",
+                doc_id=node.ref.doc_id if node.ref else None,
+                fingerprint=fp,
+                same_version=same,
+            )
+            self._objects[key] = made
+        return made
+
+
 def assess_claim(
     graph: ExperienceGraph,
     claim: ExpNode,
@@ -436,6 +481,7 @@ def assess_claim(
     *,
     today: date | None = None,
     environment: Environment | None = None,
+    listings: _Listings | None = None,
 ) -> ClaimAssessment:
     subject, obj = claim_parts(graph, claim)
     here = current.fingerprint if current else None
@@ -468,26 +514,14 @@ def assess_claim(
     if rederivation is not None and rederivation.holding is Holding.HOLDS and here:
         pro.add(here)
 
-    contradicting: list[ContradictingAttempt] = []
+    if listings is None:
+        listings = _Listings(graph, report)
     seen = set(evidence_ids)
-    for attempt_id in _contradiction_candidates(graph, claim, subject):
-        node = graph.node(attempt_id)
-        if (
-            attempt_id in seen
-            or node.coverage != "complete"
-            or report.statuses.get(attempt_id) is not SourceStatus.OK
-        ):
-            continue
-        fp = node.ref.source_fingerprint if node.ref else None
-        contradicting.append(
-            ContradictingAttempt(
-                attempt_id=attempt_id,
-                run_id=node.ref.run_id if node.ref else "",
-                doc_id=node.ref.doc_id if node.ref else None,
-                fingerprint=fp,
-                same_version=fp is not None and fp in pro,
-            )
-        )
+    contradicting = [
+        listings.attempt(a, same_version_of=pro)
+        for a in listings.usable(claim, subject)
+        if a not in seen
+    ]
 
     # con(F): where something speaks against the claim
     con: set[str] = {c.fingerprint for c in contradicting if c.fingerprint}
@@ -596,6 +630,10 @@ def assess_claims(
     by_claim: dict[str, list[Review]] = {}
     for review in reviews:
         by_claim.setdefault(review.claim_id, []).append(review)
+    outcomes_by_claim: dict[str, list[Outcome]] = {}
+    for outcome in outcomes:
+        outcomes_by_claim.setdefault(outcome.claim_id, []).append(outcome)
+    listings = _Listings(graph, report)
     return {
         c.id: assess_claim(
             graph,
@@ -603,9 +641,10 @@ def assess_claims(
             report,
             by_claim.get(c.id, []),
             current,
-            outcomes,
+            outcomes_by_claim.get(c.id, []),
             today=today,
             environment=environment,
+            listings=listings,
         )
         for c in graph.claims()
         if only is None or c.id in only
