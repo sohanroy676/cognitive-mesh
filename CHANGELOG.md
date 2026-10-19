@@ -8,6 +8,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 ### Documentation
 - Record CI runs for v1.4.2
 - **adr:** Propose ADR-0029 outcomes in the context pack
+- **adr:** Accept ADR-0029
 
 ## [1.4.2] - 2026-10-19
 
