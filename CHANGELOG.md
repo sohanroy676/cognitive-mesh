@@ -7,6 +7,8 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - Record CI runs for v1.4.1
+- **adr:** Propose ADR-0028 whole-graph assessment cost
+- Record ADR-0028 proposal in memory bank
 
 ## [1.4.1] - 2026-10-19
 
