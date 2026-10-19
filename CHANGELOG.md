@@ -3,6 +3,11 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
+## [Unreleased]
+
+### Documentation
+- **progress:** Record CI for v1.4.3
+
 ## [1.4.3] - 2026-10-19
 
 ### Added
