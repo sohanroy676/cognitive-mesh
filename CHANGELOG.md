@@ -5,11 +5,15 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Changed
+- **experience:** Share contradiction listings, scope show and promote
+
 ### Documentation
 - Record CI runs for v1.4.1
 - **adr:** Propose ADR-0028 whole-graph assessment cost
 - Record ADR-0028 proposal in memory bank
 - **adr:** Accept ADR-0028
+- Record ADR-0028 outcome and measurements
 
 ## [1.4.1] - 2026-10-19
 
