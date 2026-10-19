@@ -8,14 +8,14 @@ Claims are `unvalidated`: repetition across runs is counted, never treated as pr
 import hashlib
 import json
 from enum import StrEnum
-from typing import Final, Literal
+from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from cognitive_mesh.identity import IdentityHow
 from cognitive_mesh.validity import Environment, EnvScope
 
-FORMAT_VERSION: Final = 5
+FORMAT_VERSION: Final = 6
 CLAIM_NOTE: Final = "claims are unvalidated: repeated observation is not proof of truth"
 REPETITION_NOTE: Final = "repeated observation is counted, never treated as proof of truth"
 
@@ -140,36 +140,63 @@ class Reached(_Frozen):
     path: tuple[ExpEdge, ...]
 
 
+def _dump_key(data: dict[str, Any]) -> str:
+    return json.dumps(data, sort_keys=True, ensure_ascii=True)
+
+
 def ref_key(ref: TraceRef) -> str:
     """The one ordering of references, used by the build, the hash and the file."""
-    return json.dumps(ref.model_dump(mode="json"), sort_keys=True, ensure_ascii=True)
+    return _dump_key(ref.model_dump(mode="json"))
 
 
-def canonical(
-    nodes: tuple[ExpNode, ...],
-    edges: tuple[ExpEdge, ...],
-    diagnostics: tuple[ExperienceDiagnostic, ...] = (),
-) -> str:
-    """The text the content hash covers: sorted, compact, ASCII, independent of insertion order."""
-    node_part = [n.model_dump(mode="json") for n in sorted(nodes, key=lambda n: n.id)]
-    edge_part = [
-        {
-            **e.model_dump(mode="json", exclude={"refs"}),
-            "refs": [r.model_dump(mode="json") for r in sorted(e.refs, key=ref_key)],
-        }
-        for e in sorted(edges, key=lambda e: (e.source, e.target, e.kind.value))
-    ]
+def node_text(node: ExpNode) -> str:
+    """The stored text of a node: sorted keys, ASCII, compact. The hash covers these exact bytes."""
     return json.dumps(
-        {
-            "format": FORMAT_VERSION,
-            "nodes": node_part,
-            "edges": edge_part,
-            "diagnostics": [d.model_dump(mode="json") for d in diagnostics],
-        },
-        sort_keys=True,
-        ensure_ascii=True,
-        separators=(",", ":"),
+        node.model_dump(mode="json"), sort_keys=True, ensure_ascii=True, separators=(",", ":")
     )
+
+
+def diagnostic_text(diagnostic: ExperienceDiagnostic) -> str:
+    return json.dumps(
+        diagnostic.model_dump(mode="json"), sort_keys=True, ensure_ascii=True, separators=(",", ":")
+    )
+
+
+def edge_text(source: str, target: str, kind: str) -> str:
+    return json.dumps([source, target, kind], ensure_ascii=True, separators=(",", ":"))
+
+
+class ContentHasher:
+    """SHA-256 over the stored record texts, each framed by a tag and its length (ADR-0027).
+
+    The order is fixed: nodes by id, then edges by (source, target, kind) each followed by its
+    references in `ref_key` order, then diagnostics in stored order. `save` and `load` feed this
+    the very strings that are written and read, so every byte that is parsed is hashed.
+    """
+
+    def __init__(self) -> None:
+        self._h = hashlib.sha256()
+        self._put("F", str(FORMAT_VERSION))
+
+    def _put(self, tag: str, text: str) -> None:
+        data = text.encode("ascii")
+        self._h.update(f"{tag}{len(data)}:".encode("ascii"))
+        self._h.update(data)
+
+    def node(self, text: str) -> None:
+        self._put("N", text)
+
+    def edge(self, source: str, target: str, kind: str) -> None:
+        self._put("E", edge_text(source, target, kind))
+
+    def ref(self, text: str) -> None:
+        self._put("R", text)
+
+    def diagnostic(self, text: str) -> None:
+        self._put("D", text)
+
+    def hexdigest(self) -> str:
+        return self._h.hexdigest()
 
 
 def content_sha256(
@@ -177,4 +204,14 @@ def content_sha256(
     edges: tuple[ExpEdge, ...],
     diagnostics: tuple[ExperienceDiagnostic, ...] = (),
 ) -> str:
-    return hashlib.sha256(canonical(nodes, edges, diagnostics).encode("ascii")).hexdigest()
+    """The content hash of a snapshot, independent of the order its nodes and edges came in."""
+    hasher = ContentHasher()
+    for n in sorted(nodes, key=lambda n: n.id):
+        hasher.node(node_text(n))
+    for e in sorted(edges, key=lambda e: (e.source, e.target, e.kind.value)):
+        hasher.edge(e.source, e.target, e.kind.value)
+        for text in sorted(ref_key(r) for r in e.refs):
+            hasher.ref(text)
+    for d in diagnostics:
+        hasher.diagnostic(diagnostic_text(d))
+    return hasher.hexdigest()

@@ -15,6 +15,7 @@ from pydantic import ValidationError
 
 from cognitive_mesh.experience.models import (
     FORMAT_VERSION,
+    ContentHasher,
     EdgeKind,
     ExpEdge,
     ExperienceDiagnostic,
@@ -23,11 +24,14 @@ from cognitive_mesh.experience.models import (
     NodeKind,
     Snapshot,
     TraceRef,
-    content_sha256,
+    diagnostic_text,
+    node_text,
     ref_key,
 )
 
 SCHEMA_VERSION: Final = 1
+_MALFORMED: Final = "the experience graph holds a malformed record"
+_HASH_MISMATCH: Final = "the stored content hash does not match the graph content"
 APPLICATION_ID: Final = 0x434D4547  # "CMEG": tells a graph file from any other SQLite file
 
 _SCHEMA: Final = f"""
@@ -133,7 +137,24 @@ def save(path: Path, snapshot: Snapshot, *, built_at: datetime | None = None) ->
     """Write the whole snapshot, replacing any earlier content. Returns the content hash."""
     check_consistent(snapshot)
     stamp = (built_at or datetime.now(UTC)).astimezone(UTC).isoformat()
-    digest = content_sha256(snapshot.nodes, snapshot.edges, snapshot.diagnostics)
+    # The texts that are written are the texts that are hashed (ADR-0027).
+    hasher = ContentHasher()
+    node_rows = [(n.id, node_text(n)) for n in sorted(snapshot.nodes, key=lambda n: n.id)]
+    for _, text in node_rows:
+        hasher.node(text)
+    edge_rows: list[tuple[str, str, str]] = []
+    ref_rows: list[tuple[str, str, str, str]] = []
+    for e in sorted(snapshot.edges, key=lambda e: (e.source, e.target, e.kind.value)):
+        key = (e.source, e.target, e.kind.value)
+        edge_rows.append(key)
+        hasher.edge(*key)
+        for text in sorted(ref_key(r) for r in e.refs):
+            hasher.ref(text)
+            ref_rows.append((*key, text))
+    diag_rows = [(i, diagnostic_text(d)) for i, d in enumerate(snapshot.diagnostics)]
+    for _, text in diag_rows:
+        hasher.diagnostic(text)
+    digest = hasher.hexdigest()
     conn = _connect(path)
     try:
         if _is_fresh(conn):
@@ -145,22 +166,14 @@ def save(path: Path, snapshot: Snapshot, *, built_at: datetime | None = None) ->
         try:
             for table in ("edge_refs", "edges", "nodes", "diagnostics", "meta"):
                 conn.execute(f"DELETE FROM {table}")  # noqa: S608  # fixed table names
+            conn.executemany("INSERT INTO nodes (id, node_json) VALUES (?, ?)", node_rows)
+            conn.executemany("INSERT INTO edges (source, target, kind) VALUES (?, ?, ?)", edge_rows)
             conn.executemany(
-                "INSERT INTO nodes (id, node_json) VALUES (?, ?)",
-                [(n.id, n.model_dump_json()) for n in snapshot.nodes],
+                "INSERT INTO edge_refs (source, target, kind, ref_json) VALUES (?, ?, ?, ?)",
+                ref_rows,
             )
-            for e in snapshot.edges:
-                conn.execute(
-                    "INSERT INTO edges (source, target, kind) VALUES (?, ?, ?)",
-                    (e.source, e.target, e.kind.value),
-                )
-                conn.executemany(
-                    "INSERT INTO edge_refs (source, target, kind, ref_json) VALUES (?, ?, ?, ?)",
-                    [(e.source, e.target, e.kind.value, ref.model_dump_json()) for ref in e.refs],
-                )
             conn.executemany(
-                "INSERT INTO diagnostics (seq, diagnostic_json) VALUES (?, ?)",
-                [(i, d.model_dump_json()) for i, d in enumerate(snapshot.diagnostics)],
+                "INSERT INTO diagnostics (seq, diagnostic_json) VALUES (?, ?)", diag_rows
             )
             conn.executemany(
                 "INSERT INTO meta (key, value) VALUES (?, ?)",
@@ -195,7 +208,10 @@ def load(path: Path) -> LoadedGraph:
         edge_rows = conn.execute(
             "SELECT source, target, kind FROM edges ORDER BY source, target, kind"
         ).fetchall()
-        ref_rows = conn.execute("SELECT source, target, kind, ref_json FROM edge_refs").fetchall()
+        ref_rows = conn.execute(
+            "SELECT source, target, kind, ref_json FROM edge_refs "
+            "ORDER BY source, target, kind, ref_json"
+        ).fetchall()
         diag_rows = conn.execute("SELECT diagnostic_json FROM diagnostics ORDER BY seq").fetchall()
     except sqlite3.Error:
         raise ExperienceGraphError(
@@ -208,32 +224,48 @@ def load(path: Path) -> LoadedGraph:
             "the experience graph has an unsupported format version; "
             "rebuild it with `experience build`"
         )
+    hasher = ContentHasher()
     try:
+        # One pass: every stored text is hashed as it is parsed, in the order `save` hashed it
+        # (ADR-0027), so the hash covers exactly the bytes that are trusted.
+        for _, text in node_rows:
+            hasher.node(text)
         nodes = tuple(ExpNode.model_validate_json(row[1]) for row in node_rows)
         if any(node.id != row[0] for node, row in zip(nodes, node_rows, strict=True)):
             raise ExperienceGraphError("the experience graph holds a node under the wrong id")
-        refs: dict[tuple[str, str, str], list[TraceRef]] = {}
-        for source, target, kind, ref_json in ref_rows:
-            refs.setdefault((source, target, kind), []).append(
-                TraceRef.model_validate_json(ref_json)
-            )
-        edges = tuple(
-            ExpEdge(
-                source=s,
-                target=t,
-                kind=k,
-                refs=tuple(sorted(refs.get((s, t, k), []), key=ref_key)),
-            )
-            for s, t, k in edge_rows
-        )
+        # The same reference text sits on many edges: parse each distinct one once. Frozen
+        # models are safe to share between edges. Both queries are ordered by the edge key, so
+        # the references of each edge follow it directly.
+        parsed: dict[str, TraceRef] = {}
+        edge_list: list[ExpEdge] = []
+        at = 0
+        for s, t, k in edge_rows:
+            hasher.edge(s, t, k)
+            group: list[TraceRef] = []
+            while at < len(ref_rows) and ref_rows[at][:3] == (s, t, k):
+                text = ref_rows[at][3]
+                hasher.ref(text)
+                ref = parsed.get(text)
+                if ref is None:
+                    ref = parsed[text] = TraceRef.model_validate_json(text)
+                group.append(ref)
+                at += 1
+            edge_list.append(ExpEdge(source=s, target=t, kind=k, refs=tuple(group)))
+        if at != len(ref_rows):  # a reference that belongs to no stored edge
+            raise ExperienceGraphError(_MALFORMED)
+        edges = tuple(edge_list)
+        for (text,) in diag_rows:
+            hasher.diagnostic(text)
         diagnostics = tuple(ExperienceDiagnostic.model_validate_json(r[0]) for r in diag_rows)
     except ValidationError:
-        raise ExperienceGraphError("the experience graph holds a malformed record") from None
+        raise ExperienceGraphError(_MALFORMED) from None
+    except UnicodeEncodeError:  # not the ASCII text that was hashed
+        raise ExperienceGraphError(_HASH_MISMATCH) from None
     snapshot = Snapshot(nodes=nodes, edges=edges, diagnostics=diagnostics)
     check_consistent(snapshot)
-    digest = content_sha256(nodes, edges, diagnostics)
+    digest = hasher.hexdigest()
     if digest != meta.get("content_sha256"):
-        raise ExperienceGraphError("the stored content hash does not match the graph content")
+        raise ExperienceGraphError(_HASH_MISMATCH)
     try:
         built_at = datetime.fromisoformat(meta["built_at"])
     except (KeyError, ValueError):
