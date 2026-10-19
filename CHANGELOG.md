@@ -13,6 +13,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Propose ADR-0029 outcomes in the context pack
 - **adr:** Accept ADR-0029
 - Record ADR-0029 implementation and ADR-0030 profile
+- **adr:** Propose ADR-0030 source-check cost
+- **adr:** Accept ADR-0030
+- Record ADR-0030 outcome, stop rule applied
 
 ## [1.4.2] - 2026-10-19
 
