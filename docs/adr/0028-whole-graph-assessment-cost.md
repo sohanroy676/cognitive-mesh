@@ -130,6 +130,27 @@ check` therefore still costs about 15 s plus the load, and `experience claims` a
 **Correction:** `experience outcome` only loads the graph; it runs neither stage. Earlier text (ADR-0026, ADR-0027,
 README) that listed `experience claims/outcome/check` should read `claims`, `promote`, `show` and `check`.
 
+**Follow-up checks (2026-10-19, the two items first listed as not run):**
+- *Reviews and outcomes at scale.* Scratch `equal_ro.py` (session scratchpad, not committed) loads the old
+  `experience/assess.py` from `git show 8d8f997:...` as a separate module and compares its `assess_claims` with the new
+  one, serialised claim for claim, on the 5,000 and 20,000 run graphs with 909 reviews and 694 outcomes spread over the
+  1,600 claims (confirmed and rejected reviews on several code versions, one expired; person and check outcomes
+  succeeded, failed and ambiguous, with and without `valid_until`), with no root and with a stubbed current source at
+  two fingerprints (re-derivation holds, refuted or subject absent by hash). All equal, also with `only=` a subset of
+  178 claims. Because the synthetic data makes every claim `conflicting`, three damaged-source variants were added
+  (the sources of some code versions, or 70% of attempts, marked missing or changed): all equal, and the statuses
+  seen were `conflicting`, `unsupported`, `expired`, `contested`, `unknown` and `validated`. Times at 20,000 runs with
+  reviews and outcomes: old 18.8 to 26.0 s, new 5.0 to 6.2 s. Not reached by this data: `stale`, `supported`, the
+  environment statuses (covered by the unit tests only).
+- *Real MiniLM.* Real CLI, real `all-MiniLM-L6-v2` (cached), scratch directory, `tests/fixtures/e2e_app`: `task`
+  session 1, `cart.py` edited to import `tax`, `task` again, `memory index` (4 added), `experience build` (2 claims),
+  `experience review` (confirmed for cart->tax, rejected for cart->pricing), `experience outcome` (check, succeeded),
+  then `experience claims`, `recall` and `task` with `--reviews` and `--outcomes`, every command exit 0. cart->tax
+  was `[validated]` and `corroborated` with 3 independent sources (analyzer, check, person); cart->pricing was
+  `[stale]` with the rejecting review listed; `task` offered both with their run ids on both sides and "reviews: 1
+  confirmed, 0 rejected"; `--reviews missing.sqlite3` exited 15. The `task` pack shows review counts but no outcome
+  line (the outcome shows only in the status and in `recall`/`claims`); that is existing behaviour, not changed.
+
 **Tests:** `tests/test_assessment_cost.py` (14): `check_nodes` equals `check_sources` for every node, alone and
 together, on an untouched and a damaged database (deleted, edited, malformed runs) and for a run re-recorded
 unfinished; it reads only the runs it needs; the shared assessment equals a fresh claim-by-claim assessment with
