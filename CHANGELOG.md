@@ -13,6 +13,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record stdlib environment claims
 - **adr:** Record ADR-0026 profiling outcome
 - **progress:** Record CI for e19c0c6
+- **adr:** Propose ADR-0027 graph load verification cost
 
 ## [1.4.0] - 2026-10-18
 
