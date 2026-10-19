@@ -29,6 +29,7 @@ from cognitive_mesh.agents.context import (
 )
 from cognitive_mesh.experience.assess import ClaimStatus, claim_parts
 from cognitive_mesh.experience.graph import ExperienceGraph
+from cognitive_mesh.experience.outcomes import EVIDENCE_RESULTS
 from cognitive_mesh.graph import DependencyGraph, GraphError
 from cognitive_mesh.identity import AppIdentity
 from cognitive_mesh.retrieval.models import RecalledClaim, RecallResult
@@ -131,6 +132,8 @@ def _claim_item(
     a = recalled.assessment
     node = experience.node(a.claim_id)
     ok_support = [s for s in a.supporting if s.source.value == "ok"]
+    evidence = [o for o in a.outcomes if o.result in EVIDENCE_RESULTS]
+    outcomes_current = sum(1 for o in evidence if o.fingerprint == a.current_fingerprint)
     return ClaimItem(
         claim_id=a.claim_id,
         name=a.name,
@@ -154,6 +157,9 @@ def _claim_item(
         contradicting_total=len(a.contradicting),
         confirmed_reviews=a.counts.confirmed_current + a.counts.confirmed_other,
         rejected_reviews=a.counts.rejected_current + a.counts.rejected_other,
+        outcome=a.outcome.value,
+        outcomes_current=outcomes_current,
+        outcomes_other=len(evidence) - outcomes_current,
         retrieved_via_doc_ids=tuple(v.doc_id for v in recalled.retrieved_via),
         best_similarity=max((v.similarity for v in recalled.retrieved_via), default=0.0),
     )
@@ -168,6 +174,7 @@ def build_context(
     current_root: str,
     identity: AppIdentity | None = None,
     profile: ContextProfile = "precision",
+    outcomes_consulted: bool | None = None,
 ) -> GatedContext:
     """The gated pack for one task. `current_root` is the directory the task will run against.
 
@@ -291,6 +298,7 @@ def build_context(
         profile=profile,
         conflicts_kept=conflicts_kept,
         conflicts_over_limit=conflicts_over,
+        outcomes_consulted=outcomes_consulted,
         claims=tuple(claims),
         raw=tuple(raw),
         withheld=Withheld(

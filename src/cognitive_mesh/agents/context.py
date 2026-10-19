@@ -68,6 +68,11 @@ class ClaimItem(_Frozen):
     contradicting_total: int = 0
     confirmed_reviews: int = 0
     rejected_reviews: int = 0
+    # ADR-0029: None = the pack was written before this field existed, never "no outcome". The
+    # counts cover evidence outcomes only (a refused promotion is not evidence); no outcome text.
+    outcome: str | None = None  # an OutcomeState value for the current code version
+    outcomes_current: int = 0
+    outcomes_other: int = 0
     retrieved_via_doc_ids: tuple[str, ...] = ()
     best_similarity: float = 0.0  # how the query matched, never how true the claim is
 
@@ -115,6 +120,8 @@ class RecalledContext(_Frozen):
     # True when they alone exceed MAX_CLAIMS.
     conflicts_kept: int = 0
     conflicts_over_limit: bool = False
+    # ADR-0029: True = an outcomes file was read, False = none was given, None = older pack.
+    outcomes_consulted: bool | None = None
     claims: tuple[ClaimItem, ...] = Field(default=(), max_length=MAX_CLAIMS_HARD)
     raw: tuple[RawItem, ...] = Field(default=(), max_length=MAX_RAW)
     withheld: Withheld = Withheld()
