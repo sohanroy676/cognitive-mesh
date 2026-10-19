@@ -67,3 +67,26 @@ are never stored (ADR-0016); no result may change; no new dependency.
   this decision.
 - Accepting either decision in point 4 weakens or reinterprets a check, so it needs its own tests and a note in the
   README.
+
+## Outcome (2026-10-19, stop rule applied; no code in `src/`)
+Point 1 was prototyped outside the repo (scratch `batch30.py`, session scratchpad): the four tables are read in four
+bulk queries and `TraceStore.get` is served from them through the unchanged `_build_run`, so validation and error
+mapping are those of `get`. `check_sources` returned **identical statuses, claim support and diagnostic count, node
+for node** (132,487 nodes) to the saved reference of the current code in every run. Damaged-variant equality was not
+run, because the gate was not met.
+
+Timing at 20,000 synthetic runs, each in a fresh process, alternating, no stray python processes:
+
+| | run 1 | run 2 | run 3 | median |
+|---|---|---|---|---|
+| baseline `check_sources` | 11.63 s | 11.16 s | 11.44 s | 11.44 s |
+| batched (bulk load + check) | 6.50 s | 6.25 s | 6.53 s | 6.50 s |
+
+Batched is 57% of baseline, above the 50% gate of point 2 (earlier single comparisons gave 43% when the batched run
+came second in one process, with a warm file cache, and 55 to 57% when it came first; the fresh-process medians are
+the fair figure). The time left is `_build_run` validation, `eligible_documents`, hashing, and the NetworkX graph
+construction inside `check_sources`, which batching does not touch. At 5,000 runs the same prototype took 42% (warm).
+
+**Decision (point 3):** nothing ships. The limit is in the README. The two decisions in point 4 (narrower validation,
+early stop in `show`) are not taken and stay open; either would be a new ADR. A future attempt could try batching
+together with a cheaper `_build_run` for the check path, which is exactly the validation question of point 4.
