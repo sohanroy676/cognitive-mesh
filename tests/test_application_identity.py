@@ -141,7 +141,7 @@ def test_the_graph_file_round_trips_the_ids_and_older_formats_are_refused(tmp_pa
     assert {n.app_id for n in loaded.snapshot.nodes if n.kind is NodeKind.CLAIM} == {"shop-one"}
     (run,) = [n for n in loaded.snapshot.nodes if n.kind is NodeKind.RUN]
     assert (run.app_id, run.app_id_how) == ("shop-one", IdentityHow.DECLARED)
-    assert FORMAT_VERSION == 5
+    assert FORMAT_VERSION == 6
     conn = sqlite3.connect(path)
     conn.execute("UPDATE meta SET value = '3' WHERE key = 'format_version'")
     conn.commit()
