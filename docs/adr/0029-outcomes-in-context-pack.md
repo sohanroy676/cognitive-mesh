@@ -78,3 +78,16 @@ recorded account, not proof (ADR-0018); no new dependency.
 - An old stored pack JSON without the new fields validates and reads back with `None`; `traces show` labels it.
 - `task` through `main()` prints the line; `--json` carries the fields.
 - A hostile `detail` string in an outcome never appears in the pack JSON or the model prompt.
+
+## Outcome (2026-10-19, branch `feature/outcomes-in-pack`)
+Implemented as decided; no deviation. `ClaimItem.outcome/outcomes_current/outcomes_other` and
+`RecalledContext.outcomes_consulted` (`agents/context.py`), set in `retrieval/context.py::_claim_item` and
+`build_context(outcomes_consulted=...)`, passed by `workflow.prepare_context` (also on the missing-index path).
+Printed by `cli._print_context` (task) and `cli._print_offered_context` (`traces show`). Tests:
+`tests/test_pack_outcomes.py` (8): failed state, other-version outcome, refused promotion not counted, conflict, no
+outcomes file, text output, hostile `detail` absent from pack and prompt, old pack reads as not recorded. Two
+mutations (count refused promotions; drop `outcomes_consulted`) each failed tests. Suite 1331 passed, 5 skipped;
+ruff, format and mypy clean. Real CLI, scratch dir, `e2e_app` copy, real MiniLM: `task` (session 1), `memory index`,
+`experience build`, `experience outcome CLAIM --source check --result succeeded`, then `task ... --outcomes O` printed
+`outcome: succeeded for the current code version (1 current, 0 other version)` (exit 0), without `--outcomes` it
+printed `outcomes: not consulted (no --outcomes file)`, and `traces show` of both runs printed the matching lines.
