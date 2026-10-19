@@ -8,6 +8,8 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 ### Documentation
 - Record CI runs for v1.4.2
 - **adr:** Propose ADR-0030 source-check cost
+- **adr:** Accept ADR-0030
+- Record ADR-0030 outcome, stop rule applied
 
 ## [1.4.2] - 2026-10-19
 
