@@ -87,3 +87,46 @@ agents import nothing from `experience`.
   on one fixture; redundant and weak evidence; missing evidence gives the explicit empty pack; a 3-step plan
   where step 3 needs step 1's output, and failed/blocked/absent sources each fail with their message;
   persistence of profile and drops across processes; at least three hand-run mutation checks.
+
+## Amendment (Proposed, not accepted): profile cut-offs measured on a larger real corpus, 2026-10-19
+Status of this amendment: Proposed. No constant, test or code was changed. `PROFILE_DEFAULTS` stays 5/0.2 and 10/0.1
+until the user accepts one of the options below.
+
+Measurement (real `all-MiniLM-L6-v2`, index of 172 documents from 22 applications: 19 real CPython 3.13 standard
+library packages copied as separate applications, never executed, plus `tkinter`, `encodings` and `re`; one run per
+application, a `unresolved_report` step and up to 12 `dependencies_of` steps each). 60 queries were written and
+labelled before any score was seen: 40 related (35 name one module of one package, 5 name a package; 20 short, 20
+long) and 20 unrelated. Each was searched with `memory search --min-similarity 0 --k 20 --json` in its own process;
+the cut-off and `k` of each profile were applied afterwards to the saved hits.
+
+| | precision (k 5, 0.2) | recall (k 10, 0.1) |
+|---|---|---|
+| related queries with an expected document admitted | 38/40 (95%) | 39/40 (98%) |
+| unrelated queries that admit anything | 0/20 | 9/20 (45%) |
+| related queries that also admit a document of another application | 24/40 | 30/40 |
+| mean documents admitted per unrelated query | 0.00 | 4.00 |
+
+Best expected-hit similarity over the 40 related queries: min 0.265, median 0.446, max 0.704 (short and long queries
+alike). Top similarity of the 20 unrelated queries: median 0.085, max 0.176; one had only negative similarities. The
+fixed decision rule (set before the data: change nothing unless under 70% of related queries are admitted at 0.2, or
+over 10% of unrelated queries admit anything at 0.1) held for the precision cut-off and failed for the recall one.
+Sweeping the cut-off over the same hits: at 0.15, 38/40 related and 3/20 unrelated; at 0.175, 38/40 and 1/20; at
+0.2 and 0.25, 38/40 and 0/20 (k 5; k 10 gives 39/40 for the related column).
+
+`task --profile recall` was spot-checked on 2 unrelated queries with `--root` set to the application of their top hit
+(the worst case): "kubernetes pod crash loop" with root `concurrent` and "guitar chord progression for a blues song"
+with root `tkinter` each put `validated` claims of that application into the pack (similarity about 0.17), and
+`precision` offered nothing. The gate cannot help here, because it tests application identity and subject, not topic.
+"zebra quantum pastry" with root `json` was held back by the gate as a different application.
+
+Limits of this measurement: one corpus kind (all documents are deterministic dependency output with similar JSON
+shape), queries written by the same agent that built the corpus and mostly naming a module path, so related scores
+are probably higher than for loose natural-language requests (the earlier 6-document check found a plausibly related
+hit at 0.187); no model-written or failed runs; 172 documents.
+
+Options, for the user to choose (each would need tests and a trace-visible profile description, none is built):
+1. Keep 0.1 and document that `recall` admits off-topic same-application claims for unrelated requests (the
+   profile is a person's explicit choice).
+2. Raise the `recall` cut-off to about 0.15 (3/20 unrelated here, still admits loosely related hits down to 0.15).
+3. Keep both and measure again with loose, independently written requests (a person or another model writes the
+   queries) before changing anything.
