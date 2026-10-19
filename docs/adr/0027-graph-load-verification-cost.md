@@ -1,7 +1,7 @@
 # ADR-0027: Cost of verifying the experience graph on load (amends ADR-0026)
 
 ## Status
-Proposed (not accepted; no code is written until the user accepts this text)
+Accepted (text reviewed and accepted by the user 2026-10-19, before any code was written)
 
 ## Date
 2026-10-19
