@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.4.3] - 2026-10-19
 
 ### Added
 - **context:** Show recorded outcomes in the task pack
@@ -16,6 +16,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Propose ADR-0030 source-check cost
 - **adr:** Accept ADR-0030
 - Record ADR-0030 outcome, stop rule applied
+- Handoff and release notes for v1.4.3
 
 ## [1.4.2] - 2026-10-19
 
