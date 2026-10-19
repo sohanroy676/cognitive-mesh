@@ -1,7 +1,7 @@
 # ADR-0028: Cost of whole-graph assessment and source checks (amends ADR-0019, ADR-0026, ADR-0027)
 
 ## Status
-Proposed (not accepted; no code is to be written until the user accepts this text)
+Accepted (text reviewed and accepted by the user 2026-10-19, before any code was written)
 
 ## Date
 2026-10-19
