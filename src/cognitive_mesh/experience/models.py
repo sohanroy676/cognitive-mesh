@@ -8,7 +8,7 @@ Claims are `unvalidated`: repetition across runs is counted, never treated as pr
 import hashlib
 import json
 from enum import StrEnum
-from typing import Final, Literal
+from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -140,9 +140,13 @@ class Reached(_Frozen):
     path: tuple[ExpEdge, ...]
 
 
+def _dump_key(data: dict[str, Any]) -> str:
+    return json.dumps(data, sort_keys=True, ensure_ascii=True)
+
+
 def ref_key(ref: TraceRef) -> str:
     """The one ordering of references, used by the build, the hash and the file."""
-    return json.dumps(ref.model_dump(mode="json"), sort_keys=True, ensure_ascii=True)
+    return _dump_key(ref.model_dump(mode="json"))
 
 
 def canonical(
@@ -151,11 +155,21 @@ def canonical(
     diagnostics: tuple[ExperienceDiagnostic, ...] = (),
 ) -> str:
     """The text the content hash covers: sorted, compact, ASCII, independent of insertion order."""
+    # The same reference sits on many edges: dump and key each distinct one once (ADR-0027).
+    dumped: dict[TraceRef, tuple[str, dict[str, Any]]] = {}
+
+    def entry(ref: TraceRef) -> tuple[str, dict[str, Any]]:
+        found = dumped.get(ref)
+        if found is None:
+            data = ref.model_dump(mode="json")
+            found = dumped[ref] = (_dump_key(data), data)
+        return found
+
     node_part = [n.model_dump(mode="json") for n in sorted(nodes, key=lambda n: n.id)]
     edge_part = [
         {
             **e.model_dump(mode="json", exclude={"refs"}),
-            "refs": [r.model_dump(mode="json") for r in sorted(e.refs, key=ref_key)],
+            "refs": [entry(r)[1] for r in sorted(e.refs, key=lambda r: entry(r)[0])],
         }
         for e in sorted(edges, key=lambda e: (e.source, e.target, e.kind.value))
     ]

@@ -212,17 +212,22 @@ def load(path: Path) -> LoadedGraph:
         nodes = tuple(ExpNode.model_validate_json(row[1]) for row in node_rows)
         if any(node.id != row[0] for node, row in zip(nodes, node_rows, strict=True)):
             raise ExperienceGraphError("the experience graph holds a node under the wrong id")
-        refs: dict[tuple[str, str, str], list[TraceRef]] = {}
+        # The same reference text sits on many edges: parse and key each distinct one once
+        # (ADR-0027). Frozen models are safe to share between edges.
+        parsed: dict[str, tuple[str, TraceRef]] = {}
+        refs: dict[tuple[str, str, str], list[tuple[str, TraceRef]]] = {}
         for source, target, kind, ref_json in ref_rows:
-            refs.setdefault((source, target, kind), []).append(
-                TraceRef.model_validate_json(ref_json)
-            )
+            entry = parsed.get(ref_json)
+            if entry is None:
+                ref = TraceRef.model_validate_json(ref_json)
+                entry = parsed[ref_json] = (ref_key(ref), ref)
+            refs.setdefault((source, target, kind), []).append(entry)
         edges = tuple(
             ExpEdge(
                 source=s,
                 target=t,
                 kind=k,
-                refs=tuple(sorted(refs.get((s, t, k), []), key=ref_key)),
+                refs=tuple(r for _, r in sorted(refs.get((s, t, k), []), key=lambda e: e[0])),
             )
             for s, t, k in edge_rows
         )
