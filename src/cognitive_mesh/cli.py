@@ -51,6 +51,7 @@ from cognitive_mesh.validity import current_environment, utc_today
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from cognitive_mesh.agents.context import ClaimItem
     from cognitive_mesh.experience import ExperienceGraph, SourceReport
     from cognitive_mesh.experience.assess import ClaimAssessment
     from cognitive_mesh.experience.current import CurrentSource
@@ -619,6 +620,22 @@ def _run_plan(
     return EXIT_OK if run.status is TaskStatus.SUCCEEDED else EXIT_TASK_NOT_SUCCEEDED
 
 
+def _outcome_line(claim: "ClaimItem") -> str | None:
+    """The recorded-outcome summary of a pack claim (ADR-0029); None if there is nothing to say."""
+    if claim.outcome is None or not (claim.outcomes_current or claim.outcomes_other):
+        return None
+    return (
+        f"outcome: {_printable(claim.outcome)} for the current code version "
+        f"({claim.outcomes_current} current, {claim.outcomes_other} other version)"
+    )
+
+
+def _outcomes_note(consulted: bool | None) -> str | None:
+    if consulted is None:
+        return "outcomes: not recorded in this pack"
+    return None if consulted else "outcomes: not consulted (no --outcomes file)"
+
+
 def _print_offered_context(trace: RunTrace) -> None:
     """What past experience the run was given (ADR-0017); nothing is printed for plain runs."""
     pack = trace.recalled
@@ -639,6 +656,10 @@ def _print_offered_context(trace: RunTrace) -> None:
     for claim in pack.claims:
         label = f"[{_printable(claim.status)}] {_printable(claim.name)}"
         print(f"    {label}  {_printable(claim.claim_id)}")
+        if (line := _outcome_line(claim)) is not None:
+            print(f"      {line}")
+    if (note := _outcomes_note(pack.outcomes_consulted)) is not None:
+        print(f"    {note}")
     for raw in pack.raw:
         print(
             f"    [raw: {_printable(raw.kind)}] run {_printable(raw.run_id)} "
@@ -1001,6 +1022,10 @@ def _print_context(prepared: "PreparedContext") -> None:
                 f"    reviews: {claim.confirmed_reviews} confirmed, "
                 f"{claim.rejected_reviews} rejected"
             )
+        if (line := _outcome_line(claim)) is not None:
+            print(f"    {line}")
+    if pack.outcomes_consulted is False:
+        print(f"  {_outcomes_note(False)}")
     for raw in pack.raw:
         print(
             f"  [raw: {_printable(raw.kind)}] {_printable(raw.run_id)} "

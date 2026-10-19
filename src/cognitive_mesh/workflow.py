@@ -89,6 +89,7 @@ def prepare_context(
             k=k,
             min_similarity=min_similarity,
             profile=profile,
+            outcomes_consulted=False,
         )
         return PreparedContext(GatedContext(pack=pack, not_applicable=()), None, missing)
 
@@ -128,5 +129,6 @@ def prepare_context(
         ingestion.root,
         identity,
         profile,
+        outcomes_consulted=outcomes_file is not None,
     )
     return PreparedContext(gated, found, ())
