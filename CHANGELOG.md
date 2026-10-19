@@ -7,6 +7,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - **progress:** Record CI for v1.4.3
+- **progress:** Record stdlib claims on two real Python minors
+- **adr:** Measure profile cut-offs on a real corpus
+- **progress:** Record real-model recall timing at 5,000 and 20,000 runs
 
 ## [1.4.3] - 2026-10-19
 
