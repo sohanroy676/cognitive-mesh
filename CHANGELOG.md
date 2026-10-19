@@ -14,6 +14,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record ADR-0028 proposal in memory bank
 - **adr:** Accept ADR-0028
 - Record ADR-0028 outcome and measurements
+- Record ADR-0028 follow-up checks at scale and with real MiniLM
 
 ## [1.4.1] - 2026-10-19
 
