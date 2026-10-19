@@ -79,3 +79,63 @@ the trace database (ADR-0015); no result may change; no new dependency.
   allows.
 - Real-model recall timing at 5,000 and more runs, and the size of the final listing for a large graph, are not
   addressed here.
+
+## Outcome (2026-10-19, branch `feature/assessment-cost`)
+Profiled first (scratch `profile28.py`, not committed), on the ADR-0027 synthetic graphs (format 6, 1,600 claims,
+105,642 nodes and 251,200 edges at 20,000 runs), one run each, Windows 11, CPython 3.12, no model.
+
+| at code `8d8f997` | 5,000 runs | 20,000 runs |
+|---|---|---|
+| `check_sources`, whole graph | 3.71 s | 14.86 s |
+| `assess_claims`, whole graph | 4.57 s | 21.54 s |
+| `ContradictingAttempt` objects built (claims x about 243 / 975) | 390,000 | 1,560,000 |
+| memory held by the `assess_claims` result (tracemalloc) | 431 MB | 1,684 MB |
+
+Where the time went (cProfile, so inflated): `check_sources` spends 76% in `_check_attempts` and 62% in `store.get`
+(one read per run, already cached per run; 20,000 reads), which is the re-check this ADR forbids weakening. In
+`assess_claims` the candidate walk (`_contradiction_candidates`, `_same_application`) took 10.3 s of the 44 s
+profiled, `corroborate` 2.3 s (1,560,000 `con()` calls), and pydantic construction of the contradicting objects
+and `assess_claim`'s own loop most of the rest. The hypothesis in Context was right: every claim about one subject
+rebuilt the same ~975 objects.
+
+**Point 2 (scoping), shipped:** `experience promote` now checks only the attempts the claim is judged by
+(`check_attempts(attempts_behind(...))`) and assesses only that claim; `experience show` checks only the shown node
+and what it reaches with the new `check_nodes` (`experience/verify.py`), which applies the same rules as
+`check_sources` (a run is judged from its attempts' documents, an entity from every attempt and claim pointing at
+it). At 20,000 runs `promote`'s check and assessment take 0.44 to 0.51 s (five random claims; whole-graph path
+about 36 s) and equal the saved reference output of the old code. `show --transitive` from a claim took 9.2 to
+10.1 s because it reaches shared entities (`capability:dependencies_of` alone is 9.0 s: its status rests on every
+attempt that used it); that is exact by design, not approximated. Without `--transitive` it reaches only
+neighbours. 300 random nodes of every kind checked in 0.23 s and all equal the whole-graph statuses.
+
+**Point 3 (whole-graph `claims`), gate met:** `assess_claims` now builds the contradiction candidates once per
+(predicate, subject, application) and the immutable `ContradictingAttempt` objects once per (attempt, same-version)
+and shares them across claims (`_Listings` in `experience/assess.py`), groups outcomes by claim once, and calls
+`con()` once per distinct fingerprint. Every contradicting attempt is still listed in every assessment; the
+serialised assessments of all 1,600 claims equal the saved reference of the old code at 5,000 and 20,000 runs.
+
+| after | 5,000 runs | 20,000 runs |
+|---|---|---|
+| `assess_claims`, whole graph | 1.23 s (was 4.57 s) | 5.43 s (was 21.54 s; gate: at most half, 10.8 s, met) |
+| traced peak during the call | 39 MB (was 431 MB) | 116 MB (was 1,684 MB) |
+
+Point 4 was not triggered: the memory fell as a side effect of sharing objects, not by hiding records. The
+JSON output of `experience claims` is unchanged and still lists every contradicting attempt per claim, so its size
+is unchanged too.
+
+**Not changed (stop rule for this stage):** `check_sources` (about 15 s at 20,000 runs) stays, because 76% of it is
+the per-run re-read of the trace row and no saving was found that keeps every attempt re-checked. `experience
+check` therefore still costs about 15 s plus the load, and `experience claims` about 15 s plus 5 s plus the load.
+
+**Correction:** `experience outcome` only loads the graph; it runs neither stage. Earlier text (ADR-0026, ADR-0027,
+README) that listed `experience claims/outcome/check` should read `claims`, `promote`, `show` and `check`.
+
+**Tests:** `tests/test_assessment_cost.py` (14): `check_nodes` equals `check_sources` for every node, alone and
+together, on an untouched and a damaged database (deleted, edited, malformed runs) and for a run re-recorded
+unfinished; it reads only the runs it needs; the shared assessment equals a fresh claim-by-claim assessment with
+reviews and a current source; one listing is "same version" for one claim and not another; a listing with a
+missing source never contradicts; `only=` unchanged; `show` and `promote` through `main()` give the whole-graph
+statuses on a damaged database and keep their errors (exit 8 missing database, unknown node, not a claim).
+Mutations that failed tests: cache key ignoring same-version (2 failed), candidate key ignoring subject (4),
+entity status ignoring claims (3), run status skipping its attempts (1, after adding the unfinished-run case; the
+first version of the tests did not catch it). Suite 1323 passed, 5 skipped; ruff, format and mypy clean.
