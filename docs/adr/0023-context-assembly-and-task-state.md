@@ -90,7 +90,8 @@ agents import nothing from `experience`.
 
 ## Amendment (Proposed, not accepted): profile cut-offs measured on a larger real corpus, 2026-10-19
 Status of this amendment: Proposed. No constant, test or code was changed. `PROFILE_DEFAULTS` stays 5/0.2 and 10/0.1
-until the user accepts one of the options below.
+until the user accepts one of the options below. On 2026-10-20 the user chose option 3 (keep both, re-measure with
+independently written requests first); nothing is accepted yet and the amendment stays Proposed until that measurement exists.
 
 Measurement (real `all-MiniLM-L6-v2`, index of 172 documents from 22 applications: 19 real CPython 3.13 standard
 library packages copied as separate applications, never executed, plus `tkinter`, `encodings` and `re`; one run per
