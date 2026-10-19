@@ -131,6 +131,27 @@ reference outputs of the old code, at 5,000 and 20,000 runs.
   ASCII JSON. Detail the ADR text did not give: an edge's (source, target, kind) is hashed as a JSON array, so that
   non-ASCII ids stay ASCII in the stream.
 
-**Not changed:** `check_consistent` (about 1.5 s at 20,000 runs here), whole-graph `check_sources` and
-`assess_claims`; peak memory of the whole process was not re-measured.
+Whole-process stages, measured 2026-10-19 with a scratch script (`measure.py`, session scratchpad, not
+committed) that runs `load`, `check_consistent`, `ExperienceGraph` construction, whole-graph `check_sources` and
+`assess_claims` in one process and reads the peak working set (Windows `GetProcessMemoryInfo`). The old code ran
+from a temporary detached worktree at `e19c0c6` on the format-5 graph of the same runs. One run each, so timings
+vary by a second or two (this load took 9.86 s against the 7.49 s median above).
+
+| stage at 20,000 runs | old (`e19c0c6`) | new (format 6) |
+|---|---|---|
+| `load` | 17.13 s | 9.86 s |
+| `check_consistent` | 0.75 s | 0.71 s |
+| `ExperienceGraph` construction | 1.24 s | 1.27 s |
+| `check_sources` (whole graph) | 15.03 s | 14.79 s |
+| `assess_claims` (whole graph) | 19.14 s | 20.32 s |
+| peak working set after `load` | 1,738 MB | 916 MB |
+| peak working set of the process | 2,709 MB | 2,457 MB |
+
+At 5,000 runs: load 4.08 s to 2.21 s; peak working set after load 469 MB to 275 MB; process peak 779 MB to 696 MB.
+
+**Unchanged, as expected:** `check_consistent`, graph construction, `check_sources` and `assess_claims` are within
+run-to-run noise. `check_consistent` is about 0.7 s here (the earlier 1.5 s came from a slower, noisier profiling
+run). The process peak falls by only about 9% because it is set by `assess_claims`, which adds about 1.4 GB on top
+of the loaded graph and which this ADR did not touch. `experience claims/outcome/check` pay it; `recall` and
+`task` do not (ADR-0019).
 
