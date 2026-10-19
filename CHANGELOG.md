@@ -3,10 +3,14 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.4.4] - 2026-10-19
 
 ### Documentation
 - **progress:** Record CI for v1.4.3
+- **progress:** Record stdlib claims on two real Python minors
+- **adr:** Measure profile cut-offs on a real corpus
+- **progress:** Record real-model recall timing at 5,000 and 20,000 runs
+- **progress:** Note release v1.4.4
 
 ## [1.4.3] - 2026-10-19
 
