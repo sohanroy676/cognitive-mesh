@@ -1,7 +1,7 @@
 # ADR-0030: Cost of the whole-graph source check (amends ADR-0028)
 
 ## Status
-Proposed (not accepted; no code is written until the user accepts or changes this text)
+Accepted (text reviewed and accepted by the user 2026-10-19, before any code was written)
 
 ## Date
 2026-10-19
