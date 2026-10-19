@@ -1,7 +1,7 @@
 # ADR-0029: Recorded outcomes in the context pack (amends ADR-0017, ADR-0018, ADR-0023)
 
 ## Status
-Proposed (not accepted; no code is written until the user accepts or changes this text)
+Accepted (text reviewed and accepted by the user 2026-10-19, before any code was written)
 
 ## Date
 2026-10-19
