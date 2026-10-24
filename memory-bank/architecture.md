@@ -83,7 +83,7 @@ while tracking their source, validity, confidence, and conflicts.
 - Local Web UI
   Implemented in v1.5.0 on `feature/v1.5.0-web-ui` (ADR-0031, not merged yet) as `src/cognitive_mesh/ui/`: a stdlib
   `ThreadingHTTPServer` on 127.0.0.1, GET only, access token + Host check, read-only views over the trace store,
-  experience graph, reviews, outcomes, memory index and a dependency graph of `--root`. It calls the same library
+  experience graph, reviews and outcomes, every recorded step (ADR-0033) and a dependency graph of any typed folder (ADR-0032); the browser does not search by meaning (CLI only). It calls the same library
   functions as the CLI; the JSON for `experience claims|show|check` lives in `experience/report.py` and is shared.
   It writes nothing and shows statuses as categories, never as a score.
 - Outcome Evaluation

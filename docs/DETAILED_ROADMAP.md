@@ -530,7 +530,7 @@ they are opt-in (marker plus environment variable) and skipped by default and in
 
 ### Implement
 - `cognitive-mesh ui`: a stdlib `http.server` on 127.0.0.1 only, with a per-start access token, a Host check, GET only, and a restrictive CSP (ADR-0031).
-- Read-only views of traces, claims with statuses and supporting/contradicting records, a node's neighbourhood, the source check, recall, memory search, and the dependency graph (sandboxed iframe).
+- Read-only views of traces, claims with statuses and supporting/contradicting records, a node's neighbourhood, the source check, every recorded step, and the dependency graph (sandboxed iframe).
 - JSON payloads for `experience claims`, `show` and `check` shared between the CLI and the UI.
 
 ### Test
