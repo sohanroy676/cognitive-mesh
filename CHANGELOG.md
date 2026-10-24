@@ -19,10 +19,12 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record the v1.5.0 web UI and its verified commands
 - **adr:** Propose ADR-0032 interactive graph and run history
 - Record ADR-0032 implementation and its verified commands
+- Record the Copy id fix and how it was found
 
 ### Fixed
 - **ui:** Flush the URL line and tidy the page layout
 - **ui:** Say the graph is building while the frame is empty
+- **ui:** Make inspector buttons and Copy id work with a real click
 
 ### Maintenance
 - **ui:** Drop a stray blank line
