@@ -12,6 +12,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **ui:** Explain claims in plain sentences
 - **ui:** List every recorded step in an Experiences tab
 - **ui:** Show what an experience stored
+- **ui:** Open a saved dependency graph file in the Graph tab
 
 ### Changed
 - **experience:** Share show/claims/check JSON builders
@@ -30,6 +31,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Propose ADR-0034 stored content of an experience
 - Record the experience content page, its checks and costs
 - **adr:** Propose ADR-0035 saved dependency graph files
+- Rewrite the README as a normal project page
 
 ### Fixed
 - **ui:** Flush the URL line and tidy the page layout
