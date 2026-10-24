@@ -7,6 +7,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Added
 - **ui:** Add read-only local web UI command
+- **ui:** Redesign as an evidence ledger
 
 ### Changed
 - **experience:** Share show/claims/check JSON builders
