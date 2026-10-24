@@ -18,9 +18,10 @@ from cognitive_mesh.experience import (
     check_sources,
 )
 from cognitive_mesh.experience import store as graph_store
-from cognitive_mesh.experience.assess import assess_claims, orphaned_reviews
+from cognitive_mesh.experience.assess import assess_claims, attempts_behind, orphaned_reviews
 from cognitive_mesh.experience.current import observe_current
-from cognitive_mesh.experience.models import CLAIM_NOTE, REPETITION_NOTE
+from cognitive_mesh.experience.history import build_history, empty_history, find_node
+from cognitive_mesh.experience.models import CLAIM_NOTE, REPETITION_NOTE, NodeKind
 from cognitive_mesh.experience.outcomes import OutcomeStore, OutcomeStoreError
 from cognitive_mesh.experience.report import (
     check_payload,
@@ -30,6 +31,7 @@ from cognitive_mesh.experience.report import (
     show_payload,
 )
 from cognitive_mesh.experience.reviews import ReviewStore, ReviewStoreError
+from cognitive_mesh.experience.verify import SourceReport, check_attempts
 from cognitive_mesh.graph import (
     DEFAULT_MAX_EDGES,
     DEFAULT_MAX_NODES,
@@ -41,6 +43,9 @@ from cognitive_mesh.ingestion import IngestionError, ingest_application
 from cognitive_mesh.memory import MemoryIndexError
 from cognitive_mesh.traces import TraceNotFoundError, TraceStore, TraceStoreError
 from cognitive_mesh.ui.config import EmbedderHolder, UiConfig
+from cognitive_mesh.ui.errors import ApiError
+from cognitive_mesh.ui.graphdata import graph_payload
+from cognitive_mesh.ui.paths import resolve_folder
 from cognitive_mesh.validity import current_environment, utc_today
 
 if TYPE_CHECKING:
@@ -53,15 +58,6 @@ if TYPE_CHECKING:
 Reply = tuple[int, dict[str, Any]]
 
 NO_ROOT_NOTE = "no --root given: whether claims are current is unknown"
-
-
-class ApiError(Exception):
-    """A failure with the HTTP status to report and a message safe to show."""
-
-    def __init__(self, status: int, message: str) -> None:
-        super().__init__(message)
-        self.status = status
-        self.message = message
 
 
 def error_reply(exc: Exception) -> Reply:
@@ -120,10 +116,14 @@ class UiApi:
     embedder: EmbedderHolder
     # The embedding model and the Chroma client are not shared across threads (ADR-0031 point 10)
     _heavy: threading.Lock
+    # One graph build at a time: ingestion is CPU and disk heavy (ADR-0032 point 2)
+    _graph_lock: threading.Lock
 
     @classmethod
     def create(cls, config: UiConfig) -> UiApi:
-        return cls(config, EmbedderHolder(config.embedder_factory), threading.Lock())
+        return cls(
+            config, EmbedderHolder(config.embedder_factory), threading.Lock(), threading.Lock()
+        )
 
     # -- inputs -------------------------------------------------------------------------
 
@@ -302,6 +302,56 @@ class UiApi:
             found = index.search(query, store, k=k, min_similarity=min_similarity)
         return 200, {"data": found.model_dump(mode="json"), "notes": [], "warnings": []}
 
+    def graph(self, params: Mapping[str, str]) -> Reply:
+        typed = params.get("path", "")
+        if not typed.strip() and self.config.root is not None:
+            typed = str(self.config.root)
+        folder = resolve_folder(typed)
+        with self._graph_lock:
+            built = build_dependency_graph(ingest_application(folder))
+        return 200, {
+            "data": graph_payload(built, folder, full=_flag(params, "full")),
+            "notes": [],
+            "warnings": [],
+        }
+
+    def history(self, params: Mapping[str, str]) -> Reply:
+        text = _text(params, "id")
+        graph = self._experience_graph()
+        node = find_node(graph, text)
+        if node is None:
+            return 200, {"data": empty_history(text), "notes": [], "warnings": []}
+        with TraceStore.open_existing(_need(self.config.db, "db")) as store:
+            assessment = None
+            if node.kind is NodeKind.CLAIM:
+                report = SourceReport(
+                    statuses=check_attempts(graph, store, attempts_behind(graph, [node])),
+                    claim_support={},
+                    diagnostics=(),
+                )
+                current = (
+                    observe_current(self.config.root) if self.config.root is not None else None
+                )
+                assessment = assess_claims(
+                    graph,
+                    report,
+                    self._reviews(),
+                    current,
+                    self._outcomes() or [],
+                    today=utc_today(),
+                    environment=current_environment(),
+                )[node.id]
+            data = build_history(graph, store, node, assessment)
+        warnings = []
+        if any(r["source_check"] != "ok" for r in data["rows"]):
+            warnings.append(
+                "some rows rest on a trace source that is not confirmed; they are marked"
+            )
+        return 200, {"data": data, "notes": [data["note"]], "warnings": warnings}
+
+    def _experience_graph(self) -> ExperienceGraph:
+        return ExperienceGraph(graph_store.load(_need(self.config.graph, "graph")).snapshot)
+
     def graph_html(self, params: Mapping[str, str]) -> str:
         root = self.config.root
         if root is None:
@@ -323,4 +373,6 @@ class UiApi:
             "/api/check": self.check,
             "/api/recall": self.recall,
             "/api/search": self.search,
+            "/api/graph": self.graph,
+            "/api/history": self.history,
         }

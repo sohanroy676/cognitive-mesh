@@ -1,7 +1,7 @@
 # ADR-0032: Interactive dependency graph, typed folders, pinned ids and run history in the UI (amends ADR-0031)
 
 ## Status
-Proposed (needs the user's acceptance before any code is written)
+Accepted (text reviewed and accepted by the user 2026-10-24, before any code was written)
 
 ## Date
 2026-10-24
@@ -127,3 +127,29 @@ beyond zoom, neighbour highlighting and the existing layered layout.
   `E:\Projects` graph readable; whether pins surviving only on a fixed port confuses users.
 - Nothing in this ADR is implemented. The README, ROADMAP and verified-commands list must not describe these features
   as existing until the tests and the manual checks in point 8 pass.
+
+## Outcome of the implementation (2026-10-24, Windows 11, headless Edge, Node 22 driving it over the DevTools protocol)
+Done as written, with these details and findings:
+- **Added beyond the ADR text:** a "Find a node" field (jump to a node by part of its id); a note when a graph has more than 150 nodes
+  ("starts small, zoom in or use Find"); node `shape` is the payload key for the drawing style (a key named `style` tripped the
+  rule that forbids assigning `.style`); zoom, pan and key events are redrawn once per animation frame; edges use
+  `stroke-opacity`, not `opacity`, and arrowheads of dimmed edges are removed while a node is highlighted.
+- **A target is pinned in the `deps` space** (its name is the dependency-graph id), so a module id pinned from the graph and from
+  the Runs page is one pin.
+- **Measured:**
+  - `E:\Projects` (five projects), full graph: 552 nodes, 1,819 edges; the server took about 7 s, the page drew it in the same
+    wait; a sustained zoom test (40 wheel steps at 60 Hz) gave frames of average 29 ms, 95th percentile 83 to 100 ms, worst
+    230 to 300 ms.
+  - A synthetic folder of 2,900 modules, full graph: 5,790 edges, payload 1.5 MB; the server took 32 s (not profiled: ingestion
+    and layout both run in it); the page drew it in 2.7 s; the same zoom test gave average 32 ms, 95th percentile 83 ms, worst
+    100 ms. The 3,000 node ceiling is kept; the limit people will meet first is the build time, not drawing.
+- **Checked in a real browser (32 checks, all passing):** typed folder builds; wheel, buttons and `+`, `-`, `0` zoom; hover shows the
+  id and dims non-neighbours; click pins; pin mark; find; pins recognised in claim text and in the Runs header; run history for
+  a module id, for a claim (support and contradiction rows) and for an unknown id; unpin; truncation banner and one-click full
+  graph; refusals for a missing folder and a network path; pins survive a reload.
+- **Not checked:** hovering an edge to read its evidence and the Copy id button (written, not driven); touch pinch and
+  drag on a touch screen; keyboard-only use beyond the zoom keys and Find; a screen reader; light mode; Firefox and Safari;
+  macOS and Linux; a folder with more than the ingestion limit of 5,000 files; pins with `--port 0` across restarts.
+- **Known limits:** at "Fit" a graph of hundreds of nodes is a tall narrow strip, because the layered layout puts at most ten
+  nodes per row; it is readable only after zooming, which is what Find and neighbour highlighting are for. The 32 s build for
+  2,900 modules is long for "live".

@@ -9,7 +9,6 @@ const TABS = [
   ["overview", "Overview"],
   ["claims", "Claims"],
   ["recall", "Recall"],
-  ["search", "Search runs"],
   ["traces", "Runs"],
   ["node", "Graph node"],
   ["graph", "Dependency graph"],
@@ -25,6 +24,61 @@ const HINTS = {
 const MAX_TALLY = 12;
 let generation = 0;
 let revealed = false;
+
+// ---- pins: ids kept in this browser only (ADR-0032 point 5) ---------------------------------
+const PIN_KEY = "cogmesh.pins.v1";
+const FOLDER_KEY = "cogmesh.folder.v1";
+const MAX_PINS = 200;
+
+function readStore(key) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeStore(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch (e) {
+    // storage is unavailable (private window, blocked site data): the page still works
+  }
+}
+
+const validPin = (p) => p && typeof p.id === "string" && p.id.length > 0 && p.id.length <= 2000 && (p.space === "deps" || p.space === "exp");
+
+function loadPins() {
+  const raw = readStore(PIN_KEY);
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter(validPin).slice(-MAX_PINS) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+let pinned = loadPins();
+const pins = {
+  list: () => pinned.slice(),
+  has: (space, id) => pinned.some((p) => p.space === space && p.id === id),
+  find: (id) => pinned.find((p) => p.id === id) || null,
+  remove(space, id) {
+    pinned = pinned.filter((p) => !(p.space === space && p.id === id));
+    writeStore(PIN_KEY, JSON.stringify(pinned));
+  },
+  toggle(entry) {
+    if (pins.has(entry.space, entry.id)) {
+      pins.remove(entry.space, entry.id);
+      return;
+    }
+    pinned.push({ space: entry.space, id: entry.id, label: entry.label || entry.id, folder: entry.folder || null, pinned_at: new Date().toISOString() });
+    if (pinned.length > MAX_PINS) pinned = pinned.slice(-MAX_PINS);
+    writeStore(PIN_KEY, JSON.stringify(pinned));
+  },
+};
+const folderMemory = { get: () => readStore(FOLDER_KEY) || "", set: (v) => writeStore(FOLDER_KEY, v) };
 
 function h(tag, props, ...kids) {
   const e = document.createElement(tag);
@@ -89,6 +143,25 @@ function link(text, onclick) {
 }
 const runLink = (id) => link(id, () => go("traces", { id }));
 const nodeLink = (id) => link(id, () => go("node", { id }));
+
+function openPin(p) {
+  if (p.space === "deps") go("graph", { path: p.folder || "", focus: p.id });
+  else go("node", { id: p.id });
+}
+
+// A pinned id is marked, and links back to where it was pinned, wherever it appears again.
+function idLink(p) {
+  return h("span", { class: "pinned-id" }, h("span", { class: "badge", text: "pinned" }), link(p.id, () => openPin(p)));
+}
+
+function mentions(text) {
+  return String(text)
+    .split(/(\s+)/)
+    .map((tok) => {
+      const p = tok.trim() ? pins.find(tok) : null;
+      return p ? idLink(p) : tok;
+    });
+}
 
 function table(head, rows) {
   return h("table", {}, h("thead", {}, h("tr", {}, head.map((t) => h("th", { text: t })))), h("tbody", {}, rows));
@@ -189,7 +262,7 @@ function ledger(a, via) {
     h(
       "div",
       { class: "ledger-head" },
-      h("p", { class: "claim-text", text: a.name }),
+      h("p", { class: "claim-text" }, mentions(a.name)),
       ...(via || []).map((v) => h("p", { class: "via", text: "Retrieved via " + v.doc_id + " (query match " + v.similarity.toFixed(3) + ")" })),
     ),
     h("div", { class: "sides" }, side("s", "Supports", pro), side("c", "Contradicts", con)),
@@ -208,7 +281,7 @@ function ledger(a, via) {
         h("p", { class: "note", text: "Corroboration: " + a.corroboration + ". Outcome state: " + a.outcome + "." }),
         jsonBlock("Counts", a.counts || {}),
         jsonBlock("Independent sources", a.sources || [])),
-      h("p", {}, link("Explore this claim in the graph", () => go("node", { id: a.claim_id }))),
+      h("p", {}, link("Explore this claim in the graph", () => go("node", { id: a.claim_id })), " ", link("Show runs for this claim", () => go("traces", { for: a.claim_id }))),
     ),
   );
   revealed = true;
@@ -237,12 +310,81 @@ async function viewOverview(root) {
         h("tr", {}, h("td", { class: "mono", text: "--" + k }), h("td", { text: v.state === "not given" ? "not given" : v.state }), h("td", { text: v.message || HINTS[k] })),
       ),
     ),
+    pins.list().length
+      ? h("div", {}, h("h2", { text: "Pinned ids" }), h("ul", { class: "recs" }, pins.list().map((p) => h("li", {}, idLink(p), h("span", { class: "sub", text: p.space === "deps" ? "dependency graph node" + (p.folder ? " in " + p.folder : "") : "experience node" })))))
+      : null,
     h("p", { class: "note", text: "Version " + r.data.version + "." }),
     ...(r.warnings || []).map((m) => h("div", { class: "banner warn", role: "status", text: m })),
   );
 }
 
+const ROLE_TEXT = {
+  supports: "listed this claim",
+  contradicts: "listed the subject without the claim",
+  ran: "touched it",
+};
+
+function historyForm(value) {
+  return h("form", {
+    onsubmit: (ev) => {
+      ev.preventDefault();
+      const v = formParams(ev.target)["for"].trim();
+      go("traces", v ? { for: v } : {});
+    },
+  },
+  field("for", "Show every run that touched an id", value, { size: 52, placeholder: "A module, claim, target or attempt id" }),
+  h("button", { class: "act", type: "submit", text: "Show runs" }));
+}
+
+async function renderHistory(root, id) {
+  const r = await api("/api/history", { id });
+  const d = r.data;
+  const exp = d.found && d.node.kind !== null;
+  root.append(
+    h("p", {}, link("All runs", () => go("traces"))),
+    h("h2", { text: "Runs that touched this id" }),
+    h("p", { class: "claim-text" }, mentions(d.node.name)),
+    d.found ? h("p", { class: "note", text: d.node.kind + (d.status ? ", status " + d.status.replaceAll("_", " ") : "") + ". " + d.node.id }) : null,
+    ...messages(r),
+  );
+  if (exp) {
+    // A target is a dependency-graph id, so it is pinned as one; everything else is an experience id.
+    const entry = d.node.kind === "target"
+      ? { space: "deps", id: d.node.name, label: d.node.name }
+      : { space: "exp", id: d.node.id, label: d.node.name };
+    const pinBtn = h("button", { class: "act small ghost", type: "button", text: pins.has(entry.space, entry.id) ? "Unpin this id" : "Pin this id" });
+    pinBtn.addEventListener("click", () => {
+      pins.toggle(entry);
+      pinBtn.textContent = pins.has(entry.space, entry.id) ? "Unpin this id" : "Pin this id";
+    });
+    root.append(h("p", {}, pinBtn));
+  }
+  if (!d.found || !d.rows.length) {
+    root.append(h("p", { text: "No recorded run mentions this id." + (d.found ? "" : " It is not in the experience graph. Build the graph from your runs with: cognitive-mesh experience build") }));
+  } else {
+    if (d.claims.length) {
+      root.append(h("h2", { text: "Claims about it (" + d.claims.length + ")" }), h("ul", { class: "recs" }, d.claims.map((c) => h("li", {}, link(c.name, () => go("traces", { for: c.id }))))));
+    }
+    root.append(
+      h("h2", { text: plural(d.total_runs, "run", "runs") + ", newest first" }),
+      table(
+        ["Run", "Started", "Run status", "What it said", "Capability", "Code version", "Source check"],
+        d.rows.map((x) =>
+          h("tr", {}, h("td", {}, runLink(x.run_id)), h("td", { text: x.started_at || "unreadable" }), h("td", { text: x.run_status }),
+            h("td", { text: ROLE_TEXT[x.role] + (x.role === "contradicts" ? (x.same_version ? " (same code version)" : " (another code version)") : "") }),
+            h("td", { text: x.capability || "-" }), h("td", { class: "mono", text: x.code_version ? x.code_version.slice(0, 12) : "unrecorded" }), h("td", { text: x.source_check }))),
+      ),
+    );
+    if (d.truncated) root.append(h("p", { class: "banner warn", text: "Showing the newest runs only; " + d.total_runs + " runs touched this id." }));
+  }
+}
+
 async function viewTraces(root, params) {
+  if (params.get("for")) {
+    root.append(historyForm(params.get("for")));
+    await renderHistory(root, params.get("for"));
+    return;
+  }
   if (params.get("id")) {
     const r = await api("/api/trace", { id: params.get("id") });
     const t = r.data;
@@ -260,6 +402,8 @@ async function viewTraces(root, params) {
   const runs = r.data.runs || [];
   root.append(
     h("h2", { text: "Recorded runs" }),
+    historyForm(""),
+    pins.list().length ? h("p", { class: "note" }, "Pinned: ", ...pins.list().flatMap((p) => [link(p.id, () => go("traces", { for: p.id })), " "])) : null,
     ...messages(r),
     runs.length
       ? table(["Run", "Status", "Started", "Task", "Steps"], runs.map((x) => h("tr", {}, h("td", {}, runLink(x.run_id)), h("td", { text: x.status }), h("td", { text: x.started_at }), h("td", { text: x.task_id }), h("td", { text: x.step_count }))))
@@ -332,8 +476,9 @@ async function viewNode(root, params) {
   const d = r.data;
   root.append(
     ...messages(r),
-    h("p", { class: "claim-text", text: d.node.name }),
+    h("p", { class: "claim-text" }, mentions(d.node.name)),
     h("p", { class: "note", text: d.node.kind + ", source check " + d.status }),
+    h("p", {}, link("Show runs for this node", () => go("traces", { for: d.node.id }))),
     h("table", {}, h("tbody", {}, scalarRows(d.node))),
     jsonBlock("Full record", d.node),
     h("h2", { text: "Reached (" + d.reached.length + ")" }),
@@ -370,20 +515,6 @@ function renderRecall(root, r) {
   for (const n of d.notes) root.append(h("p", { class: "note", text: n }));
 }
 
-function renderSearch(root, r) {
-  const d = r.data;
-  root.append(...messages(r));
-  if (d.hits.length) {
-    root.append(table(["Query match", "Run", "Step", "Attempt", "Capability", "Result", "Basis"], d.hits.map((x) => h("tr", {}, h("td", { text: x.similarity.toFixed(3) }), h("td", {}, runLink(x.run_id)), h("td", { text: x.step_id }), h("td", { text: x.attempt_no }), h("td", { text: x.capability }), h("td", { text: x.result_status }), h("td", { text: x.basis || "-" })))));
-  }
-  for (const u of d.unverified) {
-    root.append(h("p", {}, h("span", { class: "chip st-stale" }, h("span", { class: "mark", "aria-hidden": "true" }), "not confirmed"), " ", runLink(u.run_id), " step " + u.step_id + " (" + u.reason + ")"));
-  }
-  if (d.message) root.append(h("p", { text: d.message }));
-  if (d.dropped_weak) root.append(h("p", { class: "note", text: plural(d.dropped_weak, "weak match", "weak matches") + " below " + d.min_similarity + " left out." }));
-  root.append(h("p", { class: "note", text: d.note }));
-}
-
 function queryView(path, title, button, render, intro) {
   return async (root, params) => {
     root.append(
@@ -408,29 +539,13 @@ function queryView(path, title, button, render, intro) {
   };
 }
 
-async function viewGraph(root) {
-  const s = await api("/api/status");
-  root.append(h("h2", { text: "Dependency graph" }));
-  if (s.data.inputs.root.state !== "present") {
-    root.append(h("p", { class: "banner warn", text: "The dependency graph needs an application directory. Start the UI with --root DIR." }));
-    return;
-  }
-  const wait = h("p", { class: "muted", text: "Building the graph. A large folder can take several seconds." });
-  root.append(
-    h("p", { class: "prose note", text: "The application as it is now. An edge from A to B means A depends on B. Shown in a sandboxed frame." }),
-    wait,
-    h("iframe", { src: "/api/graph.html", sandbox: "", title: "Dependency graph of the application", onload: () => wait.remove() }),
-  );
-}
-
 const VIEWS = {
   overview: viewOverview,
   claims: viewClaims,
   recall: queryView("recall", "Recall past experience", "Recall", renderRecall, "Finds claims by meaning. Each claim keeps its status and the records on both sides. A query match says how the words matched, not how true a claim is."),
-  search: queryView("search", "Search past runs", "Search", renderSearch, "Finds recorded steps by meaning. A close match is not evidence that a past result was correct."),
   traces: viewTraces,
   node: viewNode,
-  graph: viewGraph,
+  graph: (root, params) => graphView(root, params),
 };
 
 async function render() {
@@ -451,6 +566,8 @@ async function render() {
   }
   if (mine !== generation) root.remove();
 }
+
+const graphView = window.CogGraph.view({ h, api, go, pins, folder: folderMemory, plural, messages, rerender: () => render() });
 
 window.addEventListener("hashchange", render);
 render();

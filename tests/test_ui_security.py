@@ -1,5 +1,6 @@
 """The web UI's access rules (ADR-0031): token, Host check, GET only, headers, static allowlist."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -129,8 +130,9 @@ def test_internal_errors_are_opaque(ui_world: World, monkeypatch: pytest.MonkeyP
         assert b"secret" not in reply.body and b"Traceback" not in reply.body
 
 
-def test_the_script_never_parses_markup_or_evaluates_text() -> None:
-    script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+@pytest.mark.parametrize("name", ["app.js", "graph.js"])
+def test_the_scripts_never_parse_markup_evaluate_text_or_set_styles(name: str) -> None:
+    script = (STATIC_DIR / name).read_text(encoding="utf-8")
     for banned in (
         "innerHTML",
         "outerHTML",
@@ -140,17 +142,27 @@ def test_the_script_never_parses_markup_or_evaluates_text() -> None:
         "new Function",
         'setTimeout("',
         "srcdoc",
+        ".style",
+        "cssText",
+        'setAttribute("style"',
+        "createContextualFragment",
+        "DOMParser",
     ):
         assert banned not in script, banned
+
+
+def test_the_page_loads_only_scripts_from_its_own_origin() -> None:
     page = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    assert "<script src=" in page and "onclick" not in page
-    # the only script in the page is the one served from this origin
-    assert page.count("<script") == 1
+    assert "onclick" not in page and "<style" not in page and ' style="' not in page
+    sources = re.findall(r"<script([^>]*)>", page)
+    assert sources and all(re.fullmatch(r'\s*src="/[a-z]+\.js"\s*', a) for a in sources)
+    assert page.count("<script") == len(sources)
 
 
 def test_static_files_are_served_with_their_types(ui_world: World) -> None:
     with serving(ui_world.config()) as c:
         assert c.get("/").headers["content-type"].startswith("text/html")
         assert c.get("/app.js").headers["content-type"].startswith("text/javascript")
+        assert c.get("/graph.js").headers["content-type"].startswith("text/javascript")
         assert c.get("/app.css").headers["content-type"].startswith("text/css")
         assert b"Cognitive Mesh" in c.get("/").body
