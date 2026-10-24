@@ -26,6 +26,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record the full-suite result after the claims wording change
 - **adr:** Propose ADR-0033 experiences tab replacing recall
 - Record the Experiences tab, its measurements and checks
+- **adr:** Propose ADR-0034 stored content of an experience
 
 ### Fixed
 - **ui:** Flush the URL line and tidy the page layout
