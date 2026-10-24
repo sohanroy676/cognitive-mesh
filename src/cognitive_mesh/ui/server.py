@@ -202,4 +202,3 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(
             HTTPStatus.OK.value, page.encode("ascii"), "text/html; charset=utf-8", csp=GRAPH_CSP
         )
-
