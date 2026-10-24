@@ -70,6 +70,10 @@ table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; }
 th, td { text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--rule); vertical-align: top; overflow-wrap: anywhere; }
 th { font-weight: 600; color: var(--muted); font-size: 0.85rem; }
 td.nw { white-space: nowrap; overflow-wrap: normal; }
+td.preview { max-width: 28ch; color: var(--muted); font-size: 0.8rem; }
+.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; margin: 8px 0 16px; max-width: 90ch; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; overflow-wrap: anywhere; }
 td.mono, .mono, pre { font-family: var(--mono); font-size: 0.85rem; }
 pre { margin: 6px 0; padding: 10px; border: 1px solid var(--rule); background: var(--panel); overflow: auto; max-height: 360px; white-space: pre-wrap; word-break: break-word; }
 details { margin: 6px 0; }

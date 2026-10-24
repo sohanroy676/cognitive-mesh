@@ -147,12 +147,18 @@ def test_failed_and_model_written_steps_are_listed_and_unfinished_runs_are_not(
     assert not any(r["run_id"] == "run-unfinished" for r in data["rows"])
 
 
-def test_no_row_carries_a_steps_output(tmp_path: Path) -> None:
-    with serving(UiConfig(db=mixed_db(tmp_path), port=0)) as c:
+def test_a_row_carries_a_short_preview_and_never_the_whole_output(tmp_path: Path) -> None:
+    db = tmp_path / "t.sqlite3"
+    big: Any = {"pad": "x" * 400, "tail": "SENTINEL-TAIL"}
+    add_run(
+        db, "run-p", [("s", "dependencies_of", {}, success("run-p", "s", "dependencies_of", big))]
+    )
+    with serving(UiConfig(db=db, port=0)) as c:
         reply = c.get("/api/experiences")
-    assert b"SENTINEL-OUTPUT" not in reply.body
-    for row in reply.json()["data"]["rows"]:
-        assert not {"text", "output", "result_json"} & set(row)
+    assert b"SENTINEL-TAIL" not in reply.body  # past the 140 characters
+    row = reply.json()["data"]["rows"][0]
+    assert len(row["preview"]) == 140 and row["preview"].endswith("...")
+    assert not {"text", "output", "result_json"} & set(row)
 
 
 def test_a_long_list_is_cut_visibly_and_keeps_the_newest(

@@ -44,7 +44,7 @@ from cognitive_mesh.memory import MemoryIndexError
 from cognitive_mesh.traces import TraceNotFoundError, TraceStore, TraceStoreError
 from cognitive_mesh.ui.config import EmbedderHolder, UiConfig
 from cognitive_mesh.ui.errors import ApiError
-from cognitive_mesh.ui.experiences import build_experiences
+from cognitive_mesh.ui.experiences import build_experiences, experience_detail
 from cognitive_mesh.ui.graphdata import graph_payload
 from cognitive_mesh.ui.paths import resolve_folder
 from cognitive_mesh.validity import current_environment, utc_today
@@ -204,6 +204,14 @@ class UiApi:
             gone = g["missing_from_database"]
             warnings.append(f"{gone} experience(s) in the graph are no longer in the database")
         return 200, {"data": data, "notes": [], "warnings": warnings}
+
+    def experience(self, params: Mapping[str, str]) -> Reply:
+        doc_id = _text(params, "id")
+        db = _need(self.config.db, "db")
+        graph = self._experience_graph() if self.config.graph is not None else None
+        with TraceStore.open_existing(db) as store:
+            data = experience_detail(store, graph, doc_id)
+        return 200, {"data": data, "notes": [data["note"]], "warnings": []}
 
     def trace(self, params: Mapping[str, str]) -> Reply:
         run_id = _text(params, "id")
@@ -393,6 +401,7 @@ class UiApi:
             "/api/traces": self.traces,
             "/api/trace": self.trace,
             "/api/experiences": self.experiences,
+            "/api/experience": self.experience,
             "/api/claims": self.claims,
             "/api/node": self.node,
             "/api/check": self.check,

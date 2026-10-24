@@ -1,7 +1,7 @@
 # ADR-0034: Show what an experience stored: a one-line preview in the list and a page per experience (amends ADR-0033)
 
 ## Status
-Proposed (needs the user's acceptance before any code is written)
+Accepted (text reviewed and accepted by the user 2026-10-25, before any code was written)
 
 ## Date
 2026-10-25
@@ -84,3 +84,24 @@ Facts about the code base (inspected 2026-10-25):
   as stored; the preview is a prefix of compact JSON, not a summary.
 - Nothing in this ADR is implemented. The README and the verified-commands list must not describe it as existing until
   the tests and the browser checks in point 7 pass.
+
+## Outcome of the implementation (2026-10-25, Windows 11, headless Edge driven over the DevTools protocol)
+Built as written, with these details and findings:
+- **Code:** `ui/experiences.py` (`preview`, `cut`, `experience_detail`, `split_id`), `/api/experience`, a `What it produced`
+  column and a `Read it` link on every row, `viewExperience` in `ui/static/app.js`, and the list filters now live in the address
+  (`#experiences?result=failure&text=...`), so `Back to all experiences` returns to the same list. A `Read it` link carries the
+  list's query as `back`.
+- **One fix on the way:** my first back link was a clone of an element, which loses its click handler; it is built twice instead.
+- **Measured** (synthetic databases, one fresh process each, alternating with and without the preview): the preview adds no
+  measurable time (10,000 steps: 4.3 and 4.7 s with it, 4.4 and 4.6 s without; a first 5.3 s reading was machine load).
+  Payload at 10,000 rows: 2.8 MB without, 3.1 MB with the preview of these small synthetic outputs; with real outputs cut to 140
+  characters it grows by up to about 1.4 MB, which was not measured on real data.
+- **Checked in a real browser (33 checks, all passing):** the list shows previews (model output, failure kind and message, hostile
+  text as plain text) and nothing is injected; the text filter searches previews; the address keeps filters; `Read it` opens the
+  right experience; every section is present; a model step shows its model, inputs, output, evidence and run facts; redaction is
+  reported as "no rule matched", not as "no secrets"; a failed step shows why it failed and has no output section; a retried
+  step lists its first attempt; a 300,000-character output is cut at 100,000 characters with the hidden count; hostile stored
+  text in output, input and step id is shown as text and runs nothing (an `alert` hook stayed unset); `Back` keeps the filter; with
+  a graph the claims the step produced are listed and link to their history. The earlier 30, 32 and 10 checks still pass.
+- **Not checked:** the page on a real model run (the model step is hand-built), a database with secrets that redaction missed,
+  50 MB outputs, touch, screen readers, light mode, Firefox, Safari, macOS, Linux.
