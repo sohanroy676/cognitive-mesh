@@ -22,6 +22,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record ADR-0032 implementation and its verified commands
 - Record the Copy id fix and how it was found
 - Record the plain-language claims page
+- Record the full-suite result after the claims wording change
 
 ### Fixed
 - **ui:** Flush the URL line and tidy the page layout
