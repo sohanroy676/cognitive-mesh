@@ -10,6 +10,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **ui:** Redesign as an evidence ledger
 - **ui:** Typed-folder interactive graph and run history
 - **ui:** Explain claims in plain sentences
+- **ui:** List every recorded step in an Experiences tab
 
 ### Changed
 - **experience:** Share show/claims/check JSON builders
@@ -24,6 +25,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record the plain-language claims page
 - Record the full-suite result after the claims wording change
 - **adr:** Propose ADR-0033 experiences tab replacing recall
+- Record the Experiences tab, its measurements and checks
 
 ### Fixed
 - **ui:** Flush the URL line and tidy the page layout
