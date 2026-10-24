@@ -140,12 +140,13 @@ Implemented 2026-10-17 on `feature/v0.6.2-groq-client` (ADR-0013). Unit, CLI and
 - Test context selection and stateful task continuity.
 
 ### v1.5.0 — Local Read-Only Web UI
-- A `cognitive-mesh ui` command serves a local, read-only, token-protected web UI (ADR-0031, Proposed): traces, claims with statuses and evidence, dependency graph, recall and search.
+- A `cognitive-mesh ui` command serves a local, read-only, token-protected web UI (ADR-0031, accepted): traces, claims with statuses and evidence, dependency graph, recall and search.
 - Stdlib only; no writes to any store; evidence rules (statuses as categories, separate groups) carry over from the CLI.
-- ADR-0034 (accepted 2026-10-25): preview and a page per experience showing what each step stored; on `feature/ui-experience-content`, not merged.
-- ADR-0033 (accepted 2026-10-24): Experiences tab (every recorded step) replaces the Recall tab in the UI; on `feature/ui-experiences`, not merged.
-- ADR-0032 (accepted 2026-10-24): typed-folder interactive graph, browser-side pins, run history for nodes and claims, Search runs tab removed; on `feature/ui-graph-history`, not merged.
-- Status 2026-10-24: ADR-0031 accepted; implemented on `feature/v1.5.0-web-ui` (not merged, pushed or tagged; no CI run yet); criteria pass locally, see the README row.
+- ADR-0034 (accepted 2026-10-25): preview and a page per experience showing what each step stored.
+- ADR-0033 (accepted 2026-10-24): Experiences tab (every recorded step) replaces the Recall tab in the UI.
+- ADR-0032 (accepted 2026-10-24): typed-folder interactive graph, browser-side pins, run history for nodes and claims, Search runs tab removed.
+- ADR-0035 (accepted 2026-10-25): the Graph tab also opens a saved dependency graph file.
+- Status 2026-10-25: ADR-0031 to ADR-0035 implemented and merged to `main` in the v1.5.0 release branch (suite 1529 passed on Windows; a Linux fresh clone 1508 passed, 26 skipped). CI run ids are in `memory-bank/progress.md`.
 
 ### v1.6.0 — Model Performance Tracking and Routing
 - Track task outcomes, token cost, latency, and sample counts by model and task type.

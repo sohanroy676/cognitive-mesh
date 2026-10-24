@@ -81,7 +81,7 @@ while tracking their source, validity, confidence, and conflicts.
   the gate and the pack for the `task` command; `code_explainer` reads the pack as untrusted data and
   `dependency_analyst.compare_with_recalled` re-checks each claim against the current graph.
 - Local Web UI
-  Implemented in v1.5.0 on `feature/v1.5.0-web-ui` (ADR-0031, not merged yet) as `src/cognitive_mesh/ui/`: a stdlib
+  Implemented in v1.5.0 (ADR-0031 to ADR-0035, released as v1.5.0) as `src/cognitive_mesh/ui/`: a stdlib
   `ThreadingHTTPServer` on 127.0.0.1, GET only, access token + Host check, read-only views over the trace store,
   experience graph, reviews and outcomes, every recorded step (ADR-0033) and a dependency graph of any typed folder (ADR-0032); the browser does not search by meaning (CLI only). It calls the same library
   functions as the CLI; the JSON for `experience claims|show|check` lives in `experience/report.py` and is shared.
