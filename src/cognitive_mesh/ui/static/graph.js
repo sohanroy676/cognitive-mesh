@@ -41,7 +41,7 @@
   // ---- view --------------------------------------------------------------------------------
 
   function view(ctx) {
-    const { h, api, go, pins, folder, plural, messages } = ctx;
+    const { h, put, reput, api, go, pins, folder, plural, messages } = ctx;
 
     const svgEl = (tag, attrs, ...kids) => {
       const e = document.createElementNS(SVG_NS, tag);
@@ -62,7 +62,7 @@
       const focusId = params.get("focus") || "";
       const typed = path || (rootGiven ? "" : folder.get());
 
-      root.append(
+      put(root, 
         h("h2", { text: "Dependency graph" }),
         h("p", { class: "prose note", text: "Type a folder to graph it. An edge from A to B means A depends on B. Nothing in the folder is changed or run." }),
       );
@@ -77,21 +77,21 @@
         if (window.location.hash === "#graph?" + q) ctx.rerender();
         else go("graph", next);
       };
-      root.append(
+      put(root, 
         h("form", { onsubmit: submit },
           h("label", {}, "Folder", input),
           h("label", { class: "check" }, fullBox, h("span", { text: "Show the full graph" })),
           h("button", { class: "act", type: "submit", text: "Build graph" })),
       );
       const out = h("div", {});
-      root.append(out);
+      put(root, out);
       if (!path && !rootGiven) {
-        out.append(h("p", { class: "muted", text: "No folder yet. Type one above and choose Build graph." }));
+        put(out, h("p", { class: "muted", text: "No folder yet. Type one above and choose Build graph." }));
         return;
       }
 
       const wait = h("p", { class: "muted", text: "Building the graph. A large folder can take several seconds." });
-      out.append(wait);
+      put(out, wait);
       const started = Date.now();
       const timer = window.setInterval(() => {
         wait.textContent = "Building the graph (" + Math.round((Date.now() - started) / 1000) + " s). A large folder can take several seconds.";
@@ -124,23 +124,23 @@
 
       // summary and truncation
       const t = d.truncation;
-      out.append(h("p", { text: d.folder + ": " + plural(t.shown_nodes, "node", "nodes") + " and " + plural(t.shown_edges, "edge", "edges") + " shown." }));
+      put(out, h("p", { text: d.folder + ": " + plural(t.shown_nodes, "node", "nodes") + " and " + plural(t.shown_edges, "edge", "edges") + " shown." }));
       if (t.truncated) {
         const omitted = Object.entries(t.omitted_nodes_by_kind).map(([k, n]) => n + " " + k).join(", ") || "none";
-        out.append(
+        put(out, 
           h("div", { class: "banner warn", role: "status" },
             "Showing " + t.shown_nodes + " of " + t.total_nodes + " nodes and " + t.shown_edges + " of " + t.total_edges + " edges. Left out: " + omitted + ". ",
             h("button", { class: "link", type: "button", onclick: () => go("graph", { path: typedPath, full: "1" }), text: "Show the full graph" })),
         );
       } else if (d.full) {
-        out.append(h("p", { class: "note", text: "This is the full graph." }));
+        put(out, h("p", { class: "note", text: "This is the full graph." }));
       }
       if (d.nodes.length > 150) {
-        out.append(h("p", { class: "note", text: "This graph is large, so it starts small. Zoom in, or use Find to jump to a node. Hover a node to see only its neighbours." }));
+        put(out, h("p", { class: "note", text: "This graph is large, so it starts small. Zoom in, or use Find to jump to a node. Hover a node to see only its neighbours." }));
       }
-      if (d.cycles_total) out.append(h("p", { class: "note", text: plural(d.cycles_total, "dependency cycle", "dependency cycles") + " found; cycle edges are drawn heavier." }));
+      if (d.cycles_total) put(out, h("p", { class: "note", text: plural(d.cycles_total, "dependency cycle", "dependency cycles") + " found; cycle edges are drawn heavier." }));
       if (!d.nodes.length) {
-        out.append(h("p", { text: "No dependency nodes were found in this folder. It needs a Python, JavaScript or TypeScript project, or a package manifest." }));
+        put(out, h("p", { text: "No dependency nodes were found in this folder. It needs a Python, JavaScript or TypeScript project, or a package manifest." }));
         return;
       }
 
@@ -254,7 +254,7 @@
         if (!force && shown === n.key) return;
         shown = n.key;
         const pinned = pins.has("deps", n.id);
-        inspector.replaceChildren(
+        reput(inspector, 
           h("p", { class: "claim-text small", text: n.label }),
           h("dl", {},
             h("dt", { text: "Node id" }), h("dd", { class: "mono", text: n.id }),
@@ -272,7 +272,7 @@
         shown = "edge:" + e.number;
         const a = byKey.get(e.source);
         const b = byKey.get(e.target);
-        inspector.replaceChildren(
+        reput(inspector, 
           h("p", { class: "claim-text small", text: "e" + e.number + ": " + e.kind }),
           h("dl", {},
             h("dt", { text: "From" }), h("dd", { class: "mono", text: a ? a.id : "?" }),
@@ -283,7 +283,7 @@
       };
       const showNothing = () => {
         shown = null;
-        inspector.replaceChildren(h("p", { class: "muted", text: "Hover or focus a node to see its id. Click a node to pin it. Hover an edge to see why it exists." }));
+        reput(inspector, h("p", { class: "muted", text: "Hover or focus a node to see its id. Click a node to pin it. Hover an edge to see why it exists." }));
       };
       // The clipboard API needs a secure context and permission; fall back to a hidden text area, and
       // always say what happened, because a silent copy cannot be told from a broken one.
@@ -319,7 +319,7 @@
 
       const renderPins = () => {
         const mine = pins.list();
-        pinList.replaceChildren(
+        reput(pinList, 
           h("h3", { text: "Pinned ids" }),
           mine.length
             ? h("ul", { class: "recs" }, mine.map((p) => h("li", {},
@@ -455,7 +455,7 @@
         select(hits[0].key, true);
       } }, h("label", {}, "Find a node", findInput), h("button", { class: "act small", type: "submit", text: "Find" }), findNote);
 
-      out.append(
+      put(out, 
         find,
         h("div", { class: "graph-wrap" }, stage, h("aside", { class: "side-panel" }, inspector, pinList)),
         h("p", { class: "note", text: "Scroll or use the buttons to zoom, drag to pan. Hover a node to see only its neighbours. Click a node to pin its id: the id is marked wherever it appears again, in this browser." }),

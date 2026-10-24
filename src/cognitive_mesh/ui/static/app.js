@@ -8,15 +8,15 @@ const tabsEl = document.getElementById("tabs");
 const TABS = [
   ["overview", "Overview"],
   ["claims", "Claims"],
-  ["recall", "Recall"],
+  ["experiences", "Experiences"],
   ["traces", "Runs"],
   ["node", "Graph node"],
   ["graph", "Dependency graph"],
 ];
 const HINTS = {
-  db: "Needed for runs, claims and search.",
-  graph: "Needed for claims and recall. Build it with: cognitive-mesh experience build",
-  index: "Needed for recall and search. Build it with: cognitive-mesh memory index",
+  db: "Needed for runs, experiences, claims and history.",
+  graph: "Needed for claims and for the claims column of Experiences. Build it with: cognitive-mesh experience build",
+  index: "Not used by this page. Search by meaning is on the command line: cognitive-mesh recall and memory search.",
   reviews: "Optional. Adds people's verdicts to claims.",
   outcomes: "Optional. Adds recorded check results to claims.",
   root: "Optional. Checks claims against the code as it is now, and draws the dependency graph.",
@@ -79,6 +79,18 @@ const pins = {
   },
 };
 const folderMemory = { get: () => readStore(FOLDER_KEY) || "", set: (v) => writeStore(FOLDER_KEY, v) };
+
+// Element.append(null) writes the word "null" into the page, so every append goes through these:
+// a null, undefined or false child is simply left out, as h() does.
+function kept(kids) {
+  return kids.flat().filter((k) => k !== null && k !== undefined && k !== false);
+}
+function put(parent, ...kids) {
+  parent.append(...kept(kids));
+}
+function reput(parent, ...kids) {
+  parent.replaceChildren(...kept(kids));
+}
 
 function h(tag, props, ...kids) {
   const e = document.createElement(tag);
@@ -224,7 +236,7 @@ function helpPanel() {
   return box;
 }
 
-function ledger(a, via) {
+function ledger(a) {
   const X = window.CogExplain;
   const { pro, con, neither } = X.records(a);
   const say = X.headline(a);
@@ -238,7 +250,6 @@ function ledger(a, via) {
       { class: "ledger-head" },
       h("p", { class: "claim-text" }, mentions(a.name)),
       inWords ? h("p", { class: "inwords", text: "In words: " + inWords + "." }) : null,
-      ...(via || []).map((v) => h("p", { class: "via", text: "Found by search on " + v.doc_id + " (query match " + v.similarity.toFixed(3) + ")" })),
     ),
     h("div", { class: "sides" }, side("s", "Supports", pro), side("c", "Contradicts", con)),
     h(
@@ -270,13 +281,13 @@ async function viewOverview(root) {
   const r = await api("/api/status");
   const inputs = r.data.inputs;
   const has = (k) => inputs[k].state === "present";
-  root.append(
+  put(root, 
     h("h2", { text: "What your agents have learned, and what backs it up" }),
     h("p", { class: "lede", text: "Cognitive Mesh keeps a record of past agent runs and the claims drawn from them. For each claim you can see the records that support it, the records that contradict it, and whether it still holds for the code as it is now." }),
     h("p", { class: "prose note", text: "A status is not a verdict. Validated means a claim holds for one code version by a stated method. It is not proof that the claim is true." }),
     h("div", { class: "start" },
       has("graph") && has("db") ? h("button", { class: "act", type: "button", onclick: () => go("claims"), text: "Review claims" }) : null,
-      has("index") && has("graph") ? h("button", { class: "act", type: "button", onclick: () => go("recall"), text: "Recall past experience" }) : null,
+      has("db") ? h("button", { class: "act", type: "button", onclick: () => go("experiences"), text: "See every recorded step" }) : null,
       has("db") ? h("button", { class: "act", type: "button", onclick: () => go("traces"), text: "Browse runs" }) : null,
       has("root") ? h("button", { class: "act", type: "button", onclick: () => go("graph"), text: "View the dependency graph" }) : null),
     h("h2", { text: "Files this session reads" }),
@@ -316,7 +327,7 @@ async function renderHistory(root, id) {
   const r = await api("/api/history", { id });
   const d = r.data;
   const exp = d.found && d.node.kind !== null;
-  root.append(
+  put(root, 
     h("p", {}, link("All runs", () => go("traces"))),
     h("h2", { text: "Runs that touched this id" }),
     h("p", { class: "claim-text" }, mentions(d.node.name)),
@@ -333,15 +344,15 @@ async function renderHistory(root, id) {
       pins.toggle(entry);
       pinBtn.textContent = pins.has(entry.space, entry.id) ? "Unpin this id" : "Pin this id";
     });
-    root.append(h("p", {}, pinBtn));
+    put(root, h("p", {}, pinBtn));
   }
   if (!d.found || !d.rows.length) {
-    root.append(h("p", { text: "No recorded run mentions this id." + (d.found ? "" : " It is not in the experience graph. Build the graph from your runs with: cognitive-mesh experience build") }));
+    put(root, h("p", { text: "No recorded run mentions this id." + (d.found ? "" : " It is not in the experience graph. Build the graph from your runs with: cognitive-mesh experience build") }));
   } else {
     if (d.claims.length) {
-      root.append(h("h2", { text: "Claims about it (" + d.claims.length + ")" }), h("ul", { class: "recs" }, d.claims.map((c) => h("li", {}, link(c.name, () => go("traces", { for: c.id }))))));
+      put(root, h("h2", { text: "Claims about it (" + d.claims.length + ")" }), h("ul", { class: "recs" }, d.claims.map((c) => h("li", {}, link(c.name, () => go("traces", { for: c.id }))))));
     }
-    root.append(
+    put(root, 
       h("h2", { text: plural(d.total_runs, "run", "runs") + ", newest first" }),
       table(
         ["Run", "Started", "Run status", "What it said", "Capability", "Code version", "Source check"],
@@ -351,20 +362,20 @@ async function renderHistory(root, id) {
             h("td", { text: x.capability || "-" }), h("td", { class: "mono", text: x.code_version ? x.code_version.slice(0, 12) : "unrecorded" }), h("td", { text: x.source_check }))),
       ),
     );
-    if (d.truncated) root.append(h("p", { class: "banner warn", text: "Showing the newest runs only; " + d.total_runs + " runs touched this id." }));
+    if (d.truncated) put(root, h("p", { class: "banner warn", text: "Showing the newest runs only; " + d.total_runs + " runs touched this id." }));
   }
 }
 
 async function viewTraces(root, params) {
   if (params.get("for")) {
-    root.append(historyForm(params.get("for")));
+    put(root, historyForm(params.get("for")));
     await renderHistory(root, params.get("for"));
     return;
   }
   if (params.get("id")) {
     const r = await api("/api/trace", { id: params.get("id") });
     const t = r.data;
-    root.append(
+    put(root, 
       h("p", {}, link("Back to all runs", () => go("traces"))),
       h("h2", { text: "Run " + (t.run_id || params.get("id")) }),
       h("table", {}, h("tbody", {}, scalarRows(t))),
@@ -376,7 +387,7 @@ async function viewTraces(root, params) {
   }
   const r = await api("/api/traces");
   const runs = r.data.runs || [];
-  root.append(
+  put(root, 
     h("h2", { text: "Recorded runs" }),
     historyForm(""),
     pins.list().length ? h("p", { class: "note" }, "Pinned: ", ...pins.list().flatMap((p) => [link(p.id, () => go("traces", { for: p.id })), " "])) : null,
@@ -390,7 +401,7 @@ async function viewTraces(root, params) {
 
 async function viewClaims(root, params) {
   const include = params.get("include_unverified") === "1";
-  root.append(
+  put(root, 
     h("h2", { text: "Claims" }),
     h("form", {
       onsubmit: (ev) => {
@@ -408,18 +419,18 @@ async function viewClaims(root, params) {
   const d = r.data;
   const counts = {};
   for (const row of d.claims) counts[row.evidence_status] = (counts[row.evidence_status] || 0) + 1;
-  root.append(...messages(r));
+  put(root, ...messages(r));
   if (!d.claims.length) {
-    root.append(h("p", { text: "No claims yet. Build the graph from your runs with: cognitive-mesh experience build" }));
+    put(root, h("p", { text: "No claims yet. Build the graph from your runs with: cognitive-mesh experience build" }));
   } else {
-    root.append(h("p", { text: plural(d.claims.length, "claim", "claims") + ": " + Object.entries(counts).map(([k, n]) => n + " " + k.replaceAll("_", " ")).join(", ") + "." }));
+    put(root, h("p", { text: plural(d.claims.length, "claim", "claims") + ": " + Object.entries(counts).map(([k, n]) => n + " " + k.replaceAll("_", " ")).join(", ") + "." }));
   }
-  for (const row of d.claims) root.append(ledger(row.assessment));
+  for (const row of d.claims) put(root, ledger(row.assessment));
   for (const o of d.orphaned_reviews || []) {
-    root.append(h("p", { class: "banner warn", text: "Review " + o.id + " points at a claim that is not in the graph." }));
+    put(root, h("p", { class: "banner warn", text: "Review " + o.id + " points at a claim that is not in the graph." }));
   }
   if (d.claims.length) {
-    root.append(
+    put(root, 
       h("h2", { text: "What the statuses mean" }),
       h("table", {}, h("tbody", {}, Object.entries(d.status_meanings).map(([k, v]) => h("tr", {}, h("td", {}, chip(k)), h("td", { text: v }))))),
       h("p", { class: "note", text: "Date used for expiry: " + d.date_used + " (UTC)." }),
@@ -428,7 +439,7 @@ async function viewClaims(root, params) {
 }
 
 async function viewNode(root, params) {
-  root.append(
+  put(root, 
     h("h2", { text: "Graph node" }),
     h("form", {
       onsubmit: (ev) => {
@@ -446,12 +457,12 @@ async function viewNode(root, params) {
     h("button", { class: "act", type: "submit", text: "Show node" })),
   );
   if (!params.get("id")) {
-    root.append(h("p", { class: "note", text: "Paste a node id, or follow a link from a claim or a run." }));
+    put(root, h("p", { class: "note", text: "Paste a node id, or follow a link from a claim or a run." }));
     return;
   }
   const r = await api("/api/node", Object.fromEntries(params));
   const d = r.data;
-  root.append(
+  put(root, 
     ...messages(r),
     h("p", { class: "claim-text" }, mentions(d.node.name)),
     h("p", { class: "note", text: d.node.kind + ", source check " + d.status }),
@@ -466,61 +477,111 @@ async function viewNode(root, params) {
   );
 }
 
-function renderRecall(root, r) {
-  const d = r.data;
-  root.append(...messages(r));
-  root.append(h("h2", { text: "Claims (" + d.claims.length + ")" }));
-  if (!d.claims.length) root.append(h("p", { class: "muted", text: "No claim matched this query closely enough." }));
-  for (const item of d.claims) root.append(ledger(item.assessment, item.retrieved_via));
-  root.append(h("h2", { text: "Raw runs without claims (" + d.experiences_without_claims.length + ")" }));
-  for (const x of d.experiences_without_claims) {
-    root.append(
-      h("div", { class: "ledger" },
-        h("div", { class: "ledger-head" },
-          h("p", {}, h("span", { class: "chip st-unsupported" }, h("span", { class: "mark", "aria-hidden": "true" }), x.kind.replaceAll("_", " ")), " ", runLink(x.run_id), " step " + x.step_id + ", attempt " + x.attempt_no + ", " + x.capability),
-          h("p", { class: "via", text: x.label + ". Query match " + x.similarity.toFixed(3) + "." })),
-        h("div", { class: "fine" }, h("details", {}, h("summary", { text: "Excerpt (untrusted data)" }), h("pre", { text: x.excerpt })))),
-    );
-  }
-  root.append(h("h2", { text: "Not confirmed (" + d.unconfirmed.length + ")" }));
-  if (d.unconfirmed.length) root.append(h("p", { class: "note", text: "These matches cannot be traced to a record both stores agree on. They are never offered as support." }));
-  for (const u of d.unconfirmed) {
-    root.append(h("p", {}, h("span", { class: "chip st-stale" }, h("span", { class: "mark", "aria-hidden": "true" }), "not confirmed"), " ", runLink(u.run_id), " step " + u.step_id + ", attempt " + u.attempt_no + " (" + u.reason + ")"));
-  }
-  if (d.message) root.append(h("p", { text: d.message }));
-  if (d.dropped_weak) root.append(h("p", { class: "note", text: plural(d.dropped_weak, "weak match", "weak matches") + " below " + d.min_similarity + " left out." }));
-  for (const n of d.notes) root.append(h("p", { class: "note", text: n }));
+const RESULT_TEXT = { success: "succeeded", failure: "failed" };
+const BASIS_TEXT = { deterministic: "computed by the analyzer", model_unverified: "written by a model, not verified" };
+const CHUNK = 200;
+
+function isRaw(x) {
+  return x.result === "failure" || x.basis !== "deterministic";
 }
 
-function queryView(path, title, button, render, intro) {
-  return async (root, params) => {
-    root.append(
-      h("h2", { text: title }),
-      h("p", { class: "prose note", text: intro }),
-      path === "recall" ? helpPanel() : null,
-      h("form", {
-        onsubmit: (ev) => {
-          ev.preventDefault();
-          go(path, formParams(ev.target));
-        },
-      },
-      field("q", "What are you looking for?", params.get("q") || ""),
-      field("k", "Results", params.get("k") || "5", { size: 3 }),
-      field("min_similarity", "Minimum match", params.get("min_similarity") || "", { size: 5, placeholder: "default" }),
-      h("button", { class: "act", type: "submit", text: button })),
-    );
-    if (!params.get("q")) return;
-    root.append(h("p", { class: "muted", text: "Searching. The first query loads the embedding model and can take a while." }));
-    const r = await api("/api/" + path, Object.fromEntries(params));
-    root.lastChild.remove();
-    render(root, r);
+function matches(x, f) {
+  if (f.capability && x.capability !== f.capability) return false;
+  if (f.result && x.result !== f.result) return false;
+  if (f.basis && (x.basis || "none") !== f.basis) return false;
+  if (f.claims === "with" && !(x.claims && x.claims.length)) return false;
+  if (f.claims === "without" && x.claims && x.claims.length) return false;
+  if (f.text) {
+    const hay = [x.run_id, x.step_id, x.capability, ...(x.claims || []).flatMap((c) => [c.id, c.name])].join(" ").toLowerCase();
+    if (!hay.includes(f.text)) return false;
+  }
+  return true;
+}
+
+function experienceRow(x, showClaims) {
+  return h("tr", {},
+    h("td", {}, runLink(x.run_id)),
+    h("td", { class: "nw", title: x.started_at, text: x.started_at.slice(0, 19).replace("T", " ") }),
+    h("td", { class: "nw", text: x.step_id + (x.attempt_no > 1 ? " (attempt " + x.attempt_no + ")" : "") }),
+    h("td", { class: "nw", text: x.capability }),
+    h("td", { class: "nw" }, RESULT_TEXT[x.result] || x.result, isRaw(x) ? h("span", { class: "badge raw", text: "raw record" }) : null),
+    h("td", { text: BASIS_TEXT[x.basis] || "no output (the step failed)" }),
+    showClaims
+      ? h("td", {}, x.claims.length ? x.claims.map((c) => h("div", {}, link(c.name, () => go("traces", { for: c.id })))) : h("span", { class: "muted", text: "none" }))
+      : null);
+}
+
+function selectField(name, label, options) {
+  return h("label", {}, label, h("select", { name }, options.map(([value, text]) => h("option", { value, text }))));
+}
+
+async function viewExperiences(root) {
+  put(root, 
+    h("h2", { text: "Experiences" }),
+    h("p", { class: "lede", text: "Every step the system has recorded, one row each: what was done, in which run, how it ended, and the claims it produced." }),
+    h("p", { class: "prose note", text: "An experience is one step of a past run, as it was recorded. It is a record of what happened, not a fact. Failed steps and steps written by a model are included and marked as raw records. Open a run to see what a step produced." }),
+  );
+  const wait = h("p", { class: "muted", text: "Reading every recorded run. This can take a while for a large database." });
+  put(root, wait);
+  const r = await api("/api/experiences");
+  wait.remove();
+  const d = r.data;
+  put(root, ...messages(r));
+  if (!d.total) {
+    put(root, h("p", { text: "No finished run has recorded a step yet. Record one with: cognitive-mesh run PLAN.json --root DIR --trace-db FILE" }));
+    return;
+  }
+  const countText = (m) => Object.entries(m).map(([k, n]) => k.replaceAll("_", " ") + " " + n).join(", ");
+  const showClaims = d.graph.given;
+  put(root, 
+    h("p", { text: plural(d.total, "experience", "experiences") + " from " + plural(d.runs, "run", "runs") + "." }),
+    d.truncated ? h("div", { class: "banner warn", role: "status", text: "The database holds " + d.total + " experiences. The newest " + d.limit + " are listed. Use the command line for the rest." }) : null,
+    h("ul", { class: "plain" },
+      h("li", { text: "What was done: " + countText(d.counts.capability) + "." }),
+      h("li", { text: "How it ended: " + Object.entries(d.counts.result).map(([k, n]) => (RESULT_TEXT[k] || k) + " " + n).join(", ") + "." }),
+      h("li", { text: "Output made by: " + Object.entries(d.counts.basis).map(([k, n]) => (BASIS_TEXT[k] || "nothing, the step failed") + " " + n).join(", ") + "." })),
+    showClaims ? null : h("p", { class: "note", text: "No graph file was given (--graph), so claims are not shown. Start the UI with --graph FILE to see the claims each step produced." }),
+  );
+  const filters = { capability: "", result: "", basis: "", claims: "", text: "" };
+  let shown = CHUNK;
+  const list = h("div", {});
+  const draw = () => {
+    const rows = d.rows.filter((x) => matches(x, filters));
+    const head = ["Run", "Started", "Step", "What was done", "Result", "Output made by"].concat(showClaims ? ["Claims"] : []);
+    const part = rows.slice(0, shown);
+    // The same buttons sit above and below the table, so "Show all" is never far away.
+    const more = () => rows.length > shown
+      ? h("div", { class: "row" },
+        h("button", { type: "button", class: "act small", text: "Show " + Math.min(CHUNK, rows.length - shown) + " more", onclick: () => { shown += CHUNK; draw(); } }),
+        h("button", { type: "button", class: "act small ghost", text: "Show all " + rows.length, onclick: () => { shown = rows.length; draw(); } }))
+      : null;
+    reput(list, 
+      h("p", { class: "muted", role: "status", text: rows.length === d.rows.length ? "Showing " + part.length + " of " + rows.length + "." : part.length + " of " + rows.length + " matching experiences shown (" + d.rows.length + " in all)." }),
+      more(),
+      rows.length ? table(head, part.map((x) => experienceRow(x, showClaims))) : h("p", { text: "No experience matches these filters." }),
+      more());
   };
+  const form = h("form", { onsubmit: (ev) => ev.preventDefault() },
+    selectField("capability", "What was done", [["", "All"], ...Object.keys(d.counts.capability).map((k) => [k, k])]),
+    selectField("result", "How it ended", [["", "All"], ["success", "Succeeded"], ["failure", "Failed"]]),
+    selectField("basis", "Output made by", [["", "All"], ["deterministic", "The analyzer"], ["model_unverified", "A model"], ["none", "Nothing (failed)"]]),
+    showClaims ? selectField("claims", "Claims", [["", "All"], ["with", "With claims"], ["without", "Without claims"]]) : null,
+    field("text", "Run, step or claim contains", "", { size: 28 }));
+  const apply = () => {
+    for (const el of form.elements) if (el.name) filters[el.name] = el.name === "text" ? el.value.trim().toLowerCase() : el.value;
+    shown = CHUNK;
+    draw();
+  };
+  form.addEventListener("input", apply);
+  form.addEventListener("change", apply);
+  put(root, form, list);
+  draw();
 }
 
 const VIEWS = {
   overview: viewOverview,
   claims: viewClaims,
-  recall: queryView("recall", "Recall past experience", "Recall", renderRecall, "Finds claims by meaning. Each claim keeps its status and the records on both sides. A query match says how the words matched, not how true a claim is."),
+  experiences: viewExperiences,
   traces: viewTraces,
   node: viewNode,
   graph: (root, params) => graphView(root, params),
@@ -540,12 +601,12 @@ async function render() {
   try {
     await VIEWS[name](root, params);
   } catch (e) {
-    if (mine === generation) root.append(h("div", { class: "banner error", role: "alert", text: e.message }));
+    if (mine === generation) put(root, h("div", { class: "banner error", role: "alert", text: e.message }));
   }
   if (mine !== generation) root.remove();
 }
 
-const graphView = window.CogGraph.view({ h, api, go, pins, folder: folderMemory, plural, messages, rerender: () => render() });
+const graphView = window.CogGraph.view({ h, put, reput, api, go, pins, folder: folderMemory, plural, messages, rerender: () => render() });
 
 window.addEventListener("hashchange", render);
 render();

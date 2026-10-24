@@ -1,7 +1,7 @@
 # ADR-0033: An Experiences tab that lists every recorded step; the Recall tab is removed (amends ADR-0031 and ADR-0032)
 
 ## Status
-Proposed (needs the user's acceptance before any code is written)
+Accepted (text reviewed and accepted by the user 2026-10-24, before any code was written)
 
 ## Date
 2026-10-24
@@ -85,3 +85,25 @@ deleting anything, a per-step source check, and paging on the server.
   claims; rows have no output text, so judging one needs a click through to the run.
 - Nothing in this ADR is implemented. The README and the verified-commands list must not describe the tab as existing
   until the tests and the manual checks in point 6 pass.
+
+## Outcome of the implementation (2026-10-25, Windows 11, headless Edge driven over the DevTools protocol)
+Built as written, with these details and findings:
+- **`TraceStore.iter_runs()`** (one pass, newest first, an unreadable run as `(id, None)`) was added and `list()` now uses it, so
+  the page does not read every run twice. `/api/experiences` uses it; `runs` (runs with at least one step) was added to the
+  payload.
+- **Buttons above and below the list:** the first browser run showed that "Show all" at the bottom of a 200-row table is easy to
+  miss, so the same buttons are also above the table. A compact time is shown (full time on hover) and the short columns do not
+  wrap.
+- **Measured** (synthetic databases, one fresh process each, no graph): 300 runs (600 steps) 0.2 s; 5,000 runs (10,000
+  steps) 3.6 s, payload 2.8 MB, traced peak 10 MB; 20,000 runs (40,000 steps, 10,000 listed) 14.3 s, payload 2.8 MB, peak 15 MB.
+  Time is linear in runs; the payload is capped by the ceiling. The 10,000-row ceiling is kept.
+- **Checked in a real browser (30 checks, all passing):** the Recall tab is gone; Overview's "See every recorded step"; first
+  200 of 600 drawn; Show 200 more; Show all; raw-record marks (103 expected, 103 found); filters by result, basis,
+  capability, claims and text; a no-match message; run links; claims column and claim links to their history; a stray-text
+  check on eight pages.
+- **Found while testing:** the page showed the word "null" (for example "from 300 runs.null") because the browser's own
+  `append(null)` writes text, unlike the page's `h()` helper. It affected earlier tabs wherever an optional piece was appended.
+  All appends now go through `put()` and `reput()`, and a test forbids the unsafe form.
+- **Not checked:** the page on a database with a graph that is out of date (covered by API tests, not drawn in the browser);
+  50,000-row lists drawn with "Show all" (the ceiling stops it at 10,000); touch, screen readers, light mode, Firefox, Safari,
+  macOS, Linux.

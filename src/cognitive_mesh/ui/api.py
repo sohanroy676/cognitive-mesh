@@ -44,6 +44,7 @@ from cognitive_mesh.memory import MemoryIndexError
 from cognitive_mesh.traces import TraceNotFoundError, TraceStore, TraceStoreError
 from cognitive_mesh.ui.config import EmbedderHolder, UiConfig
 from cognitive_mesh.ui.errors import ApiError
+from cognitive_mesh.ui.experiences import build_experiences
 from cognitive_mesh.ui.graphdata import graph_payload
 from cognitive_mesh.ui.paths import resolve_folder
 from cognitive_mesh.validity import current_environment, utc_today
@@ -180,6 +181,29 @@ class UiApi:
         if listing.malformed:
             warnings.append(f"{len(listing.malformed)} malformed run(s) not shown")
         return 200, {"data": listing.model_dump(mode="json"), "notes": [], "warnings": warnings}
+
+    def experiences(self, params: Mapping[str, str]) -> Reply:
+        db = _need(self.config.db, "db")
+        graph: ExperienceGraph | None = None
+        built_at: str | None = None
+        if self.config.graph is not None:
+            loaded = graph_store.load(self.config.graph)
+            graph, built_at = ExperienceGraph(loaded.snapshot), loaded.built_at.isoformat()
+        with TraceStore.open_existing(db) as store:
+            data = build_experiences(store, graph, built_at)
+        warnings = []
+        if data["malformed"]:
+            warnings.append(f"{len(data['malformed'])} run(s) could not be read and are not listed")
+        g = data["graph"]
+        if g["given"] and g["not_in_graph"]:
+            warnings.append(
+                f"{g['not_in_graph']} experience(s) are not in the graph yet, so their claims "
+                "may be missing. Rebuild it with: cognitive-mesh experience build"
+            )
+        if g["given"] and g["missing_from_database"]:
+            gone = g["missing_from_database"]
+            warnings.append(f"{gone} experience(s) in the graph are no longer in the database")
+        return 200, {"data": data, "notes": [], "warnings": warnings}
 
     def trace(self, params: Mapping[str, str]) -> Reply:
         run_id = _text(params, "id")
@@ -368,6 +392,7 @@ class UiApi:
             "/api/status": self.status,
             "/api/traces": self.traces,
             "/api/trace": self.trace,
+            "/api/experiences": self.experiences,
             "/api/claims": self.claims,
             "/api/node": self.node,
             "/api/check": self.check,

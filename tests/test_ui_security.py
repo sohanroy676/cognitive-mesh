@@ -149,6 +149,11 @@ def test_the_scripts_never_parse_markup_evaluate_text_or_set_styles(name: str) -
         "DOMParser",
     ):
         assert banned not in script, banned
+    # Element.append(null) writes the word "null" into the page: appends go through put()/reput()
+    unsafe = re.findall(
+        r"\b(?:root|out|list|inspector|pinList)\.(?:append|replaceChildren)\(", script
+    )
+    assert not unsafe, unsafe
 
 
 def test_the_page_loads_only_scripts_from_its_own_origin() -> None:

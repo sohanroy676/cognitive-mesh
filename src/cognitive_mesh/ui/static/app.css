@@ -52,7 +52,7 @@ main { padding: 28px 36px 72px; max-width: 1120px; }
 form { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; margin: 12px 0 16px; }
 label { display: flex; flex-direction: column; gap: 3px; font-size: 0.85rem; color: var(--muted); }
 label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--ink); font-size: 0.95rem; }
-input { font: inherit; padding: 7px 9px; border: 1px solid var(--muted); border-radius: 3px; background: var(--panel); color: var(--ink); }
+select, input { font: inherit; padding: 7px 9px; border: 1px solid var(--muted); border-radius: 3px; background: var(--panel); color: var(--ink); }
 input[type="checkbox"] { width: 18px; height: 18px; padding: 0; accent-color: var(--support); }
 input[name="q"] { min-width: min(520px, 86vw); }
 button.act { font: inherit; font-weight: 600; padding: 8px 16px; border: 2px solid var(--ink); background: var(--ink); color: var(--paper); border-radius: 3px; cursor: pointer; }
@@ -69,6 +69,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--support); fo
 table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; }
 th, td { text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--rule); vertical-align: top; overflow-wrap: anywhere; }
 th { font-weight: 600; color: var(--muted); font-size: 0.85rem; }
+td.nw { white-space: nowrap; overflow-wrap: normal; }
 td.mono, .mono, pre { font-family: var(--mono); font-size: 0.85rem; }
 pre { margin: 6px 0; padding: 10px; border: 1px solid var(--rule); background: var(--panel); overflow: auto; max-height: 360px; white-space: pre-wrap; word-break: break-word; }
 details { margin: 6px 0; }
@@ -174,6 +175,7 @@ button.act.ghost { background: transparent; color: var(--ink); }
 .pinlist { border-top: 1px solid var(--rule); padding-top: 8px; }
 .ghostlink { margin-left: 10px; color: var(--muted); }
 .findform { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin: 12px 0; }
+.badge.raw { border-color: var(--muted); color: var(--muted); margin: 0 0 0 8px; }
 .badge { display: inline-block; font-size: 0.72rem; font-weight: 650; padding: 0 6px; margin-right: 6px; border: 1px solid var(--support); color: var(--support); }
 .pinned-id { display: inline-block; }
 @media (max-width: 960px) { .graph-wrap { grid-template-columns: minmax(0, 1fr); } .stage { height: 60vh; } }

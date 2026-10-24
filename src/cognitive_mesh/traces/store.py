@@ -9,7 +9,7 @@ import contextlib
 import json
 import sqlite3
 from collections import defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from datetime import datetime
 from pathlib import Path
 from types import TracebackType
@@ -328,8 +328,11 @@ class TraceStore:
             raise TraceStoreError("cannot read the trace database (sqlite error)") from None
         return _build_run(row, steps, attempts, context)
 
-    def list(self) -> TraceListing:
-        """All readable runs, newest first; unreadable ones are reported, never hidden."""
+    def iter_runs(self) -> Iterator[tuple[str, RunTrace | None]]:
+        """Every run once, newest first, as (run id, trace). An unreadable run gives (id, None).
+
+        One pass over the database, so callers that need the traces do not read each run twice.
+        """
         try:
             ids = [
                 r[0]
@@ -339,12 +342,18 @@ class TraceStore:
             ]
         except sqlite3.Error:
             raise TraceStoreError("cannot read the trace database (sqlite error)") from None
-        runs: list[RunSummary] = []
-        malformed: list[str] = []
         for run_id in ids:
             try:
-                trace = self.get(run_id)
+                yield run_id, self.get(run_id)
             except TraceRecordError:
+                yield run_id, None
+
+    def list(self) -> TraceListing:
+        """All readable runs, newest first; unreadable ones are reported, never hidden."""
+        runs: list[RunSummary] = []
+        malformed: list[str] = []
+        for run_id, trace in self.iter_runs():
+            if trace is None:
                 malformed.append(run_id)
                 continue
             runs.append(
