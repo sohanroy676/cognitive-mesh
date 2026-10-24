@@ -142,6 +142,7 @@ Implemented 2026-10-17 on `feature/v0.6.2-groq-client` (ADR-0013). Unit, CLI and
 ### v1.5.0 — Local Read-Only Web UI
 - A `cognitive-mesh ui` command serves a local, read-only, token-protected web UI (ADR-0031, Proposed): traces, claims with statuses and evidence, dependency graph, recall and search.
 - Stdlib only; no writes to any store; evidence rules (statuses as categories, separate groups) carry over from the CLI.
+- Status 2026-10-24: ADR-0031 accepted; implemented on `feature/v1.5.0-web-ui` (not merged, pushed or tagged; no CI run yet); criteria pass locally, see the README row.
 
 ### v1.6.0 — Model Performance Tracking and Routing
 - Track task outcomes, token cost, latency, and sample counts by model and task type.

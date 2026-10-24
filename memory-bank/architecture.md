@@ -80,6 +80,12 @@ while tracking their source, validity, confidence, and conflicts.
   traces) keeps unrelated experience out and lists it for the person. `workflow.prepare_context` wires recall,
   the gate and the pack for the `task` command; `code_explainer` reads the pack as untrusted data and
   `dependency_analyst.compare_with_recalled` re-checks each claim against the current graph.
+- Local Web UI
+  Implemented in v1.5.0 on `feature/v1.5.0-web-ui` (ADR-0031, not merged yet) as `src/cognitive_mesh/ui/`: a stdlib
+  `ThreadingHTTPServer` on 127.0.0.1, GET only, access token + Host check, read-only views over the trace store,
+  experience graph, reviews, outcomes, memory index and a dependency graph of `--root`. It calls the same library
+  functions as the CLI; the JSON for `experience claims|show|check` lives in `experience/report.py` and is shared.
+  It writes nothing and shows statuses as categories, never as a score.
 - Outcome Evaluation
   Evaluate task results and feed new evidence into memory and model-performance records.
 
