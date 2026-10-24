@@ -9,6 +9,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **ui:** Add read-only local web UI command
 - **ui:** Redesign as an evidence ledger
 - **ui:** Typed-folder interactive graph and run history
+- **ui:** Explain claims in plain sentences
 
 ### Changed
 - **experience:** Share show/claims/check JSON builders
@@ -20,6 +21,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Propose ADR-0032 interactive graph and run history
 - Record ADR-0032 implementation and its verified commands
 - Record the Copy id fix and how it was found
+- Record the plain-language claims page
 
 ### Fixed
 - **ui:** Flush the URL line and tidy the page layout
