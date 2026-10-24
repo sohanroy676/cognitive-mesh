@@ -1,0 +1,39 @@
+{
+  "task_id": "claims-status-filter-before",
+  "steps": [
+    {
+      "step_id": "report",
+      "capability": "unresolved_report"
+    },
+    {
+      "step_id": "deps-1",
+      "capability": "dependencies_of",
+      "inputs": {
+        "node_id": "module:src/cognitive_mesh/cli.py"
+      },
+      "depends_on": [
+        "report"
+      ]
+    },
+    {
+      "step_id": "deps-2",
+      "capability": "dependencies_of",
+      "inputs": {
+        "node_id": "module:src/cognitive_mesh/experience/report.py"
+      },
+      "depends_on": [
+        "report"
+      ]
+    },
+    {
+      "step_id": "deps-3",
+      "capability": "dependencies_of",
+      "inputs": {
+        "node_id": "module:tests/test_cli_experience.py"
+      },
+      "depends_on": [
+        "report"
+      ]
+    }
+  ]
+}

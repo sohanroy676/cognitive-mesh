@@ -1,0 +1,39 @@
+{
+  "task_id": "json-output-after",
+  "steps": [
+    {
+      "step_id": "report",
+      "capability": "unresolved_report"
+    },
+    {
+      "step_id": "deps-1",
+      "capability": "dependencies_of",
+      "inputs": {
+        "node_id": "module:src/graph/cli/commands/scan.py"
+      },
+      "depends_on": [
+        "report"
+      ]
+    },
+    {
+      "step_id": "deps-2",
+      "capability": "dependencies_of",
+      "inputs": {
+        "node_id": "module:src/graph/rendering/scan_json.py"
+      },
+      "depends_on": [
+        "report"
+      ]
+    },
+    {
+      "step_id": "deps-3",
+      "capability": "dependencies_of",
+      "inputs": {
+        "node_id": "module:tests/test_scan_json.py"
+      },
+      "depends_on": [
+        "report"
+      ]
+    }
+  ]
+}

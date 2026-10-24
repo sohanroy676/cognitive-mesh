@@ -1,0 +1,186 @@
+{
+ "project": "onboarding-coordinator",
+ "slug": "status-command",
+ "task": "Add a read-only status command to the console interface printing the most recent run's per-domain outcome from each domain's ledger; no run yet message; no ledger/state change; no domain key; tests; README.",
+ "clone": "E:/experience-db/work/onboarding-coordinator",
+ "branch": "agent/status-command",
+ "base_commit": "b1686ef",
+ "head_commit": "ce0f9b2",
+ "model": "claude-sonnet-5-5",
+ "finished": true,
+ "steps": [
+  {
+   "step_id": "read-1",
+   "capability": "read_project",
+   "input": {
+    "question": "What do rules, ADRs and existing code say about reading ledgers and a status feature?"
+   },
+   "outcome": "success",
+   "output": {
+    "found": "ledger/reconstruct.py is a read-only auditor that needs a run_id; nothing finds the latest run. Entries carry ts and run_id; ledgers are hash chained and read via read_entries/verify_entries. Console entry is onboard.py (requires --subject). Only domains and ledger/reconstruct.py use ledger/; app/ may import ledger.reconstruct but not ledger.ledger (perimeter scan). The three source folders may hold at most 11 files.",
+    "files_read": [
+     "AGENTS.md",
+     "CLAUDE.md",
+     "ledger/reconstruct.py",
+     "ledger/ledger.py",
+     "onboard.py",
+     "README.md",
+     "docs/adr/0005-run-outcomes.md",
+     "docs/adr/0007-perimeter-checks.md",
+     "tests/test_unit_reconstruct.py"
+    ],
+    "constraints": [
+     "stdlib only, unittest",
+     "no new file in domains/coordinator/ledger (11-file rule)",
+     "coordinator never holds or reads a domain key",
+     "app/ must not import ledger.ledger",
+     "ASCII output",
+     "never edit traces"
+    ]
+   }
+  },
+  {
+   "step_id": "decide-1",
+   "capability": "decide",
+   "input": {
+    "question": "Does an equivalent exist, and where should status live?"
+   },
+   "outcome": "success",
+   "output": {
+    "decision": "No equivalent exists (reconstruct needs a known run id; nothing finds the latest). Put the logic in ledger/reconstruct.py (existing read-only auditor; no new file in a source folder) and expose it on the console as `python onboard.py --status [--state-dir PATH]`, with --subject no longer required when --status is given.",
+    "why": "11-file rule forbids a new module in ledger/; app/ may import ledger.reconstruct but not ledger.ledger; onboard.py is the console entry.",
+    "alternatives_considered": [
+     {
+      "option": "new ledger/status.py",
+      "rejected_because": "breaks the 11-file rule in the source folders"
+     },
+     {
+      "option": "only `python -m ledger.reconstruct --latest`",
+      "rejected_because": "not the console onboarding interface the task names"
+     },
+     {
+      "option": "argparse subcommand `onboard.py status`",
+      "rejected_because": "would change the existing flat CLI and its tests"
+     }
+    ],
+    "assumptions": [
+     "the console interface means onboard.py"
+    ],
+    "risks": [
+     "mixing --status with run flags needs explicit rejection"
+    ]
+   }
+  },
+  {
+   "step_id": "decide-2",
+   "capability": "decide",
+   "input": {
+    "question": "How is the most recent run chosen?"
+   },
+   "outcome": "success",
+   "output": {
+    "decision": "Use only action_executed/refused/failed lines from hash-verified ledgers; latest = max (ts, domain order, seq). token_rejected lines are ignored for this choice. A broken chain is reported, its lines not used.",
+    "why": "token_rejected lines can be added by anyone with write access (reconstruct LIMITS), so they must not pick the run; unverified chains must not be trusted (ADR-0005/0007 stance).",
+    "alternatives_considered": [
+     {
+      "option": "read a run id from approval markers or a new pointer file",
+      "rejected_because": "would store new state or read coordinator files; status must write nothing and ledgers are the domains' own evidence"
+     },
+     {
+      "option": "use all event types",
+      "rejected_because": "forgeable rejected lines could hijack the answer"
+     }
+    ],
+    "assumptions": [
+     "ts from the domains' clocks orders runs; backwards clock is a known stated limit"
+    ],
+    "risks": [
+     "an aborted run leaves no ledger line so is never shown; the output says so"
+    ]
+   }
+  },
+  {
+   "step_id": "change-1",
+   "capability": "change_code",
+   "input": {
+    "goal": "implement latest_run/format_status and the --status console flag"
+   },
+   "outcome": "success",
+   "output": {
+    "summary": "ledger/reconstruct.py: latest_run and format_status (read-only, reuse reconstruct/format_rebuild). app/onboarding.py: run_status with default state/ like the provisioner. onboard.py: --status, --state-dir; --subject required unless --status; --status rejected with run flags. Manual check: no state dir prints 'no run yet', exit 0.",
+    "files_changed": [
+     {
+      "path": "ledger/reconstruct.py",
+      "what": "latest_run, format_status",
+      "line": 127
+     },
+     {
+      "path": "app/onboarding.py",
+      "what": "run_status",
+      "line": 57
+     },
+     {
+      "path": "onboard.py",
+      "what": "--status and --state-dir flags",
+      "line": 27
+     }
+    ]
+   }
+  },
+  {
+   "step_id": "decide-3",
+   "capability": "decide",
+   "input": {
+    "question": "How to test, and README scope?"
+   },
+   "outcome": "success",
+   "output": {
+    "decision": "New tests/test_unit_status.py with real Ledger on a temp folder and FakeClock; adversarial cases: forged token_rejected cannot pick the run, broken chain reported and exit 1, snapshot proves no file changed or created, argument conflicts. README section only; no ADR (small, reversible).",
+    "why": "AGENTS.md: unittest, injected clock, try to break the feature; ADRs only for hard-to-reverse choices.",
+    "alternatives_considered": [
+     {
+      "option": "end-to-end test starting real domains",
+      "rejected_because": "ports and time; unit level with real ledger class is enough"
+     }
+    ],
+    "assumptions": [],
+    "risks": [
+     "not run against a real provisioned run"
+    ]
+   }
+  },
+  {
+   "step_id": "check-1",
+   "capability": "run_checks",
+   "input": {
+    "command": "python -m unittest tests.test_unit_status"
+   },
+   "outcome": "success",
+   "output": {
+    "result": "12 tests OK; reconstruct module path was the clone's"
+   }
+  },
+  {
+   "step_id": "check-2",
+   "capability": "run_checks",
+   "input": {
+    "command": "python -m unittest discover -s tests; python -m compileall -q domains coordinator ledger provision.py demo.py onboard.py app"
+   },
+   "outcome": "success",
+   "output": {
+    "result": "489 tests OK in 198 s (includes G6 perimeter and 11-file checks); compileall exit 0"
+   }
+  },
+  {
+   "step_id": "reflect-1",
+   "capability": "reflect",
+   "input": {
+    "question": "What should the next person know?"
+   },
+   "outcome": "success",
+   "output": {
+    "summary": "No equivalent existed, so the task was built as asked. Never ran --status against a real run produced by onboard.py (needs domain ports); only ledgers written by the real Ledger class. Latest run is by domain-clock timestamp, so a backwards clock can mislead; aborted runs and not_executed actions leave no ledger line and are invisible. No ADR was written. Surprise: the full suite takes ~200 s, longer than a default tool timeout."
+   }
+  }
+ ]
+}

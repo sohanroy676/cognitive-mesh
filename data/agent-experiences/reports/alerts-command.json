@@ -1,0 +1,235 @@
+{
+  "project": "Incident-commander",
+  "slug": "alerts-command",
+  "task": "Add a read-only command `python -m incident_commander alerts` listing the simulated alerts (id and identifying facts), no state change, no env vars, purity gate passing, unit tests, README command list.",
+  "clone": "E:/experience-db/work/Incident-commander",
+  "branch": "agent/alerts-command",
+  "base_commit": "3ea1ea6",
+  "head_commit": "7f21bc6",
+  "model": "claude-sonnet-5-5",
+  "finished": true,
+  "steps": [
+    {
+      "step_id": "read-1",
+      "capability": "read_project",
+      "input": {
+        "question": "what do the project rules and structure require for this task?"
+      },
+      "outcome": "success",
+      "output": {
+        "found": "CLI is incident_commander/__main__.py (argparse subcommands tools/investigate/gates/run). Alerts are frozen dataclasses (alert_id, service, fired_at, severity, metric, summary) in fixtures/alerts.py, reachable via SimWorld().alert_ids()/alert(). Output style is key=value lines via report.kv. README has a Commands list. Baseline: dod purity PASS, scikit-learn 1.8.0 importable. Tests are unittest, CLI tests run subprocesses in tests/test_cli.py.",
+        "files_read": [
+          "AGENTS.md",
+          "CLAUDE.md",
+          ".claude/rules/*.md",
+          "incident_commander/__main__.py",
+          "incident_commander/fixtures/alerts.py",
+          "incident_commander/types.py",
+          "incident_commander/report.py",
+          "incident_commander/world.py",
+          "tests/test_cli.py",
+          "README.md",
+          "memory-bank/progress.md"
+        ],
+        "constraints": [
+          "incident_commander imports stdlib+sklearn only, no env vars, never imports ic_plus",
+          "decisions use typed evidence only, never severity (listing only displays it)",
+          "tests ship with code, unittest not pytest",
+          "generated files CHANGELOG.md/traces/* never hand-edited",
+          "never push; commit on the existing branch, Conventional Commits with body",
+          "ruff check and ruff format"
+        ]
+      }
+    },
+    {
+      "step_id": "check-0",
+      "capability": "run_checks",
+      "input": {
+        "command": "python -m incident_commander.dod purity; python -m unittest discover -s tests (baseline, before changes)"
+      },
+      "outcome": "success",
+      "output": {
+        "result": "purity PASS (22 modules); 201 tests OK; ruff 0.17.0 available; scikit-learn 1.8.0 importable"
+      }
+    },
+    {
+      "step_id": "decide-1",
+      "capability": "decide",
+      "input": {
+        "question": "What output format should the alerts command use?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "One key=value line per alert using report.kv, in world order, plus an M-free plain header-less listing: alert=ALRT-9001 service=checkout-service severity_label=high metric=latency_ms fired_at=1760000100 summary=\"...\".",
+        "why": "The existing tools command already prints alert=.. service=.. fired_at=.. severity_label=.. via kv; reusing kv keeps output deterministic and greppable and consistent with the project trace contract. severity is called severity_label there because it is only a label, never evidence.",
+        "alternatives_considered": [
+          {
+            "option": "Aligned table",
+            "rejected_because": "no table helper exists; wide summary text breaks alignment; harder to parse"
+          },
+          {
+            "option": "JSON flag",
+            "rejected_because": "scope creep; project has no JSON output anywhere"
+          }
+        ],
+        "assumptions": [
+          "fired_at as a raw epoch number is acceptable, matching tools output"
+        ],
+        "risks": [
+          "Future format change breaks scripts; tests pin the shape"
+        ]
+      }
+    },
+    {
+      "step_id": "decide-2",
+      "capability": "decide",
+      "input": {
+        "question": "Where should the data come from, and how to guarantee read-only?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "Read alerts through SimWorld().alert_ids() and .alert(id) (the same accessors other commands use) and do not call any tool, clock, executor or apply_remediation. Add cmd_alerts() in __main__.py and a test that the world is unchanged.",
+        "why": "world.py is the single access path; fixtures/alerts.py says it is the only place incident ids exist, so I do not duplicate ids. Using SimWorld is read-only since only apply_remediation mutates.",
+        "alternatives_considered": [
+          {
+            "option": "Import ALERTS from fixtures directly",
+            "rejected_because": "bypasses SimWorld, which other commands go through"
+          }
+        ],
+        "assumptions": [
+          "SimWorld construction has no side effects (it is used by every other command)"
+        ],
+        "risks": [
+          "none for state; tests will assert equality with ALERTS"
+        ]
+      }
+    },
+    {
+      "step_id": "decide-3",
+      "capability": "decide",
+      "input": {
+        "question": "Which fields to show and what to do about the summary text?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "Show id, service, severity_label, metric, fired_at, and summary (quoted by fmt). No invented data (no status, owner).",
+        "why": "Those are all six fields the Alert type stores. Summary is fixture text authored by the project, not log text, so it is not untrusted content; log text is the thing the project hides.",
+        "alternatives_considered": [
+          {
+            "option": "Omit summary",
+            "rejected_because": "it is stored identifying info and short"
+          },
+          {
+            "option": "Convert fired_at to ISO time",
+            "rejected_because": "would need new formatting code and a timezone choice; raw epoch matches the tools command"
+          }
+        ],
+        "assumptions": [
+          "summary is trusted fixture text"
+        ],
+        "risks": [
+          "a future alert with a quote in the summary would be printed unescaped by fmt (existing behaviour)"
+        ]
+      }
+    },
+    {
+      "step_id": "change-1",
+      "capability": "change_code",
+      "input": {
+        "goal": "add cmd_alerts and wire the alerts subcommand"
+      },
+      "outcome": "success",
+      "output": {
+        "summary": "Added cmd_alerts() printing one kv line per alert from SimWorld, an argparse subparser `alerts` with no arguments, dispatch in main(), and updated the module docstring.",
+        "files_changed": [
+          {
+            "path": "incident_commander/__main__.py",
+            "what": "cmd_alerts + subparser + dispatch",
+            "line": 71
+          }
+        ]
+      }
+    },
+    {
+      "step_id": "decide-4",
+      "capability": "decide",
+      "input": {
+        "question": "How to test the command, given the world is rebuilt inside the command?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "New file tests/test_alerts_command.py: in-process main() with captured stdout for content/order/determinism/extra-arg rejection, plus one subprocess run with only PATH and SYSTEMROOT in the environment.",
+        "why": "Project tests put CLI tests in subprocesses but a separate small file keeps test_cli.py untouched (rules: minimal edits, small files); in-process is faster and lets me capture argparse exit. The subprocess test proves no env vars are needed.",
+        "alternatives_considered": [
+          {
+            "option": "Add to tests/test_cli.py",
+            "rejected_because": "larger shared file, unrelated churn"
+          }
+        ],
+        "assumptions": [
+          "python needs PATH/SYSTEMROOT on Windows only"
+        ],
+        "risks": [
+          "the no-state-change test is weak: cmd_alerts builds its own SimWorld, so I can only check the fixture table and a separate world are unchanged, not the command internal world; read-only-ness rests on the code calling no mutating method"
+        ]
+      }
+    },
+    {
+      "step_id": "check-1",
+      "capability": "run_checks",
+      "input": {
+        "command": "python -m unittest tests.test_alerts_command -v"
+      },
+      "outcome": "success",
+      "output": {
+        "result": "6 tests OK; module under test is the clone code (python run with the clone as cwd, alerts output matched fixtures in the clone)"
+      }
+    },
+    {
+      "step_id": "check-2",
+      "capability": "run_checks",
+      "input": {
+        "command": "python -m unittest discover -s tests; python -m ruff check .; python -m ruff format --check .; python -m incident_commander.dod purity"
+      },
+      "outcome": "success",
+      "output": {
+        "result": "207 tests OK (201 before); ruff check passed; format check 59 files already formatted; G1 purity PASS 22 modules (the alerts command adds no import)"
+      }
+    },
+    {
+      "step_id": "decide-5",
+      "capability": "decide",
+      "input": {
+        "question": "Which docs to update and what not to touch?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "Added one line to the README Commands list and one entry in memory-bank/progress.md; did not edit CHANGELOG.md or traces/, did not mark a roadmap version.",
+        "why": "CLAUDE.md says generated files are never hand-edited and progress.md is updated at session end; the command is not a roadmap milestone.",
+        "alternatives_considered": [
+          {
+            "option": "Update activeContext.md",
+            "rejected_because": "it describes the milestone focus (v0.5), unchanged by this side feature"
+          }
+        ],
+        "assumptions": [
+          "README header Commands (v0.1) can stay"
+        ],
+        "risks": [
+          "progress.md entry sits outside the version list format"
+        ]
+      }
+    },
+    {
+      "step_id": "reflect-1",
+      "capability": "reflect",
+      "input": {
+        "question": "what should the next person know?"
+      },
+      "outcome": "success",
+      "output": {
+        "notes": "The command prints raw epoch fired_at like the tools command; no human-readable time. CHANGELOG not regenerated (no generator installed per memory bank). I did not run the full CI or the other dod gates (only purity exists). Python used was the system python (scikit-learn 1.8.0), not the project 3.12 venv. The unchanged-state test is indirect. Branch not pushed or merged."
+      }
+    }
+  ]
+}

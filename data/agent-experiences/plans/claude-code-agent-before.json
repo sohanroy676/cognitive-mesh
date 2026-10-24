@@ -1,0 +1,9 @@
+{
+  "task_id": "claude-code-agent-before",
+  "steps": [
+    {
+      "step_id": "report",
+      "capability": "unresolved_report"
+    }
+  ]
+}

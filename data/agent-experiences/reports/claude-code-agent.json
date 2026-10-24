@@ -1,0 +1,240 @@
+{
+  "project": "agent-config-deployer",
+  "slug": "claude-code-agent",
+  "task": "Add Claude Code as a second supported coding agent via a new JSON config file plus templates (CLAUDE.md, equivalents of the other deployable files), with tests that it is discovered and its files deploy to the right places. Record why if app code must change. Do not launch the GUI.",
+  "clone": "E:/experience-db/work/agent-config-deployer",
+  "branch": "agent/claude-code-agent",
+  "base_commit": "fcec6be",
+  "head_commit": "b8cfc28",
+  "model": "claude-sonnet-5-5",
+  "finished": true,
+  "steps": [
+    {
+      "step_id": "read-1",
+      "capability": "read_project",
+      "input": {
+        "question": "How are agents, templates and deployment wired, and what must a new agent follow?"
+      },
+      "outcome": "success",
+      "output": {
+        "found": "agents/*.json is globbed by core/agent_loader.list_agents; each config has name, base_template_path, structure.base_files (template-relative source -> project-relative destination), project_specific_files (key -> destination, user-written content) and file_descriptions (required for every project-specific key by an existing integrity test). prompt.md in the template folder is shown in the Prompt step. file_deployer copies base files and merges only a destination named .gitignore. Existing integrity tests iterate over all agents/*.json, so a new config is checked automatically.",
+        "files_read": [
+          "README.md",
+          "agents/cline.json",
+          "core/agent_loader.py",
+          "core/file_deployer.py",
+          "tests/test_agent_loader.py",
+          "tests/test_file_deployer.py",
+          "memory-bank/systemPatterns.md",
+          "memory-bank/progress.md",
+          "templates/cline/*"
+        ],
+        "constraints": [
+          "Agent config files are named agents/<agent_name>.json",
+          "Only core/file_deployer.py writes to the target project",
+          "Base template path is a folder with a prompt.md",
+          "Every project_specific key needs a file_descriptions entry",
+          "Tests live in tests/test_<module>.py"
+        ]
+      }
+    },
+    {
+      "step_id": "decide-1",
+      "capability": "decide",
+      "input": {
+        "question": "Can the feature be done with only a new JSON config and templates, or must app code change?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "Use only agents/claude_code.json plus templates/claude-code/; no change to core/ or ui/.",
+        "why": "README and systemPatterns say a new agent is only a JSON file; list_agents globs the folder, file_deployer is driven entirely by the mapping, and the integrity tests iterate over all configs. The one hardcoded 'templates/cline' string in ui/wizard_steps.py is just a placeholder hint for the override field.",
+        "alternatives_considered": [
+          {
+            "option": "Change ui placeholder to be agent-aware",
+            "rejected_because": "Cosmetic, out of scope; task asks to avoid app code unless required"
+          }
+        ],
+        "assumptions": [
+          "Nothing else in the UI hardcodes Cline behaviour (only grep checked, GUI not launched)"
+        ],
+        "risks": [
+          "The Select Agent step UI with two agents was not visually verified"
+        ]
+      }
+    },
+    {
+      "step_id": "decide-2",
+      "capability": "decide",
+      "input": {
+        "question": "Where do the Claude Code files go, and how to name the config?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "Config agents/claude_code.json (snake_case per systemPatterns and progress.md backlog), name 'Claude Code', template folder templates/claude-code. Rules go to .claude/rules/01-06*.md, workflows become slash commands in .claude/commands/{commit,debug,new-feature}.md, memory-bank/ stays the same, plus CHANGELOG, ROADMAP, CI, ADR, PRE-DEPLOY-CHECKLIST, .gitignore.",
+        "why": "This mirrors the layout used by the Claude Code project that this template family comes from (.claude/rules auto-load, .claude/commands for slash commands). Names match Cline's so behaviour is comparable.",
+        "alternatives_considered": [
+          {
+            "option": "Reference ../cline files from base_files to avoid duplicating shared files",
+            "rejected_because": "The loader joins base_template_path / src, a custom template path override would break, and traversal out of the template folder is fragile"
+          },
+          {
+            "option": "Name the folder templates/claude-code-templates as in the README example",
+            "rejected_because": "README shows it as an example; existing Cline folder was renamed to the short agent name (progress.md), so follow that"
+          }
+        ],
+        "assumptions": [
+          "Claude Code auto-loads .claude/rules/*.md and .claude/commands/*.md in the project (from documented behaviour, not tested here)"
+        ],
+        "risks": [
+          "Duplicated shared files (CI, ADR, memory-bank) can drift from the Cline copies"
+        ]
+      }
+    },
+    {
+      "step_id": "decide-3",
+      "capability": "decide",
+      "input": {
+        "question": "Should CLAUDE.md be a base file or a project-specific file, and what replaces .clineignore?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "CLAUDE.md is a static base file that imports @AGENTS.md and the memory-bank files; AGENTS.md, tech-stack, architecture, projectBrief and ROADMAP remain project-specific (user/AI-written). .clineignore is replaced by .claude/settings.json with permissions.deny Read rules for secrets and build output.",
+        "why": "Claude Code reads CLAUDE.md, not AGENTS.md, so the import makes the cross-tool AGENTS.md file effective. Keeping CLAUDE.md static means it works even if the user skips content pages. Claude Code has no .clineignore; deny permissions are its mechanism.",
+        "alternatives_considered": [
+          {
+            "option": "CLAUDE.md as the user-written project-specific file",
+            "rejected_because": "Would duplicate AGENTS.md content and require changing the prompt contract; a missing file would leave the project without any Claude entry point"
+          }
+        ],
+        "assumptions": [
+          "@path imports of missing files are ignored without error by Claude Code (not verified)"
+        ],
+        "risks": [
+          "settings.json deploy overwrites an existing user .claude/settings.json (conflict step will prompt, but there is no JSON merge)"
+        ]
+      }
+    },
+    {
+      "step_id": "change-1",
+      "capability": "change_code",
+      "input": {
+        "goal": "Add the Claude Code agent config and template folder without touching app code"
+      },
+      "outcome": "success",
+      "output": {
+        "summary": "Created agents/claude_code.json (generated from cline.json, 23 base files, 5 project-specific files) and templates/claude-code/ (copies of Cline's rules, workflows-as-commands, memory-bank, CI, ADR, checklist, .gitignore with Cline wording changed; new CLAUDE.md, settings.json deny rules, prompt.md, README.md).",
+        "files_changed": [
+          {
+            "path": "agents/claude_code.json",
+            "what": "new agent config",
+            "line": 1
+          },
+          {
+            "path": "templates/claude-code/CLAUDE.md",
+            "what": "static entry file importing AGENTS.md and memory-bank",
+            "line": 1
+          },
+          {
+            "path": "templates/claude-code/settings.json",
+            "what": "permissions.deny Read rules replacing .clineignore",
+            "line": 1
+          },
+          {
+            "path": "templates/claude-code/prompt.md",
+            "what": "prompt for Claude Code, points to .claude/rules/",
+            "line": 1
+          },
+          {
+            "path": "templates/claude-code/project-specific-template/AGENTS.md",
+            "what": "wording points to .claude/rules/ and CLAUDE.md import",
+            "line": 1
+          }
+        ]
+      }
+    },
+    {
+      "step_id": "check-1",
+      "capability": "run_checks",
+      "input": {
+        "command": "venv python.exe -m pytest -q (cwd = clone; core.__file__ confirmed to be the clone's)"
+      },
+      "outcome": "failure",
+      "failure_kind": "internal_error",
+      "failure_message": "1 failed, 81 passed: test_templates_do_not_mention_cline flagged templates/claude-code/README.md, which says it replaces .clineignore"
+    },
+    {
+      "step_id": "decide-4",
+      "capability": "decide",
+      "input": {
+        "question": "How to test the new agent given existing integrity tests already iterate over agents/*.json?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "Add tests/test_claude_code_agent.py (discovery, case-insensitive lookup, real deploy into tmp_path to .claude/... destinations, no .clinerules/.clineignore deployed, settings.json valid with Read deny rules, every @import in CLAUDE.md is a deployed file, no 'cline' text left in the templates, prompt targets Claude Code, unique destinations).",
+        "why": "The existing tests only prove sources exist; none proves destinations or that copied Cline wording was removed. The adversarial cases target the main risk of copying templates.",
+        "alternatives_considered": [
+          {
+            "option": "Put tests in test_agent_loader.py",
+            "rejected_because": "Project convention is one test file per module/subject and the file is already long"
+          }
+        ],
+        "assumptions": [
+          "Deploying with an empty ConflictReport mirrors the no-conflict path used by the app"
+        ],
+        "risks": [
+          "Tests do not prove Claude Code itself accepts the files; it was not run"
+        ]
+      }
+    },
+    {
+      "step_id": "change-2",
+      "capability": "change_code",
+      "input": {
+        "goal": "Fix the leftover Cline mention found by the new test, add tests, update docs"
+      },
+      "outcome": "success",
+      "output": {
+        "summary": "Reworded templates/claude-code/README.md; added tests/test_claude_code_agent.py (10 tests); README.md lists Claude Code and marks the roadmap item done; memory-bank/progress.md backlog line updated. No change in core/ or ui/.",
+        "files_changed": [
+          {
+            "path": "tests/test_claude_code_agent.py",
+            "what": "10 new tests",
+            "line": 1
+          },
+          {
+            "path": "templates/claude-code/README.md",
+            "what": "removed .clineignore mention",
+            "line": 1
+          },
+          {
+            "path": "README.md",
+            "what": "mention Claude Code, tick roadmap item",
+            "line": 3
+          }
+        ]
+      }
+    },
+    {
+      "step_id": "check-2",
+      "capability": "run_checks",
+      "input": {
+        "command": "venv python.exe -m pytest -q; -m ruff check .; -m black --check ."
+      },
+      "outcome": "success",
+      "output": {
+        "result": "82 passed (72 existing + 10 new); ruff clean; black clean after formatting the new test file once. core imported from the clone path."
+      }
+    },
+    {
+      "step_id": "reflect-1",
+      "capability": "reflect",
+      "input": {
+        "question": "What should the next person know?"
+      },
+      "outcome": "success",
+      "output": {
+        "notes": "No app code changed, confirming the README claim. Not done: the GUI Select Agent step with two agents was not launched; Claude Code was not run against the deployed files, so @import behaviour for missing files and the settings.json deny syntax are from documented behaviour, not verified. Shared files (CI, ADR, memory-bank, rules) are copies of Cline's and can drift; a shared-template mechanism would need app code. ui/wizard_steps.py still has a 'templates/cline' placeholder hint. Deploying settings.json overwrites an existing .claude/settings.json without JSON merge (the conflict step asks first). Surprise: my own README tripped the no-Cline-wording test."
+      }
+    }
+  ]
+}

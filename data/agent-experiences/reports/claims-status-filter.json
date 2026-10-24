@@ -1,0 +1,223 @@
+{
+  "project": "cognitive-mesh",
+  "slug": "claims-status-filter",
+  "task": "Add a --status STATUS option to `cognitive-mesh experience claims` so only claims whose evidence status equals STATUS are listed (text and --json). Unknown status refused with clear message and usage-error exit code. Default unchanged. Output must say how many claims the filter left out. Add tests (incl. failure case) and README command list entry.",
+  "clone": "E:/experience-db/work/cognitive-mesh",
+  "branch": "agent/claims-status-filter",
+  "base_commit": "2122f4f",
+  "head_commit": "5300085",
+  "model": "claude-sonnet-5-5",
+  "finished": true,
+  "steps": [
+    {
+      "step_id": "read-1",
+      "capability": "read_project",
+      "input": {
+        "question": "what do the project rules and code structure require for adding a filter to `experience claims`?"
+      },
+      "outcome": "success",
+      "output": {
+        "found": "`experience claims` is _experience_claims in cli.py; rows come from claims_view() in experience/report.py, serialised by claims_payload(), and both are shared with ui/api.py. Evidence status is ClaimStatus (StrEnum, 10 values) in experience/assess.py; the row key is evidence_status. Usage errors use argparse (SystemExit 2) or EXIT_CONFIG_ERROR=2.",
+        "files_read": [
+          "AGENTS.md",
+          "CLAUDE.md",
+          "src/cognitive_mesh/cli.py",
+          "src/cognitive_mesh/experience/report.py",
+          "src/cognitive_mesh/experience/assess.py",
+          "README.md",
+          "tests/test_cli_experience.py"
+        ],
+        "constraints": [
+          "README must stay accurate and only document run commands",
+          "tests include failure cases; never delete a test",
+          "default output and JSON must not change",
+          "report.py JSON is shared with the web UI",
+          "do not run uv or the full suite"
+        ]
+      }
+    },
+    {
+      "step_id": "decide-1",
+      "capability": "decide",
+      "input": {
+        "question": "Where does the filter live: CLI only, or in the shared claims_view?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "Filter inside claims_view() via an optional status argument (default None), counting dropped claims in ClaimsView.filtered_out.",
+        "why": "Rows, hidden count and status meanings are all computed there; filtering in the CLI would leave meanings and JSON inconsistent. The UI shares the function, so the default None keeps its output unchanged.",
+        "alternatives_considered": [
+          {
+            "option": "filter rows in _experience_claims after the view is built",
+            "rejected_because": "would leave status_meanings listing statuses no longer shown and duplicate the count logic"
+          }
+        ],
+        "assumptions": [
+          "filter applies after the hidden-unverified check, so hidden counts stay about source verification only"
+        ],
+        "risks": [
+          "UI could later reuse the argument without surfacing the count"
+        ]
+      }
+    },
+    {
+      "step_id": "decide-2",
+      "capability": "decide",
+      "input": {
+        "question": "How to refuse an unknown status and with which exit code?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "argparse choices= built from the ClaimStatus enum, so an unknown value prints the valid list and exits 2 (SystemExit), like `task --profile bogus`.",
+        "why": "2 is the project's usage-error code and the existing precedent test_an_unknown_profile_is_a_usage_error uses SystemExit(2); choices stay in sync with the enum automatically.",
+        "alternatives_considered": [
+          {
+            "option": "validate by hand in _experience_claims and return EXIT_CONFIG_ERROR",
+            "rejected_because": "duplicates the status list and the clear message argparse already gives"
+          }
+        ],
+        "assumptions": [
+          "EXIT_CONFIG_ERROR=2 and argparse's 2 are the same 'usage error' in the project's docs"
+        ],
+        "risks": [
+          "ClaimStatus is imported when the parser is built (inside the function, not at module top)"
+        ]
+      }
+    },
+    {
+      "step_id": "decide-3",
+      "capability": "decide",
+      "input": {
+        "question": "How must the filter report what it left out, and does the default JSON change?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "Text prints \"status filter 'X': N claim(s) with another status left out\"; JSON gains status_filter and filtered_out_by_status only when a filter is used. The 'no claims' line is suppressed when filtering so an empty result is not misread as an empty graph.",
+        "why": "Task requires the filter never be silent, and default output must be byte-identical (also the UI's JSON).",
+        "alternatives_considered": [
+          {
+            "option": "always emit filtered_out_by_status (0 by default)",
+            "rejected_because": "changes default JSON shape"
+          }
+        ],
+        "assumptions": [],
+        "risks": [
+          "consumers must treat the two keys as optional"
+        ]
+      }
+    },
+    {
+      "step_id": "change-1",
+      "capability": "change_code",
+      "input": {
+        "goal": "implement the filter, its output and README entry"
+      },
+      "outcome": "success",
+      "output": {
+        "summary": "claims_view gets evidence_status argument and ClaimsView gets status_filter/filtered_out; claims_payload adds two keys only when filtering; CLI adds --status with choices from ClaimStatus and prints the left-out count; README command line updated; 4 tests added.",
+        "files_changed": [
+          {
+            "path": "src/cognitive_mesh/experience/report.py",
+            "what": "filter + count in claims_view, optional payload keys",
+            "line": 79
+          },
+          {
+            "path": "src/cognitive_mesh/cli.py",
+            "what": "--status option and filter line in text output",
+            "line": 250
+          },
+          {
+            "path": "tests/test_cli_experience.py",
+            "what": "4 new tests incl. unknown status exit 2",
+            "line": 132
+          },
+          {
+            "path": "README.md",
+            "what": "command list entry for --status",
+            "line": 178
+          }
+        ]
+      }
+    },
+    {
+      "step_id": "check-1",
+      "capability": "run_checks",
+      "input": {
+        "command": "pytest tests/test_cli_experience.py (project .venv python, PYTHONPATH=clone/src; cognitive_mesh.__file__ confirmed inside the clone)"
+      },
+      "outcome": "failure",
+      "failure_kind": "internal_error",
+      "failure_message": "8 failed: my new `status` parameter was shadowed by the loop variable `status` in claims_view, so default output lost all claims"
+    },
+    {
+      "step_id": "decide-4",
+      "capability": "decide",
+      "input": {
+        "question": "How to fix the shadowing?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "Rename the parameter to evidence_status (and the CLI keyword), keeping the existing local name.",
+        "why": "Minimal edit, no change to unrelated code.",
+        "alternatives_considered": [
+          {
+            "option": "rename the loop local",
+            "rejected_because": "touches unrelated lines"
+          }
+        ],
+        "assumptions": [],
+        "risks": []
+      }
+    },
+    {
+      "step_id": "check-2",
+      "capability": "run_checks",
+      "input": {
+        "command": "same pytest run after the rename"
+      },
+      "outcome": "failure",
+      "failure_kind": "internal_error",
+      "failure_message": "1 failed: my test assumed the fixture has claims with mixed evidence statuses; without --root all share one status"
+    },
+    {
+      "step_id": "change-2",
+      "capability": "change_code",
+      "input": {
+        "goal": "make the test match the fixture"
+      },
+      "outcome": "success",
+      "output": {
+        "summary": "The test now asserts that nothing is left out for the shared status; the nonmatching case (all claims left out, count printed) is covered by the 'conflicting' test.",
+        "files_changed": [
+          {
+            "path": "tests/test_cli_experience.py",
+            "what": "adjusted assertion",
+            "line": 141
+          }
+        ]
+      }
+    },
+    {
+      "step_id": "check-3",
+      "capability": "run_checks",
+      "input": {
+        "command": "pytest tests/test_cli_experience.py; ruff check; ruff format --check; mypy on the 3 changed python files"
+      },
+      "outcome": "success",
+      "output": {
+        "result": "19 passed; ruff check and format clean; mypy no issues in 3 files (one ruff E501 on a docstring was shortened first)"
+      }
+    },
+    {
+      "step_id": "reflect-1",
+      "capability": "reflect",
+      "input": {
+        "question": "what should the next person know?"
+      },
+      "outcome": "success",
+      "output": {
+        "summary": "Not done: no test with a mixed-status graph (needs reviews or --root to produce a different status), the web UI does not pass the filter, tests/test_ui_* and the full suite were not run, and the CLI was not run by hand. A first test run broke because a new parameter name collided with a loop variable; check names in claims_view before adding parameters. Unknown status exits 2 through argparse (SystemExit), not a returned code."
+      }
+    }
+  ]
+}
