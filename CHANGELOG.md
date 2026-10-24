@@ -29,6 +29,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record the Experiences tab, its measurements and checks
 - **adr:** Propose ADR-0034 stored content of an experience
 - Record the experience content page, its checks and costs
+- **adr:** Propose ADR-0035 saved dependency graph files
 
 ### Fixed
 - **ui:** Flush the URL line and tidy the page layout
@@ -37,6 +38,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Maintenance
 - **ui:** Drop a stray blank line
+- **data:** Keep a real agent experience database and a reference graph
 
 ## [1.4.4] - 2026-10-19
 
