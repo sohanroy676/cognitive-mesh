@@ -200,61 +200,35 @@ function tally(kind, n) {
   );
 }
 
-function record(main, sub) {
-  return h("li", {}, main, sub ? h("span", { class: "sub", text: sub }) : null);
-}
-
-// Sort everything known about a claim onto the side it speaks for. What speaks for neither side
-// is listed apart, never folded into support.
-function sortRecords(a) {
-  const pro = [];
-  const con = [];
-  const neither = [];
-  for (const s of a.supporting || []) {
-    pro.push(record(h("span", {}, "Run ", runLink(s.run_id)), "code version " + short(s.fingerprint) + ", source check " + s.source));
-  }
-  for (const c of a.contradicting || []) {
-    con.push(
-      record(
-        h("span", {}, "Run ", runLink(c.run_id), " listed this subject without the claim"),
-        (c.same_version ? "same code version " : "another or unrecorded code version ") + short(c.fingerprint),
-      ),
-    );
-  }
-  const re = a.rederivation;
-  if (re && re.holding === "holds") pro.push(record("Re-derived from the current source: holds", "same analyzer as the original observation"));
-  else if (re && re.holding === "refuted") con.push(record("Re-derived from the current source: not found", "same analyzer as the original observation"));
-  else if (re) neither.push(record("Re-derivation could not decide", "the subject is not in the current source"));
-  for (const r of a.reviews || []) {
-    const line = "Review " + r.id + " by " + r.reviewer + " (unauthenticated): " + r.verdict;
-    const sub = "code version " + short(r.fingerprint) + (r.note ? ", " + r.note : "");
-    (r.verdict === "confirmed" ? pro : con).push(record(line, sub));
-  }
-  for (const o of a.outcomes || []) {
-    if (o.source === "promotion") {
-      neither.push(record("Promotion attempt " + o.id + ": " + o.result, "a refused promotion is not evidence"));
-      continue;
-    }
-    const line = "Outcome " + o.id + " from a " + o.source + ": " + o.result;
-    const sub = "code version " + short(o.fingerprint) + (o.detail ? ", " + o.detail : "");
-    if (o.result === "succeeded") pro.push(record(line, sub));
-    else if (o.result === "failed") con.push(record(line, sub));
-    else neither.push(record(line, sub));
-  }
-  return { pro, con, neither };
+function recordItem(r) {
+  return h("li", {}, h("span", {}, r.before, r.runId ? runLink(r.runId) : null, r.after || null), r.sub ? h("span", { class: "sub", text: r.sub }) : null);
 }
 
 function side(kind, title, items) {
+  const empty = kind === "s" ? "Nothing found that supports this claim." : "Nothing found that contradicts this claim.";
   return h(
     "section",
     { class: "side " + (kind === "s" ? "pro" : "con") },
     h("h3", {}, title, tally(kind, items.length), h("span", { class: "muted", text: plural(items.length, "record", "records") })),
-    h("ul", { class: "recs" }, items.length ? items : [h("li", { class: "none", text: kind === "s" ? "Nothing supports this claim." : "Nothing contradicts this claim." })]),
+    h("ul", { class: "recs" }, items.length ? items.map(recordItem) : [h("li", { class: "none", text: empty })]),
   );
 }
 
+// A short key to read the page by. It is open the first time and remembers when it is closed.
+const HELP_KEY = "cogmesh.help.v1";
+function helpPanel() {
+  const box = h("details", { class: "helpbox", open: readStore(HELP_KEY) === "closed" ? null : true },
+    h("summary", { text: "How to read this page" }),
+    h("ul", { class: "plain" }, window.CogExplain.KEY.map((line) => h("li", { text: line }))));
+  box.addEventListener("toggle", () => writeStore(HELP_KEY, box.open ? "open" : "closed"));
+  return box;
+}
+
 function ledger(a, via) {
-  const { pro, con, neither } = sortRecords(a);
+  const X = window.CogExplain;
+  const { pro, con, neither } = X.records(a);
+  const say = X.headline(a);
+  const inWords = X.aboutClaim(a.name);
   const classes = "ledger" + (revealed ? "" : " reveal");
   const el = h(
     "article",
@@ -263,24 +237,26 @@ function ledger(a, via) {
       "div",
       { class: "ledger-head" },
       h("p", { class: "claim-text" }, mentions(a.name)),
-      ...(via || []).map((v) => h("p", { class: "via", text: "Retrieved via " + v.doc_id + " (query match " + v.similarity.toFixed(3) + ")" })),
+      inWords ? h("p", { class: "inwords", text: "In words: " + inWords + "." }) : null,
+      ...(via || []).map((v) => h("p", { class: "via", text: "Found by search on " + v.doc_id + " (query match " + v.similarity.toFixed(3) + ")" })),
     ),
     h("div", { class: "sides" }, side("s", "Supports", pro), side("c", "Contradicts", con)),
     h(
       "div",
       { class: "total" },
       chip(a.status),
-      h("p", { class: "meaning", text: a.meaning }),
-      h("p", { class: "note", text: "Validated by: " + ((a.validated_by || []).join(", ") || "nothing") + ". Checked against " + (a.current_fingerprint ? "code version " + short(a.current_fingerprint) : "no code (no --root given, so currency is unknown)") + "." }),
+      h("p", { class: "headline", text: say.text }),
+      say.next ? h("p", { class: "note", text: say.next }) : null,
+      h("p", { class: "note", text: X.currentCodeNote(a) }),
     ),
     h(
       "div",
       { class: "fine" },
-      neither.length ? h("details", {}, h("summary", { text: "On neither side (" + neither.length + ")" }), h("ul", { class: "recs" }, neither)) : null,
-      h("details", {}, h("summary", { text: "How the status was reached" }),
-        h("p", { class: "note", text: "Corroboration: " + a.corroboration + ". Outcome state: " + a.outcome + "." }),
-        jsonBlock("Counts", a.counts || {}),
-        jsonBlock("Independent sources", a.sources || [])),
+      neither.length ? h("details", {}, h("summary", { text: "Records that speak for neither side (" + neither.length + ")" }), h("ul", { class: "recs" }, neither.map(recordItem))) : null,
+      h("details", {}, h("summary", { text: "How this status was reached" }),
+        h("ul", { class: "plain" }, X.reading(a).filter(Boolean).map((line) => h("li", { text: line }))),
+        h("p", { class: "note", text: "Formal meaning of “" + a.status.replaceAll("_", " ") + "”: " + a.meaning }),
+        jsonBlock("Raw data, for checking", { corroboration: a.corroboration, outcome: a.outcome, counts: a.counts || {}, sources: a.sources || [] })),
       h("p", {}, link("Explore this claim in the graph", () => go("node", { id: a.claim_id })), " ", link("Show runs for this claim", () => go("traces", { for: a.claim_id }))),
     ),
   );
@@ -424,6 +400,7 @@ async function viewClaims(root, params) {
     },
     checkbox("include_unverified", "Include claims whose trace source is not confirmed", include),
     h("button", { class: "act", type: "submit", text: "Update" })),
+    helpPanel(),
     h("p", { class: "muted", text: "Re-checking every source. This can take a few seconds." }),
   );
   const r = await api("/api/claims", { include_unverified: include });
@@ -520,6 +497,7 @@ function queryView(path, title, button, render, intro) {
     root.append(
       h("h2", { text: title }),
       h("p", { class: "prose note", text: intro }),
+      path === "recall" ? helpPanel() : null,
       h("form", {
         onsubmit: (ev) => {
           ev.preventDefault();

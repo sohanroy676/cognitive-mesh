@@ -31,6 +31,7 @@ MAX_PARAM_CHARS = 2100  # a query is at most 2000 characters (memory.index.MAX_Q
 STATIC_FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+    "/explain.js": ("explain.js", "text/javascript; charset=utf-8"),
     "/graph.js": ("graph.js", "text/javascript; charset=utf-8"),
     "/app.css": ("app.css", "text/css; charset=utf-8"),
 }
