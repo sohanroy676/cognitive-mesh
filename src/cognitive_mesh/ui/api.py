@@ -46,7 +46,8 @@ from cognitive_mesh.ui.config import EmbedderHolder, UiConfig
 from cognitive_mesh.ui.errors import ApiError
 from cognitive_mesh.ui.experiences import build_experiences, experience_detail
 from cognitive_mesh.ui.graphdata import graph_payload
-from cognitive_mesh.ui.paths import resolve_folder
+from cognitive_mesh.ui.paths import resolve_graph_source
+from cognitive_mesh.ui.savedgraph import load_saved_graph
 from cognitive_mesh.validity import current_environment, utc_today
 
 if TYPE_CHECKING:
@@ -338,11 +339,14 @@ class UiApi:
         typed = params.get("path", "")
         if not typed.strip() and self.config.root is not None:
             typed = str(self.config.root)
-        folder = resolve_folder(typed)
+        kind, path = resolve_graph_source(typed)
         with self._graph_lock:
-            built = build_dependency_graph(ingest_application(folder))
+            if kind == "file":
+                built, source = load_saved_graph(path)
+            else:
+                built, source = build_dependency_graph(ingest_application(path)), None
         return 200, {
-            "data": graph_payload(built, folder, full=_flag(params, "full")),
+            "data": graph_payload(built, path, full=_flag(params, "full"), source=source),
             "notes": [],
             "warnings": [],
         }

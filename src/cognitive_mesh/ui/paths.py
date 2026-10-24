@@ -8,18 +8,19 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal
 
 from cognitive_mesh.ui.errors import ApiError
 
 MAX_PATH_CHARS: Final = 1024
 
 
-def resolve_folder(text: str) -> Path:
-    """The absolute path of an existing directory, or an `ApiError` with a fixed message.
+def resolve_graph_source(text: str) -> tuple[Literal["folder", "file"], Path]:
+    """A typed path as a folder to build, or a saved graph file (`.json`) to load (ADR-0035).
 
     The path is made absolute without resolving links, so ingestion can still refuse a root that
-    is itself a symlink or junction.
+    is itself a symlink or junction, and a symlinked file can be refused. Failures are `ApiError`
+    with fixed messages.
     """
     cleaned = text.strip()
     if not cleaned:
@@ -30,11 +31,14 @@ def resolve_folder(text: str) -> Path:
         raise ApiError(400, "the path contains control characters")
     if cleaned.replace("/", "\\").startswith("\\\\"):
         raise ApiError(400, "network and device paths are not allowed")
-    folder = Path(os.path.abspath(cleaned))
+    path = Path(os.path.abspath(cleaned))
     try:
-        is_dir = folder.is_dir()
+        if path.is_dir():
+            return "folder", path
+        if path.is_file():
+            if path.suffix.lower() == ".json":
+                return "file", path
+            raise ApiError(409, "that path is not a folder or a saved graph file (.json)")
     except OSError:
-        is_dir = False
-    if not is_dir:
-        raise ApiError(409, "that folder does not exist or is not a directory")
-    return folder
+        pass
+    raise ApiError(409, "that folder or file does not exist")

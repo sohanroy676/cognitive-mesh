@@ -19,7 +19,9 @@ FULL_MAX_NODES: Final = 3000
 FULL_MAX_EDGES: Final = 10000
 
 
-def graph_payload(graph: DependencyGraph, folder: Path, *, full: bool) -> dict[str, Any]:
+def graph_payload(
+    graph: DependencyGraph, folder: Path, *, full: bool, source: dict[str, Any] | None = None
+) -> dict[str, Any]:
     total_nodes, total_edges = len(graph.nodes()), len(graph.edges())
     if full:
         if total_nodes > FULL_MAX_NODES or total_edges > FULL_MAX_EDGES:
@@ -36,6 +38,7 @@ def graph_payload(graph: DependencyGraph, folder: Path, *, full: bool) -> dict[s
     trunc = view.truncation
     return {
         "folder": str(folder),
+        "source": source or {"kind": "folder"},
         "full": full,
         "width": width,
         "height": height,

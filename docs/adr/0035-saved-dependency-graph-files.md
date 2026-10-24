@@ -1,7 +1,7 @@
 # ADR-0035: Load a saved dependency graph file in the UI's Graph tab (amends ADR-0032)
 
 ## Status
-Proposed (needs the user's acceptance before any code is written)
+Accepted (text reviewed and accepted by the user 2026-10-25, before any code was written)
 
 ## Date
 2026-10-25
@@ -72,3 +72,24 @@ a version field or a compact format, and any change to how folders are built.
   Nothing checks that a snapshot still matches the folder it came from.
 - Nothing in this ADR is implemented. The README and `data/reference-graphs/README.md` must not describe loading as
   working until the tests and the browser check in point 8 pass.
+
+## Outcome of the implementation (2026-10-25, Windows 11, headless Edge driven over the DevTools protocol)
+Built as written, with these details and findings:
+- **Code:** `DependencyGraph.from_dict` (graph models validate every node, edge and diagnostic; a node id that repeats, or an
+  edge that names a missing node, is refused), `ui/savedgraph.py` (size cap, symlink and read failures, fixed messages),
+  `resolve_graph_source` in `ui/paths.py` (a folder, or an existing `.json` file), a `source` note in the graph payload, and the
+  page's banner and wording.
+- **Two things differ from the ADR text.** (1) A directory named `x.json` is a folder and is built as one; only a regular file
+  is loaded as a saved graph. (2) The graph models ignore an unknown extra field in a file instead of refusing it; the field is
+  not kept and never reaches the page (tested). Missing keys, wrong types, unknown node kinds, edges without evidence, repeated
+  node ids and dangling edges are refused.
+- **Measured:** loading the committed 557-node, 1,855-edge reference file through the API takes 0.11 to 0.14 s (three runs);
+  building the same projects from the folder takes 7.9 and 8.8 s. The page showed the graph 0.45 to 0.54 s after the path was
+  submitted.
+- **Checked in a real browser (13 checks, all passing):** typing the file's path draws the graph; the page says it was loaded
+  from a saved file and shows its size and when it was saved; truncation shows the true totals (300 of 557 nodes, 1,855 edges);
+  one click shows all 557 nodes; the mouse wheel zooms; hovering shows the id; a pin remembers the file as its source; a link
+  with the file's path and a node id reopens it with the node selected; a typed folder still builds, without the label; a text
+  file and a non-graph JSON file are refused with plain messages and none of the file's text.
+- **Not checked:** a saved graph that is 25 MB; a file on a network drive (refused by the path rules, not exercised); light mode,
+  touch, screen readers, Firefox, Safari, macOS, Linux.

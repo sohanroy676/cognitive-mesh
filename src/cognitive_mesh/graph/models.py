@@ -10,7 +10,8 @@ from cognitive_mesh.ingestion import SourceRef
 
 
 class GraphError(Exception):
-    """A graph query named a node that does not exist. The only exception the graph raises."""
+    """A graph query named a node that does not exist, or a saved graph is not valid. The only
+    exception the graph raises."""
 
 
 class NodeKind(StrEnum):

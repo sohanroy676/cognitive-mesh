@@ -64,9 +64,9 @@
 
       put(root, 
         h("h2", { text: "Dependency graph" }),
-        h("p", { class: "prose note", text: "Type a folder to graph it. An edge from A to B means A depends on B. Nothing in the folder is changed or run." }),
+        h("p", { class: "prose note", text: "Type a folder to graph it, or the path of a saved graph file (.json) to open it at once. An edge from A to B means A depends on B. Nothing is changed or run." }),
       );
-      const input = h("input", { name: "path", value: typed, type: "text", size: 54, placeholder: rootGiven ? "Leave empty to use the --root folder" : "For example E:\\Projects\\my-app", "aria-label": "Folder to graph" });
+      const input = h("input", { name: "path", value: typed, type: "text", size: 54, placeholder: rootGiven ? "Leave empty to use the --root folder" : "A folder, or a saved graph file such as graph.json", "aria-label": "Folder or saved graph file" });
       const fullBox = h("input", { type: "checkbox", name: "full", checked: full ? true : null });
       const submit = (ev) => {
         ev.preventDefault();
@@ -79,7 +79,7 @@
       };
       put(root, 
         h("form", { onsubmit: submit },
-          h("label", {}, "Folder", input),
+          h("label", {}, "Folder or saved graph file", input),
           h("label", { class: "check" }, fullBox, h("span", { text: "Show the full graph" })),
           h("button", { class: "act", type: "submit", text: "Build graph" })),
       );
@@ -125,6 +125,10 @@
       // summary and truncation
       const t = d.truncation;
       put(out, h("p", { text: d.folder + ": " + plural(t.shown_nodes, "node", "nodes") + " and " + plural(t.shown_edges, "edge", "edges") + " shown." }));
+      if (d.source && d.source.kind === "saved file") {
+        put(out, h("div", { class: "banner warn", role: "status" },
+          "Loaded from a saved file, not built from the folder just now. The folder may have changed since it was saved. File size " + d.source.bytes + " bytes, saved " + d.source.modified.slice(0, 19).replace("T", " ") + " UTC."));
+      }
       if (t.truncated) {
         const omitted = Object.entries(t.omitted_nodes_by_kind).map(([k, n]) => n + " " + k).join(", ") || "none";
         put(out, 

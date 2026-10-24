@@ -109,10 +109,11 @@ def test_unusable_paths_are_refused_with_fixed_messages(typed: str, status: int,
         assert text in str(reply.json()["error"])
 
 
-def test_a_file_is_not_a_folder() -> None:
+def test_a_file_that_is_not_a_saved_graph_is_refused_with_a_plain_message() -> None:
     with serving(config()) as c:
         reply = c.get(graph_url(DEP_APP / "pyproject.toml"))
-        assert reply.status == 409 and "not a directory" in str(reply.json()["error"])
+        assert reply.status == 409
+        assert "not a folder or a saved graph file" in str(reply.json()["error"])
 
 
 def test_an_empty_path_uses_the_root_when_one_was_given() -> None:

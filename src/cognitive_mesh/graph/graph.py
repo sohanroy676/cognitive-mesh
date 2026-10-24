@@ -4,6 +4,7 @@ from collections import deque
 from collections.abc import Collection
 
 import networkx as nx
+from pydantic import ValidationError
 
 from cognitive_mesh.graph.builders import build
 from cognitive_mesh.graph.models import (
@@ -179,6 +180,37 @@ class DependencyGraph:
             "cycles_truncated": truncated,
             "diagnostics_by_code": count_values([d.code.value for d in self.diagnostics]),
         }
+
+    @classmethod
+    def from_dict(cls, data: object) -> "DependencyGraph":
+        """Rebuild a graph from `to_dict()` output, for example a saved `graph --json` file.
+
+        Every node, edge and diagnostic goes through the same models as a built graph, so nothing
+        else is accepted. `summary` is recomputed, never trusted. The error message never contains
+        text from `data`.
+        """
+        invalid = GraphError("this is not a valid saved dependency graph")
+        if not isinstance(data, dict):
+            raise invalid
+        raw_nodes, raw_edges, raw_diagnostics = (
+            data.get(key) for key in ("nodes", "edges", "diagnostics")
+        )
+        if not (
+            isinstance(raw_nodes, list)
+            and isinstance(raw_edges, list)
+            and isinstance(raw_diagnostics, list)
+        ):
+            raise invalid
+        try:
+            nodes = [Node.model_validate(n) for n in raw_nodes]
+            edges = [Edge.model_validate(e) for e in raw_edges]
+            diagnostics = [GraphDiagnostic.model_validate(d) for d in raw_diagnostics]
+        except ValidationError:
+            raise invalid from None
+        ids = {n.id for n in nodes}
+        if len(ids) != len(nodes) or any(e.source not in ids or e.target not in ids for e in edges):
+            raise invalid
+        return cls(nodes, edges, diagnostics)
 
     def to_dict(self) -> dict[str, object]:
         return {
