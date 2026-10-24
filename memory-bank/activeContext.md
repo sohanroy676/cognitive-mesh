@@ -3,7 +3,7 @@
 <!-- Update this at the end of every session. This is the first thing to read when resuming. -->
 
 ## Current focus
-Session 5 (final): v1.5.0 (local read-only web UI, ADR-0031 to ADR-0035) is merged to main and tagged after CI (run ids in `progress.md`). The stacked review branches are kept locally and are all contained in main. Nothing is in flight.
+Session 5 (final): v1.5.0 (local read-only web UI, ADR-0031 to ADR-0035) is merged to main, pushed (`1326aae`, CI run 40130681538 passed) and tagged `v1.5.0` (tag run 40130991203 passed). The stacked review branches are kept locally and are all contained in main. Nothing is in flight.
 
 Session 5 (latest): real agent experience data is committed on `chore/agent-experience-data` (off `feature/ui-experience-content`; unmerged, unpushed) under `data/`; ADR-0035 (saved graph files in the Graph tab) is Proposed and waits for the user. Merge order now ends: ..., `docs/adr-0034-experience-content`, `feature/ui-experience-content`, `chore/agent-experience-data`.
 
