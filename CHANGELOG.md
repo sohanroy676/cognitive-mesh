@@ -16,6 +16,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **progress:** Record CI for v1.4.4 and final handoff
 - **adr:** Propose ADR-0031 local read-only web UI
 - Record the v1.5.0 web UI and its verified commands
+- **adr:** Propose ADR-0032 interactive graph and run history
 
 ### Fixed
 - **ui:** Flush the URL line and tidy the page layout
