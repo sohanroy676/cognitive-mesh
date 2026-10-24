@@ -1,0 +1,2 @@
+# SQLite files are binary: never convert their line endings
+data/agent-experiences/*.sqlite3 binary

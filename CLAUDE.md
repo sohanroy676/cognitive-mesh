@@ -33,7 +33,7 @@ Read on demand: `memory-bank/progress.md`, `memory-bank/systemPatterns.md` (fill
 - Add tests for new behavior including failure cases and persistence across sessions; never delete a failing test to get green.
 - Documentation must distinguish implemented from planned behavior. A roadmap entry is not evidence a feature exists; mark a version done only when its criteria pass.
 - Update `memory-bank/progress.md` and `activeContext.md` at the end of a session.
-- Update `README.md` at the end of every version (status table, limitations, verified commands).
+- Update `docs/STATUS.md` (status table, limitations) and `docs/COMMANDS.md` (verified commands) at the end of every version, and `README.md` when its summary changes.
 
 ## Known inconsistencies to resolve
 

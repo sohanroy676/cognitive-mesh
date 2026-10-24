@@ -1,211 +1,197 @@
 # Cognitive Mesh
 
-An application-aware, evidence-aware AI agent system with persistent cross-session memory.
-The goal is a system that reads an application's code and configuration, coordinates
-specialized agents, and keeps traceable memory of what it did and why.
+[![CI](https://github.com/sohanroy676/cognitive-mesh/actions/workflows/ci.yml/badge.svg)](https://github.com/sohanroy676/cognitive-mesh/actions/workflows/ci.yml)
 
-> **Status: early development.** Only the foundation, application ingestion, a dependency
-> graph, the agent interfaces, (v0.5.0) a basic orchestrator, (v0.6.0) a SQLite store for run
-> traces, (v0.6.1) a real Ollama client, (v0.6.2) a Groq client, (v0.7.0) semantic search over stored traces and (v0.8.0) an experience graph, (v0.9.0) evidence-aware recall and (v1.0.0) a `task` command that
-> supplies recalled experience to a later task exist. What a model does with that context is unverified.
-> This README is updated with every version; the roadmap is not evidence that a feature exists.
+**Memory for AI agents that can show its evidence.**
 
-## What works today (v1.3.0)
+Cognitive Mesh reads an application's code and configuration, runs small specialised agents over it, and
+keeps a **traceable memory of what happened**: every step an agent took, what it produced, and which version of
+the code it looked at. Later tasks can recall that experience. Every remembered claim comes with the records that
+support it and the records that contradict it, so you can check a claim instead of taking it on trust.
 
-| Version | Capability | Status |
-|---|---|---|
-| v1.3.0 | Application identity (ADR-0021) and temporal/environment awareness (ADR-0022): runs carry an application id (declared, manifest or directory; trace schema 3, graph format 5 at the time; format 6 since ADR-0027 on the feature branch); claims have a scope (`code`, `environment`, `unscoped`); reviews and outcomes can carry `--valid-until` (files at schema 2); statuses `expired`, `environment_changed`, `environment_unverified`; the agent pack withholds expired and environment-changed claims with a reason | Done: criteria pass (suite 1222 passed, 7 skipped); merged to main with CI green (identity part run 39125954559, validity part run 39128164981); tag `v1.3.0` follows the release merge. `recall` and `task` read outcomes with `--outcomes`. No claim type is environment-dependent yet, so that path is exercised with synthetic claims; expiry exists only where a person sets `--valid-until`; identity is a label, so two applications with the same derived id still share context |
-| v1.4.0 | Context assembly and declared task state (ADR-0023): the pack is ordered by a written rule (conflicting/contested first, then stale-like, validated, supported, unsupported; then corroboration, similarity, id); conflicts are never cut for size and items cut are listed by id; `task --profile precision\|recall` (per task; sets default `--k` and `--min-similarity`; `recall` also offers raw traces of runs with no recorded application); plans may declare `state` entries that later steps take through `input_refs`; trace schema 4 stores the profile; `compare_dependencies` (ADR-0024) is a deterministic capability that compares two `dependencies_of` reports through declared state and never yields a claim | Done: criteria pass (suite 1275 passed, 7 skipped; ruff/format/mypy clean); merged to main (`0cfd437` and, with `compare_dependencies`, `14721b5`; CI runs 39132386870 and 39135553254 passed); tag `v1.4.0` follows the release merge. Real-CLI runs with the real MiniLM for both profiles and for `compare_deps.json`. Limits: profile cut-offs (5/0.2 and 10/0.1) are rough, not measured; limit counts items, not tokens; a small model may still truncate a conflict-heavy pack (unverified); state sources appear in `run`/`task --json`, not in the trace database; no state shared across runs |
-| v1.4.1 | First environment-dependent claim type (ADR-0025) and cheaper, stricter graph loading (ADR-0027, graph format 6): `depends_on` claims on Python standard-library objects (`stdlib:*`, not `stdlib:node:*`) are environment-scoped and carry the recorded Python minor (new identifier `python_minor`); a different current minor gives `environment_changed` (withheld from the agent pack with a reason), a missing or unparsable one `environment_unverified`; runs on different minors merge into one claim with no single environment, shown as unverified and never validated; the experience graph file (format 6) hashes the exact stored record texts in the same pass that parses them, so loading 20,000 synthetic runs fell from a median 15.9 s to 7.5 s and its memory peak from 1.5 GB to 0.8 GB, a whitespace-only edit of a stored record is now refused, and format-5 files must be rebuilt with `experience build` | Release `chore/release-v1.4.1`; tag `v1.4.1` after CI on main passed (release merge `8d8f997`: run 39236707892; tag run 39236999198); suite 1309 passed, 5 skipped; real CLI: a run whose recorded Python was edited to 3.10 gave `environment_changed` for the `stdlib:os` claim and left a first-party claim `validated`. Not a roadmap version. Limits (see the load-limit paragraph below for ADR-0027's measured numbers and what it did not change): only the Python minor is compared; stdlib backports and Node built-ins are not modelled; old graph files keep their claims as `code` until rebuilt |
-| v1.4.2 | Cheaper whole-graph assessment, same results (ADR-0028): `experience claims` builds each subject's contradiction listings once and shares the immutable records between claims (assessment of 1,600 claims at 20,000 synthetic runs: 21.5 s -> 5.4 s, traced peak 1.7 GB -> 0.12 GB; output identical to v1.4.1, also with 909 reviews and 694 outcomes); `experience promote` checks and assesses only the one claim (about 0.5 s instead of about 36 s); `experience show` checks only the nodes it reaches. No new dependency, no format change | Release `chore/release-v1.4.2`; tag `v1.4.2` after CI on main passed (release merge `d19a984`: run 39277078289; tag run 39277360831); suite 1323 passed, 5 skipped; real CLI and real MiniLM walkthrough in `memory-bank/tech-stack.md`. Not a roadmap version. Limits: `experience check` and the source check inside `claims` are unchanged (about 15 s at 20,000 runs, three quarters of it re-reading every run's trace row; ADR-0030 measured reading the rows in four bulk queries instead of four per run: identical results, but 57% of the time (median of three fresh runs on a different synthetic set), above the 50% gate, so it was not built); `show --transitive` from a claim still takes about 9 s there because shared entities rest on every attempt that used them; the `stale`, `supported` and environment statuses were checked by unit tests only at scale |
-| v1.4.3 | Recorded outcomes in the `task` context pack (ADR-0029): each claim carries the outcome state for the current code version (`none|succeeded|failed|ambiguous|conflict`) and counts of evidence outcomes on this and on other versions (refused promotions are not counted), and the pack records whether an outcomes file was read (`outcomes_consulted`); `task` and `traces show` print it; no outcome text enters the pack or the prompt; packs stored earlier read back as "not recorded", no schema change. ADR-0029 and ADR-0030 are accepted; ADR-0030 (cost of `check_sources`) ended at its stop rule with no code: reading trace rows in bulk gave identical results at 57% of the time, above the 50% gate | Release `chore/release-v1.4.3`; tag `v1.4.3` after CI on main passed (run ids in `memory-bank/progress.md`); suite 1331 passed, 5 skipped; real CLI and real MiniLM walkthrough in `memory-bank/tech-stack.md`. Not a roadmap version. Limits: outcome `detail`, recorder and dates are deliberately not shown to the agents; `experience check` and the source check inside `claims` are unchanged (about 11 s at 20,000 synthetic runs); narrower validation and an early stop in `show` are open decisions |
-| v0.1.0 | Project foundation: uv, ruff, mypy (strict), pytest, config loading, minimal CLI | Done, tagged |
-| v0.2.0 | Read-only application ingestion with source references, diagnostics and secret redaction | Done, tagged |
-| v0.3.0 | Dependency graph with evidence on every edge, unresolved items kept visible | Done, tagged; CI run 39010744225 passed |
-| v0.3.1 | JS/TS imports and literal dynamic imports in the graph; computed ones stay unresolved | Done, tagged `v0.3.1`; CI run 39012713238 passed |
-| v0.3.2 | Graph visualization: Mermaid text or self-contained HTML/SVG, with evidence and visible truncation | Done; merged to main, CI run 39021177652 passed |
-| v0.4.0 | Agent architecture: common interface, two roles, capability declarations, explicit failure results, provider protocol (fake clients only) | Criteria pass locally; merged to main; Done, tagged `v0.4.0`; CI runs 39023604187 and 39024302873 passed |
-| v0.5.0 | Orchestrator: validated task plans, dependency ordering, capability-based assignment, explicit failed/blocked/incomplete results, bounded retries, run budget, `run` command | Done, tagged `v0.5.0`; CI runs 39024871768 and 39025436259 passed |
-| v0.6.0 | Episodic trace store: SQLite persistence of orchestrator runs (steps, attempts, ids, model info, timestamps), redaction before storing, success/failed/incomplete/interrupted states, `run --trace-db`, `traces list/show` | Done, tagged `v0.6.0`; CI runs 39026432280 and 39028485876 passed |
-| v0.6.1 | Real Ollama client (stdlib HTTP, hard total deadline, every failure mapped to a provider error kind), `COGMESH_OLLAMA_MODEL` / `COGMESH_MODEL_TIMEOUT_S`, `run` uses it only for plans with a model step | Criteria pass locally (including a real `llama3.2` run); merged to main and pushed; CI run 39029734411 on the merge passed; tagged `v0.6.1` (no tag-triggered CI; the tagged merge is covered by run 39031027771) |
-| v0.6.2 | Real Groq client (`qwen/qwen3.8-27b` by default, preview model; reasoning off; shared error mapping with the Ollama client; key never in errors/traces/output), `COGMESH_GROQ_MODEL` / `COGMESH_GROQ_REASONING_EFFORT` | Criteria pass locally, including a real Groq run (`explain_file` succeeded, `model_unverified`) and the opt-in live test; merged to main and pushed; CI run 39031027771 on the merge passed; not tagged |
-| v0.7.0 | Semantic memory retrieval: final attempts of finished runs are embedded (`all-MiniLM-L6-v2`, pinned revision) into a ChromaDB index; `memory index` / `memory search`; every hit is re-checked against its trace row; an index from another model is refused | Criteria pass locally, including a real-model run; merged to main and pushed; CI runs 39043661141 and 39043771776 passed; tagged `v0.7.0` |
-| v0.8.0 | Experience graph: runs, steps, final attempts, entities and claims from deterministic outputs, each edge with a source reference; persisted in its own SQLite file with a content hash; `experience build\|show\|claims\|check`; elements whose trace row is missing, changed or unreadable are marked and hidden unless asked for | Criteria pass locally, including a run of the real CLI from an empty directory; merged to main and pushed; CI runs 39053270212 and 39053504333 passed; tagged `v0.8.0` (tag run 39053616562 passed) |
-| v0.9.0 | Evidence-aware retrieval: `recall` follows vector hits into the experience graph and reports each claim with a status (`validated`, `supported`, `stale`, `conflicting`, `unsupported`), the observations and reviews behind it, and both sides of any conflict; raw and unconfirmed experiences are listed separately; `experience review` records a person's verdict; needs no model provider | Criteria pass locally, including a run of the real CLI with the real embedding model; merged to main (`12706e6`) and pushed; CI run 39055678848 passed; release merge CI run 39055806280 passed; tagged `v0.9.0` (tag run 39055934929 passed) |
-| v1.0.0 | Core end-to-end prototype: `task` runs a plan with the experience recalled for a request as read-only context (claims with status, meaning and source run ids; failed and model-written runs as labelled raw traces; unconfirmed and not-applicable hits counted and kept out), a deterministic `compare_with_recalled` capability re-checks recalled claims against the current code, `code_explainer` receives the same pack as untrusted data, and the pack each run was offered is stored with the run (trace schema 2); needs no model provider unless the plan has a model step | Criteria pass locally, including real-CLI runs with the real embedding model in separate processes and an opt-in live test; merged to main (`109f7b8`) and pushed; CI run 39060264282 passed; release merge `21bf079` (CI run 39060614195 passed); tagged `v1.0.0` (tag run 39060736575 passed) |
-| v1.1.0 | Outcome validation (ADR-0018): an outcome is a check's result (a command the person ran, its exit code) or a person's account; outcomes are append-only per code version, and each row links to the one before it; a failed outcome makes a claim `contested`, an ambiguous one `unknown`, a person and a check that disagree `conflicting`, and a successful one validates the claim for that version only; `experience promote` accepts a claim only if it is validated for the current code, and otherwise refuses, lists the unmet checks and records the refusal. Also in this release: drafted plans are checked before they run (inputs against the capability schema, no repeated steps, node ids), one repair round for a refused draft, and `plan --root` shows the model the application's files | Criteria pass locally (the full suite passes; new tests cover the store, the rules, the statuses, the CLI and the plan fixes); merged to main (`00c9185`) and pushed; CI run 39108887919 passed; the release merge and tag `v1.1.0` follow CI on that merge |
-| v1.2.0 | Corroboration and lineage (ADR-0020): confidence is a category (`none`, `single`, `corroborated`, `contradicted`) with a reason, computed on every call and never stored. Independence is by method class per code version: every trace observation and re-derivation is one `analyzer` source, all reviews and person outcomes are one `person` source, `check` outcomes are one; repeats are listed as dependent repeats and add nothing. A claim seen on two code versions shows persistence, not corroboration. `experience claims` prints "N independent source(s), M dependent repeat(s)" and the category; the context pack carries both read-only. Also in this release: a refused plan draft gets fixed hint text on its repair round, a drafted reference to another step adds that step to `depends_on`, and the draft prompt shows a validated example plan | Criteria pass locally (the full suite passes; `tests/test_corroboration.py` covers the ADR's cases); merged to main (release merge `d20f09c`); CI run 39116536227 passed; tag `v1.2.0` pushed, tag run 39116840371 passed |
-| v1.2.1 | Subject index (ADR-0019): claims store their subject (graph format 3, older files refused); `recall` and `task` check sources and assess only the claims about the subjects their vector hits reach, and the result reports `subjects_followed` and `claims_assessed`. Results equal a whole-graph recall claim for claim (tests, including a generated 5,000-run graph) | Criteria pass locally (suite 1144 passed, 7 skipped); merged to main (`f83d363`), CI run 39119591652 passed; tag `v1.2.1` follows the release merge. Loading the graph file still grows with the whole graph; `experience claims`, `outcome` and `check` still use whole-graph checks |
+## Why
 
-Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
-`docs/adr/0006-dependency-graph-model.md`, `docs/adr/0007-js-ts-and-dynamic-import-analysis.md`,
-`docs/adr/0008-dependency-graph-visualization.md`, `docs/adr/0009-agent-architecture.md`, `docs/adr/0010-orchestrator.md`, `docs/adr/0011-episodic-trace-store.md`, `docs/adr/0012-ollama-client.md`, `docs/adr/0013-groq-client.md`, `docs/adr/0014-semantic-memory-retrieval.md`, `docs/adr/0015-experience-graph.md`, `docs/adr/0016-evidence-aware-retrieval.md`, `docs/adr/0017-context-supply.md`.
+AI agents forget between sessions. When they do remember, they rarely say *why* they believe something, and they
+often repeat an earlier answer as if repetition made it true. Cognitive Mesh is built on one rule: **memory is
+evidence, not truth.** Similarity, repetition and a model's confidence never count as proof. Raw records stay
+separate from claims, conflicts are shown instead of resolved quietly, and what a claim means is computed for one
+code version, never stored as a verdict.
 
-### Known limitations
-- Outcomes (v1.1.0, ADR-0018): an outcome is a check's exit code or a person's account, and the `--by` label is unauthenticated. Nothing runs checks for you, and a run's own success never counts. Outcomes count only for the code version named by `--root`; without `--root` they are shown and change nothing. A `promote` that succeeds states that a claim is validated now; it stores no separate "promoted" knowledge. The revision history is the outcome chain, enforced append-only by database triggers. Not verified: more than 10 concurrent outcome writers (10 were tested, 5 rounds), macOS, a fresh clone. Plan drafting with `llama3.2` (a 3B model on this CPU) is indicative only: 3 of 5 drafts with `--root` passed validation and ran; a draft can still give a wrong-shape reply or an input reference to a step it does not depend on.
-- Corroboration (v1.2.0, ADR-0020): with only the analyzer in play most claims are `single`; `corroborated` needs a person's review or a `check` outcome on the same code version. All reviewers count as one person (reviews are unauthenticated). The analyzer's correctness is assumed. Without `--root` the category shown is for the strongest version (a contradicted one ranks first), and each version is in the JSON `by_version`. Plan drafting with `llama3.2`, one request: 5 of 10 drafts passed validation before the changes and all 5 ran; after the example prompt 5 of 5 passed and 4 ran. Indicative only.
-- Scale and identity (checked 2026-10-18, synthetic traces, see `memory-bank/progress.md`): `recall` and `task` rebuild the whole experience graph on every call, so they grow with the number of recorded runs (about 15 s at 5,000 runs, about 66 s and 2.4 GB peak at 20,000, fake embedder). The relevance gate cannot tell two applications apart when they share a directory name and module paths, so they share context (pinned by `tests/test_e2e_identity_limit.py`; a foreign claim is still re-derived and never `validated` for code that lacks it); application ids (v1.3.0, branch `feature/v1.3.0-application-identity`, not yet merged) separate applications that carry different ids; two applications that derive the same id (same manifest name and directory name) still share context. Graph loading (ADR-0026, measured 2026-10-18 with a scratch tool on synthetic runs, no model): loading and verifying the experience graph file takes about 0.7 s at 1,000 runs, 3.8 s at 5,000 and 17 s at 20,000 (104,122 nodes, 268,160 edges), split about evenly between validating edge records (41%) and the content hash (41%); whole-graph source checks (`experience claims`, `promote`, `show`, `check`) add about 15 s at 20,000 runs; peak memory of the whole process was about 3.2 GB at 20,000 runs. After ADR-0027 (graph format 6, branch `feature/graph-load-cost`, not yet merged; measured 2026-10-19 on the same kind of synthetic runs, 105,642 nodes and 251,200 edges at 20,000 runs, this machine): the median of three loads fell from 15.9 s to 7.5 s at 20,000 runs (4.0 s to 1.9 s at 5,000), and the traced peak of the load from 1.5 GB to 0.8 GB; the full hash check still runs on every load and now covers exactly the stored bytes, so a whitespace-only edit of a stored record is refused. Graph files of format 5 are refused with a message to rebuild them with `experience build`. Whole-graph source checks and assessment were unchanged by ADR-0027 and cost about 15 s and 20 s at 20,000 runs on this machine (`experience outcome` runs neither; it only loads the graph). ADR-0028 (branch `feature/assessment-cost`, not yet merged; measured 2026-10-19 on the same synthetic runs): the whole-graph assessment fell from 21.5 s to 5.4 s at 20,000 runs (4.6 s to 1.2 s at 5,000) and its traced peak from 1.7 GB to 0.12 GB with identical results, because claims about one subject now share the same immutable contradicting-attempt records instead of rebuilding about 975 of them each; `experience promote` checks and assesses only the one claim (about 0.5 s instead of about 36 s) and `experience show` checks only the nodes it reaches (about 9 s for a `--transitive` view from a claim, because shared entities such as a capability rest on every attempt that used them); the whole-graph source check (`experience check`, `claims`) is unchanged at about 15 s because three quarters of it is re-reading every run's trace row, which is the check itself; the peak working set of a process that loads, checks and assesses the whole graph fell only from about 2.7 GB to 2.5 GB (the assessment dominates), while the peak after loading fell from about 1.7 GB to 0.9 GB. Measured with the real MiniLM model on 2026-10-20 (item (b); same synthetic runs as the ADR-0027 and ADR-0030 profiles, this machine, fresh processes, median of 3, `recall` without `--root`): indexing took 405 s for 6,667 documents at 5,000 runs (about 16.5 documents per second, peak 683 MB, 17 MB on disk) and 1,531 s for 26,667 documents at 20,000 runs (about 17.4 per second, peak 899 MB, 68 MB on disk); `recall` took about 18.2 s at 5,000 runs (peak 760 MB) and about 26.3 s at 20,000 runs (peak 1,365 MB), `task` about 19.2 s and 28.2 s. Of that, about 13 s is loading the model in every process, graph loading 2.1 s and 8.4 s, and the recall work itself 0.7 s and 2.3 s; searching the index takes about 0.1 s. This replaces the older 66 s and 2.4 GB figure for 20,000 runs, which predates ADR-0019, ADR-0027 and ADR-0028 and used a different synthetic generator, so the two are not a like-for-like comparison. Not measured: other machines, real (non-synthetic) runs at this size, concurrent processes.
-- Local directories only; results are in memory, except run traces recorded with `--trace-db` (v0.6.0).
-- Secret detection is pattern- and entropy-based and not exhaustive (it can miss short, low-entropy or hex-only secrets and can redact an innocent random id). Sending file contents to Groq needs `COGMESH_ALLOW_REMOTE_CONTENT=true`.
-- The graph covers declared direct dependencies, Python imports and (v0.3.1) JS/TS imports. Only `uv.lock` and
-  `package-lock.json` (v2/v3) are read, giving transitive `requires` edges between locked packages; other
-  lockfiles are excluded, and ecosystems without a readable lockfile are reported as unknown, not absent.
-- JS/TS imports resolve only to ingested files by relative path. Bundler aliases, tsconfig `paths`,
-  package.json `exports`, `.js` to `.ts` remapping and `.mjs`/`.cjs` files are not modelled; bare
-  specifiers (`react`) stay unresolved. Computed dynamic imports (Python and JS) are unresolved.
-- JS/TS support adds native dependencies (tree-sitter and two grammars).
-- Visualization (v0.3.2): the HTML layout is a simple layered one with crossing reduction (edges can still cross or overlap on dense graphs; checked in headless Chrome/Edge only). Large
-  graphs are truncated with a visible notice (defaults: HTML 300 nodes / 1000 edges, Mermaid 100 / 200),
-  and cycle members are kept before unresolved items. Mermaid output rendered correctly in mermaid-cli 12.0.0 (one-off manual check, not part of the test
-  suite or CI; other renderers unchecked); the HTML was viewed only in headless Edge.
-- Agents (v0.4.0): no real provider client exists (no Groq or Ollama calls); the provider path is
-  tested with fake clients only. Timeouts are enforced by the client, not by a watchdog, so a client
-  that hangs is not interrupted. `code_explainer` output is unverified model text. Nothing is
-  persisted.
-- Orchestrator (v0.5.0): steps run sequentially; `depends_on` controls order; a step can take an input from an earlier step's output (`input_refs`, validated before running, source `basis` recorded), and up to two other agents of the same capability can take over after a failure result.
-  `cognitive-mesh plan "REQUEST"` drafts a plan with the configured model (never runs it; output is model-written and unreviewed). A hung provider call is not
-  interrupted: the run budget is checked only before each attempt. Retries apply only to failures an
-  agent marks retryable, at most 5 attempts per step. With no provider configured, `explain_file`
-  steps fail as `provider_unavailable`. Run results are persisted only when `--trace-db` is given.
-- Trace store (v0.6.0): recording is opt-in (`run --trace-db FILE`). Traces are raw records, not
-  validated knowledge; `memory search` (v0.7.0), the experience graph and `recall` read them, and `task` (v1.0.0) offers
-  what they support to a later task as labelled context. Secrets are redacted by pattern
-  before storing, so a stored trace is not a byte-exact replay and detection is not exhaustive.
-  The trace holds the resolved source path and file hashes (no hostname or user name). A run is
-  committed as `running` first; a crash reads back as `interrupted` with no step data. No
-  retention or size limits, one writer assumed, schema version 2 (the first migration, v1.0.0, adds the
-  context a run was offered; writers upgrade older files, readers refuse them), no per-attempt
-  timing, no tool activity beyond agent attempts. Run `traces` against files you trust: they are
-  read as data and validated, but they are not authenticated.
-- Ollama client (v0.6.1): `COGMESH_PROVIDER=ollama`. Only `run` calls a model, and only for plans with a model step
-  (`explain_file`). The contents of the explained file are sent to the configured Ollama server, so
-  point `COGMESH_OLLAMA_BASE_URL` only at a server you trust. No streaming, proxies, redirects or
-  connection reuse. A missing model (HTTP 404) is not retried; run `ollama pull <model>`. Model
-  output stays `model_unverified`. Verified against one local Ollama with `llama3.2` only; the
-  opt-in live test is `RUN_LIVE_OLLAMA=1 uv run pytest -m live`.
-- Groq client (v0.6.2): `COGMESH_PROVIDER=groq` with `GROQ_API_KEY`; default model `qwen/qwen3.8-27b`
-  (`COGMESH_GROQ_MODEL`), a Groq **preview** model that may be retired; reasoning is turned off
-  (`COGMESH_GROQ_REASONING_EFFORT=none`). The endpoint is fixed (HTTPS to api.groq.com), so the key can
-  only be sent there. The contents of the explained file are sent to Groq, a third party, so `COGMESH_ALLOW_REMOTE_CONTENT=true` is required (exit 2 otherwise). The key is
-  rejected if it has spaces, line breaks or non-ASCII characters, and never appears in errors, traces or
-  output. A reply containing `<think>` is rejected, not cleaned up. HTTP 429 and 498 are retried only
-  within the plan's bounded policy; `Retry-After` is not read. No streaming or proxy. Verified
-  2026-10-17 against the real API with one key and `qwen/qwen3.8-27b` only (not other models, tiers or
-  rate-limit behavior); the opt-in live test is `RUN_LIVE_GROQ=1 RUN_LIVE_GROQ_KEY=... uv run pytest -m live`.
-- Memory search (v0.7.0, ADR-0014): the index is a derived copy of the trace database; build it with
-  `memory index` and rebuild after new runs. Only final attempts of succeeded or failed steps of finished
-  runs are embedded; blocked/not-run steps and interrupted runs are not. Similarity is **not** evidence that
-  a past result was correct, and `model_unverified` text is searchable (hits show their basis). A hit whose
-  trace row is gone, changed or unreadable is listed as not confirmed and never as a result. The default
-  cut-off (cosine 0.2) was picked from one real-model run on 3 documents and is a rough starting point;
-  related queries scored 0.24 to 0.35 and an unrelated one at most 0.04, but a loosely related query still
-  scored 0.21. One embedding model only, English-oriented, ~90 MB downloaded from Hugging Face on first use
-  (no `HF_TOKEN` needed). The index holds text derived from traces, so treat its directory like the trace
-  database (redaction is pattern-based). Installing now pulls torch (CPU build on Linux) and ChromaDB.
-  Not verified: very large traces, concurrent indexers, macOS, a fresh clone (CI ran the tests on Linux; the real model was only run on Windows).
-- Experience graph (v0.8.0, ADR-0015): the graph file is a derived copy of the trace database; rebuild it with
-  `experience build` after new runs. Claims exist only for `dependencies_of` (direct dependencies) and
-  `unresolved_report` outputs of successful deterministic steps; model output and failed steps never become
-  claims, and every claim is `unvalidated`. A claim stated by several runs is one claim with several pieces of
-  evidence: the count shows repetition and is **not** proof, and the code version (source fingerprint) of each
-  observation is kept. Elements whose trace row is gone, changed or unreadable stay in the file, are marked,
-  and are hidden unless `--include-unverified` is given. The file is refused if its hash, schema or edges do
-  not check out. Not verified: very large trace databases (the whole graph is built in memory), concurrent
-  builders, macOS, a fresh clone.
-- Evidence-aware retrieval (v0.9.0, ADR-0016): there is no confidence number. Each claim gets one status with a
-  fixed meaning, computed on every call per code version (source fingerprint) from observations whose trace
-  row still checks out, reviews, and, with `--root DIR`, a re-derivation of the claim from the current source.
-  `validated` means the claim holds for that one code version by a stated method (the same analyzer derives it
-  again, or a person confirmed it); it is **not** proof of truth, and the re-derivation is not independent of
-  the analyzer that produced the claim. A complete listing that lacks a claim contradicts it: the same code
-  version gives `conflicting`, another version is shown as a difference across versions. Truncated listings
-  never contradict. Without `--root` currency is `unknown`. Similarity, repetition and model output never change
-  a status; model-written and failed experiences stay in a separate raw group. Reviews live in their own
-  append-only SQLite file; `--by` is an unauthenticated label. The graph file has format 2: rebuild older files
-  with `experience build`. The graph does not record which application a run analysed, so equal node ids from
-  different applications merge and differ only by fingerprint. Only two kinds of claim exist. Not verified:
-  very large traces, concurrent reviewers, macOS, a fresh clone (CI ran the tests on Linux; the real CLI runs were Windows only).
-- Context supply (v1.0.0, ADR-0017): `task` recalls experience for the request and gives the agents a
-  read-only pack. Every claim keeps its status, its fixed meaning and the run/doc ids that back or
-  contradict it; nothing in the pack is verified truth. Failed and model-written runs are a separate raw group
-  (metadata only, no text); hits whose source no longer checks out are only counted. A claim is offered
-  only if its subject exists in the application being run, and a raw trace only if its run analysed a
-  directory with the same name; the rest is listed to the person and never sent. That gate uses node ids and
-  the directory name, not a real application identity, so two applications with the same folder name and
-  module paths can still share context. A first session (no index or graph yet) runs with an explicit
-  empty pack; an index, graph or reviews file that exists but is unusable is an error. `compare_with_recalled`
-  re-derives claims with the same analyzer that made them, which is not independent proof, and running it
-  adds no evidence for a claim. A run's success never validates anything. The index and graph are not
-  refreshed automatically: run `memory index` and `experience build` after new runs. What a model does
-  with the pack is unverified (the real-provider prompt path was not run). The 0.2 cut-off still comes from
-  a few documents: the opt-in live test kept a related claim and dropped "zebra quantum pastry" once.
-  Not verified: very large traces, concurrent sessions, macOS, a fresh clone.
-- Ingested files are treated as data and are never executed.
+## Status
 
-## Setup and usage
+Early development. Everything described below runs and is tested. Releases up to v1.5.0 (the local
+read-only web UI) are on `main`. There is no model-quality
+claim here: what a model does with recalled context is unverified. The detailed record of what each version added
+and what it does not do is in [docs/STATUS.md](docs/STATUS.md).
 
-Requires Python 3.12 and [uv](https://docs.astral.sh/uv/) (Windows: `winget install --id=astral-sh.uv -e`).
+## What it does
 
-```
+- **Reads an application.** Ingests a local folder (source, manifests, lockfiles, docs) without ever running its
+  code, and redacts secret-looking text before anything is stored.
+- **Builds a dependency graph** of Python and JavaScript/TypeScript imports and declared packages. Every edge
+  carries its evidence (file, line, rule); anything it cannot resolve is listed as unresolved, never guessed.
+  Output as text, JSON, Mermaid or a self-contained HTML page.
+- **Runs agents from a plan.** A JSON plan is validated and run step by step with retries and explicit failures.
+  Two agent roles exist: a deterministic dependency analyst and a code explainer that uses a model (Ollama or Groq).
+- **Records every run** in SQLite, with secrets redacted and a note of which model, if any, made each step.
+- **Searches past steps by meaning** (sentence embeddings in a local ChromaDB index).
+- **Turns analysis into claims.** An experience graph links runs, steps and claims such as "`cart.py` depends on
+  `pricing.py`". A claim's status (`validated`, `supported`, `stale`, `conflicting`, and a few more) is worked out
+  when you look at it, from the evidence for it, the evidence against it, people's reviews and recorded outcomes.
+- **Recalls past experience for a new task** (`recall`, `task`), with the supporting and contradicting records
+  listed next to each claim.
+- **Shows all of it in a local, read-only web UI**: every recorded step and what it stored, claims explained in
+  plain sentences, run history for any module or claim, and an interactive dependency graph you can zoom, pin
+  and load from a saved file.
+
+## Quick start
+
+You need [git](https://git-scm.com/) and [uv](https://docs.astral.sh/uv/) (it installs and manages Python 3.12
+for you; on Windows: `winget install --id=astral-sh.uv -e`). Development and day-to-day use have been on Windows;
+CI runs on Ubuntu with Python 3.12. macOS has not been tried.
+
+```bash
+git clone https://github.com/sohanroy676/cognitive-mesh.git
+cd cognitive-mesh
 uv sync
-uv run pytest
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy
-uv run git-cliff -o CHANGELOG.md   # regenerate CHANGELOG.md from Conventional Commits; CI fails if stale
+uv run pytest          # the full suite takes a few minutes; it needs no model download or API key
 ```
 
-Commands below were run successfully (see `memory-bank/tech-stack.md` for the verified list):
+The first `uv sync` is large: it installs PyTorch and ChromaDB for semantic search.
 
-```
-COGMESH_PROVIDER=ollama uv run cognitive-mesh           # validates configuration, exit 0
-uv run cognitive-mesh ingest PATH [--json] [--include-content]
-uv run cognitive-mesh graph PATH [--json] [--deps-of NODE_ID [--transitive]]
-uv run cognitive-mesh graph PATH --format mermaid|html [--output FILE] [--max-nodes N] [--max-edges N]
-uv run cognitive-mesh agents [--json]                  # lists roles and capabilities, no config needed
-uv run cognitive-mesh run PLAN.json --root DIR [--json]   # runs a task plan, no config needed
-uv run cognitive-mesh run PLAN.json --root DIR --trace-db FILE   # also records the run (SQLite)
-uv run cognitive-mesh traces list --db FILE [--json]
-uv run cognitive-mesh traces show RUN_ID --db FILE [--json]
-uv run cognitive-mesh memory index --db FILE --index DIR [--json]   # needs no provider; first use downloads the model
-uv run cognitive-mesh memory search "QUERY" --db FILE --index DIR [--k N] [--min-similarity X] [--json]
-uv run cognitive-mesh experience build --db FILE --graph FILE [--json]   # needs no provider and does not load the embedding model
-uv run cognitive-mesh experience claims --db FILE --graph FILE [--include-unverified] [--json]
-uv run cognitive-mesh experience show NODE_ID --db FILE --graph FILE [--transitive] [--incoming] [--include-unverified] [--json]
-uv run cognitive-mesh experience check --db FILE --graph FILE [--json]
-uv run cognitive-mesh experience claims --db FILE --graph FILE [--reviews FILE] [--root DIR] [--outcomes FILE] [--json]   # adds evidence status and recorded outcomes
-uv run cognitive-mesh experience review CLAIM_ID --verdict confirmed|rejected --note TEXT --by NAME --root DIR --graph FILE --reviews FILE [--json]
-uv run cognitive-mesh experience outcome CLAIM_ID --source check|person --result succeeded|failed|ambiguous --detail TEXT --by NAME --root DIR --graph FILE --outcomes FILE [--json]
-uv run cognitive-mesh experience promote CLAIM_ID --by NAME --root DIR --db FILE --graph FILE --outcomes FILE [--reviews FILE] [--json]   # exit 17 if refused; the refusal is recorded
-uv run cognitive-mesh recall "QUERY" --db FILE --index DIR --graph FILE [--reviews FILE] [--root DIR] [--k N] [--min-similarity X] [--json]   # needs no provider
-uv run cognitive-mesh task "REQUEST" --plan PLAN.json --root DIR --db FILE --index DIR --graph FILE [--reviews FILE] [--k N] [--min-similarity X] [--json]   # recalled context + run; no provider unless the plan has a model step
+## Try it (no model, no API key)
+
+These commands use a tiny sample app that ships with the repository. The database files they create are
+git-ignored.
+
+```bash
+# 1. The dependency graph of the sample app
+uv run cognitive-mesh graph tests/fixtures/dep_app
+
+# 2. Run a small plan against it and record the run
+uv run cognitive-mesh run tests/fixtures/plans/ok.json --root tests/fixtures/dep_app --trace-db traces.sqlite3
+uv run cognitive-mesh traces list --db traces.sqlite3
+
+# 3. Turn the recorded runs into claims, and look at them
+uv run cognitive-mesh experience build --db traces.sqlite3 --graph graph.sqlite3
+uv run cognitive-mesh experience claims --db traces.sqlite3 --graph graph.sqlite3 --root tests/fixtures/dep_app
+
+# 4. Open the web UI (it prints a link with a private token; open that link)
+uv run cognitive-mesh ui --db traces.sqlite3 --graph graph.sqlite3 --root tests/fixtures/dep_app
 ```
 
-Exit codes: 0 ok, 2 configuration or usage error, 3 unusable ingestion root, 4 unknown graph node,
-5 output file could not be written, 6 invalid or unreadable plan, 7 task failed or incomplete, 8 trace store error or malformed trace, 9 unknown trace run id, 11 memory index missing, unusable or built with another model, 12 experience graph file missing or unusable, 13 unknown experience graph node, 14 graph sources not confirmed (`experience check`), 15 reviews file missing or unusable, or a review that was refused, 14 `experience check` found trace sources that no longer match.
-Configuration comes from the environment or an ignored `.env` (copy `.env.example`); never commit
-secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and run in a fresh venv on Windows; not published, not run in CI). The package version is derived from git tags (hatch-vcs): a build at tag `vX.Y.Z` is `X.Y.Z`, later commits are `X.Y.(Z+1).devN`, and a checkout without tags is `0.1.devN`.
+### Explore real data that ships in the repo
 
-## Project layout
+`data/agent-experiences/` is a real experience database: five Claude agents each added a small feature to a
+different project and logged what they read, decided, changed and checked, including the checks that failed.
 
-- `src/cognitive_mesh/` - `config`, `cli`, `ingestion/`, `agents/` (interface, contracts, roles, registry), `orchestrator/` (plans, ordering, runner), `traces/` (SQLite trace store, recorder), `memory/` (eligible documents, embedder, ChromaDB index), `retrieval/` (evidence-aware recall, the gated context pack), `workflow.py` (context for `task`), `providers/` (model client protocol, Ollama client, stdlib HTTP transport), `graph/` (JS/TS parsing isolated in `graph/js_parse.py`; visualization in `graph/view.py`, `render_mermaid.py`, `render_html.py`)
-- `tests/` - pytest suite; fixtures in `tests/fixtures/` (`sample_app`, `dep_app`, `js_app`, `lock_app`, `e2e_app` for the manual walkthrough)
-- `docs/adr/` - architecture decision records; `docs/DETAILED_ROADMAP.md` - per-version criteria
-- `memory-bank/` - agent-facing project record (brief, architecture, progress, active context)
-- `ROADMAP.md` - version plan; `AGENTS.md` / `CLAUDE.md` - contributor and agent instructions
+```bash
+uv run cognitive-mesh ui --db data/agent-experiences/traces.sqlite3 --graph data/agent-experiences/graph.sqlite3
+```
 
-## Roadmap (summary)
+Open **Experiences**, then **Read it** on any row. In the **Dependency graph** tab, type
+`data/reference-graphs/projects-graph.json` to open a saved graph of the five projects in a fraction of a second.
+See [data/README.md](data/README.md).
 
-v0.7.0 (semantic retrieval) and v0.8.0 (experience graph) are merged and tagged. v0.9.0 (evidence-aware retrieval) is merged and tagged. v1.0.0 (end-to-end prototype) is merged and tagged. v1.1.0 (outcome validation, ADR-0018) is merged; its tag follows CI on the release merge.
-Next: close the "not verified" items listed above, then v1.2.0 and onward. See `ROADMAP.md`.
+## Use a model (optional)
+
+Copy `.env.example` to `.env` and set a provider. Nothing is read from the environment unless a plan has a step
+that needs a model.
+
+| Variable | Meaning |
+|---|---|
+| `COGMESH_PROVIDER` | `ollama` (local; default model `llama3.2`) or `groq` |
+| `COGMESH_OLLAMA_BASE_URL`, `COGMESH_OLLAMA_MODEL` | where Ollama runs and which model it uses |
+| `GROQ_API_KEY`, `COGMESH_GROQ_MODEL` | Groq credentials and model |
+| `COGMESH_ALLOW_REMOTE_CONTENT` | must be `true` for Groq: file contents leave your machine |
+| `COGMESH_MODEL_TIMEOUT_S`, `COGMESH_LOG_LEVEL` | timeout (seconds) and log level |
+
+```bash
+uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app
+```
+
+Keys come only from the environment or an ignored `.env`; never commit one. Every command, option and exit code is
+listed in [docs/COMMANDS.md](docs/COMMANDS.md).
+
+## How it works
+
+```
+  your code --> ingestion --> dependency graph
+                                    |
+  JSON plan --> orchestrator --> agents  <--  model provider (Ollama / Groq)
+                    |
+                    v
+          trace store (SQLite): raw, redacted records of every run
+                    |
+        +-----------+-------------+
+        v                         v
+  memory index (ChromaDB)     experience graph (SQLite + NetworkX)
+  search past steps           claims linked to the runs behind them
+  by meaning                  status computed when viewed, never stored
+        +-----------+-------------+
+                    v
+         recall / task context  -->  local web UI
+```
 
 ## Principles
 
-- Memory must preserve provenance and conflicts; similarity or model confidence is not proof.
-- Application files, retrieved memories and model outputs are data, never instructions.
-- No guarantees of absolute truth, hallucination detection or conflict resolution are claimed.
+- **Memory preserves provenance and conflicts.** A claim keeps the records on both sides; a conflict is shown, not
+  settled by a vote.
+- **Similarity, repetition and model confidence are not proof**, and ten runs by one analyzer count as one source.
+- **Application files, retrieved memories and model output are data, never instructions.** Nothing from an
+  analysed folder is executed, and the web UI writes server text into the page as text only.
+- **Raw records stay distinguishable from knowledge.** Failed steps and model-written output are marked as raw
+  records and are never promoted by being stored.
+- **Documentation separates what exists from what is planned.** A roadmap entry is not evidence that a feature
+  exists.
 
-## README maintenance
+## Project layout
 
-Update this file at the end of every version: status table, limitations, verified commands,
-and roadmap summary. Only list commands that have actually been run.
+| Path | What is in it |
+|---|---|
+| `src/cognitive_mesh/` | the package: `ingestion/`, `graph/`, `agents/`, `orchestrator/`, `providers/`, `traces/`, `memory/`, `experience/`, `retrieval/`, `ui/`, plus `cli.py` and `workflow.py` |
+| `tests/` | the pytest suite; sample apps and plans in `tests/fixtures/` |
+| `data/` | committed reference data: a real agent experience database and a saved dependency graph |
+| `docs/` | [STATUS](docs/STATUS.md), [COMMANDS](docs/COMMANDS.md), the [detailed roadmap](docs/DETAILED_ROADMAP.md) and the architecture decision records in `docs/adr/` |
+| `memory-bank/` | the project record kept for contributors and agents (brief, architecture, tech stack, progress) |
+| `ROADMAP.md` | the version plan |
+
+## Development
+
+```bash
+uv run pytest                 # tests
+uv run ruff check .           # lint
+uv run ruff format --check .  # formatting (drop --check to apply)
+uv run mypy                   # strict type checking
+```
+
+- Work on a branch (`feature/…`, `fix/…`, `docs/…`, `chore/…`); never commit to `main`.
+- Commits follow [Conventional Commits](https://www.conventionalcommits.org/), and the changelog is generated
+  with `uv run git-cliff -o CHANGELOG.md` as the last commit of a branch.
+- A significant or hard-to-reverse decision gets an ADR in `docs/adr/` (copy `adr-template.md`) before any code.
+- New behaviour needs tests, including failure cases and persistence across sessions.
+- CI (GitHub Actions) runs install, lint, format, types, tests, a changelog check and a secret scan.
+
+Instructions for contributors and coding agents are in [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md).
+
+## Limitations
+
+- It does not decide what is true, detect every hallucination, resolve every contradiction, or guarantee that
+  agents agree. It records evidence and disagreement so a person can judge.
+- Analysis is static: imports and declarations are read, never executed. Dynamic imports and unusual build setups are
+  reported as unresolved.
+- Text a model wrote is stored as unverified. The recorded steps of the agents in `data/agent-experiences/` are
+  their own account of their work.
+- The web UI is local only (it listens on `127.0.0.1`, needs a per-start token and never writes to a store).
+- Only local folders can be analysed; there is no hosted service.
+
+The full list, version by version, is in [docs/STATUS.md](docs/STATUS.md).
+
+## Documentation
+
+[Status by version](docs/STATUS.md) · [Commands and exit codes](docs/COMMANDS.md) · [Roadmap](ROADMAP.md) ·
+[Detailed roadmap](docs/DETAILED_ROADMAP.md) · [Decisions (ADRs)](docs/adr) · [Reference data](data/README.md)
+
+## License
+
+No license has been chosen yet, so all rights are reserved until one is added.

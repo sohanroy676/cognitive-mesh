@@ -52,6 +52,8 @@ dev = [
 target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
+# data/ holds recorded artifacts (databases, exports, the exact scripts that built them), not project code
+extend-exclude = ["data"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "S"]

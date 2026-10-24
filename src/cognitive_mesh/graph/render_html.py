@@ -150,6 +150,11 @@ def _positions(view: GraphView) -> tuple[dict[str, tuple[int, int]], int, int]:
     return pos, width, height
 
 
+def layout_positions(view: GraphView) -> tuple[dict[str, tuple[int, int]], int, int]:
+    """The layered layout used by the HTML page, shared with the web UI (ADR-0032 point 4)."""
+    return _positions(view)
+
+
 def _edge_path(edge: ViewEdge, pos: dict[str, tuple[int, int]]) -> tuple[str, float, float]:
     """SVG path data plus the label position (the curve's midpoint)."""
     sx, sy = pos[edge.source_key]

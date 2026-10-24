@@ -1,0 +1,19 @@
+{
+  "task_id": "alerts-command-before",
+  "steps": [
+    {
+      "step_id": "report",
+      "capability": "unresolved_report"
+    },
+    {
+      "step_id": "deps-1",
+      "capability": "dependencies_of",
+      "inputs": {
+        "node_id": "module:incident_commander/__main__.py"
+      },
+      "depends_on": [
+        "report"
+      ]
+    }
+  ]
+}

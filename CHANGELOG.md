@@ -3,10 +3,46 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.5.0] - 2026-10-24
+
+### Added
+- **ui:** Add read-only local web UI command
+- **ui:** Redesign as an evidence ledger
+- **ui:** Typed-folder interactive graph and run history
+- **ui:** Explain claims in plain sentences
+- **ui:** List every recorded step in an Experiences tab
+- **ui:** Show what an experience stored
+- **ui:** Open a saved dependency graph file in the Graph tab
+
+### Changed
+- **experience:** Share show/claims/check JSON builders
 
 ### Documentation
 - **progress:** Record CI for v1.4.4 and final handoff
+- **adr:** Propose ADR-0031 local read-only web UI
+- Record the v1.5.0 web UI and its verified commands
+- **adr:** Propose ADR-0032 interactive graph and run history
+- Record ADR-0032 implementation and its verified commands
+- Record the Copy id fix and how it was found
+- Record the plain-language claims page
+- Record the full-suite result after the claims wording change
+- **adr:** Propose ADR-0033 experiences tab replacing recall
+- Record the Experiences tab, its measurements and checks
+- **adr:** Propose ADR-0034 stored content of an experience
+- Record the experience content page, its checks and costs
+- **adr:** Propose ADR-0035 saved dependency graph files
+- Rewrite the README as a normal project page
+- Record the Linux fresh-clone check and the cleanup
+- Mark v1.5.0 released and write the handoff
+
+### Fixed
+- **ui:** Flush the URL line and tidy the page layout
+- **ui:** Say the graph is building while the frame is empty
+- **ui:** Make inspector buttons and Copy id work with a real click
+
+### Maintenance
+- **ui:** Drop a stray blank line
+- **data:** Keep a real agent experience database and a reference graph
 
 ## [1.4.4] - 2026-10-19
 

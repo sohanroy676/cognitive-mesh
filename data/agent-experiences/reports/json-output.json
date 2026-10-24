@@ -1,0 +1,245 @@
+{
+  "project": "DependencyGraph",
+  "slug": "json-output",
+  "task": "Add a --format option (text default unchanged byte-for-byte, json) to `graph scan`: one valid JSON document on stdout with every file's language and line count, per-language totals and overall totals; keep include/exclude; add tests and update README usage.",
+  "clone": "E:/experience-db/work/DependencyGraph",
+  "branch": "agent/json-output",
+  "base_commit": "7c1e4cb",
+  "head_commit": "ba6ed40",
+  "model": "claude-sonnet-5-5",
+  "finished": true,
+  "steps": [
+    {
+      "step_id": "read-1",
+      "capability": "read_project",
+      "input": {
+        "question": "What does the project structure and scan command look like; are there rules files or tests?"
+      },
+      "outcome": "success",
+      "output": {
+        "found": "Typer CLI; scan command in src/graph/cli/commands/scan.py prints a rich Table plus a summary via rich Console. FileScanner in infrastructure/filesystem.py returns ScanResult(root, files[ScannedFile relative_path/language/line_count], languages_detected). No tests folder, no AGENTS/CLAUDE rules files. pyproject uses pytest (pythonpath=src); typer, rich and pytest import fine on system python 3.13.1.",
+        "files_read": [
+          "README.md",
+          "pyproject.toml",
+          "src/graph/cli/commands/scan.py",
+          "src/graph/cli/app.py",
+          "src/graph/application/scanner.py",
+          "src/graph/rendering/json_renderer.py"
+        ],
+        "constraints": [
+          "text output must stay byte-for-byte identical",
+          "ruff line-length 100, mypy strict",
+          "existing JsonRenderer serialises a CodeGraph to a file, not a ScanResult"
+        ]
+      }
+    },
+    {
+      "step_id": "decide-1",
+      "capability": "decide",
+      "input": {
+        "question": "How to declare --format and reject unknown values?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "Use a str Enum (OutputFormat: text/json) as the Typer option type, default text.",
+        "why": "Typer/click then validates the value, lists choices in --help and exits 2 with a usage error for unknown values; no hand-written validation. Matches the project's Typer style.",
+        "alternatives_considered": [
+          {
+            "option": "plain str option with manual check",
+            "rejected_because": "more code, custom error path and exit code to maintain"
+          },
+          {
+            "option": "Literal type",
+            "rejected_because": "Typer support for Literal depends on version; Enum is long supported"
+          }
+        ],
+        "assumptions": [
+          "installed typer version supports Enum choices (checked by a test)"
+        ],
+        "risks": [
+          "error text for the bad value comes from click and may differ across versions; test asserts only exit code 2"
+        ]
+      }
+    },
+    {
+      "step_id": "decide-2",
+      "capability": "decide",
+      "input": {
+        "question": "JSON field names, ordering and path format?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "Top-level keys in order: root, files, languages, totals. files = list sorted by relative path (same order as text table), each {path, language, lines}. languages = object keyed by language value, sorted by name, each {files, lines}. totals = {files, lines}. Paths emitted with forward slashes (as_posix).",
+        "why": "Mirrors the text output's data (path/language/lines columns, sorted rows, language list, file count) so totals can be compared 1:1. Sorted keys and files make output deterministic for diffing. Short names are enough; lines matches the text column header. Forward slashes make JSON identical across OSes while text keeps native separators for byte-for-byte compatibility.",
+        "alternatives_considered": [
+          {
+            "option": "reuse JsonRenderer/CodeGraph schema (nodes, line_count)",
+            "rejected_because": "that renderer needs a full CodeGraph and writes graph.json to disk; scan has no graph"
+          },
+          {
+            "option": "languages as list of objects",
+            "rejected_because": "object keyed by language is simpler to look up; ordering is still deterministic"
+          },
+          {
+            "option": "keep native backslash paths",
+            "rejected_because": "escaped backslashes in JSON are ugly and make output OS dependent"
+          }
+        ],
+        "assumptions": [
+          "consumers prefer posix paths",
+          "root is emitted as given by result.root (absolute resolved path)"
+        ],
+        "risks": [
+          "text and JSON path separators differ on Windows; a test normalises before comparing"
+        ]
+      }
+    },
+    {
+      "step_id": "decide-3",
+      "capability": "decide",
+      "input": {
+        "question": "Where does the serialisation code go and how is stdout kept clean?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "Add a pure function scan_result_to_dict in new module src/graph/rendering/scan_json.py; scan.py prints json.dumps(..., indent=2) with plain print/typer.echo, before any rich output; error path unchanged.",
+        "why": "Keeps scan.py small and the dict builder unit-testable; rendering/ already holds output formats. rich Console would wrap long lines and interpret [markup] in paths, which could corrupt JSON, so plain stdout is used. The header/table code only runs for text so default output is untouched. Missing-folder error still goes through the existing console error path (exit 1) in both formats.",
+        "alternatives_considered": [
+          {
+            "option": "extend JsonRenderer",
+            "rejected_because": "its API writes a file from a CodeGraph"
+          },
+          {
+            "option": "console.print_json",
+            "rejected_because": "rich styling/wrapping risk and escapes; plain json.dumps is exact"
+          }
+        ],
+        "assumptions": [
+          "error message for missing repo stays on stdout as today (console.print); not changed to avoid altering existing behaviour"
+        ],
+        "risks": [
+          "with --format json a missing folder still prints a non-JSON error on stdout with exit 1; noted for reflection"
+        ]
+      }
+    },
+    {
+      "step_id": "change-1",
+      "capability": "change_code",
+      "input": {
+        "goal": "Add --format text|json to graph scan with a pure JSON builder"
+      },
+      "outcome": "success",
+      "output": {
+        "summary": "New rendering/scan_json.py with scan_result_to_dict; scan.py gets OutputFormat enum, --format option and an early JSON branch using typer.echo(json.dumps(indent=2)) before any rich output. Text path untouched.",
+        "files_changed": [
+          {
+            "path": "src/graph/rendering/scan_json.py",
+            "what": "new scan_result_to_dict",
+            "line": 1
+          },
+          {
+            "path": "src/graph/cli/commands/scan.py",
+            "what": "OutputFormat enum, --format option, JSON branch",
+            "line": 14
+          }
+        ]
+      }
+    },
+    {
+      "step_id": "check-1",
+      "capability": "run_checks",
+      "input": {
+        "command": "PYTHONPATH=src python -m graph.cli.app scan FIXTURE (before vs after change), cmp of captured stdout; graph.__file__ printed first"
+      },
+      "outcome": "success",
+      "output": {
+        "result": "graph.__file__ is the clone's src/graph/__init__.py. Default text output for a 3-file folder and an empty folder is byte-identical to the baseline capture taken before editing (cmp: same). --format json prints parseable JSON; --format xml exits 2 with a usage error.",
+        "note": "first attempt of the text/json branch edit did not apply (a non-ASCII heredoc replace silently missed); I noticed because --format json still printed the table, then fixed with the Edit tool"
+      }
+    },
+    {
+      "step_id": "check-2",
+      "capability": "run_checks",
+      "input": {
+        "command": "PYTHONPATH=src python -m pytest -q (clone cwd; graph.__file__ confirmed as clone)"
+      },
+      "outcome": "failure",
+      "failure_kind": "internal_error",
+      "failure_message": "1 failed, 9 passed: special-character test used double quotes in a filename, invalid on Windows (OSError); test bug, not product bug"
+    },
+    {
+      "step_id": "decide-4",
+      "capability": "decide",
+      "input": {
+        "question": "How to test, given there is no tests folder?"
+      },
+      "outcome": "success",
+      "output": {
+        "decision": "Write tests/test_scan_json.py with unittest.TestCase classes driving the real Typer app through typer.testing.CliRunner (COLUMNS=200), on temp folders; runnable by both pytest (configured in pyproject) and unittest.",
+        "why": "pyproject already configures pytest with pythonpath=src, and unittest style needs no new dependency and runs under either. Using the CLI end-to-end verifies stdout contains only the JSON document and that text and JSON agree.",
+        "alternatives_considered": [
+          {
+            "option": "unit-test only scan_result_to_dict",
+            "rejected_because": "would not prove stdout cleanliness, option parsing or include/exclude interaction"
+          }
+        ],
+        "assumptions": [
+          "text-vs-JSON agreement is checked by parsing the rich table rows; both | and box characters are accepted"
+        ],
+        "risks": [
+          "parsing the rich table is somewhat brittle if the table layout changes"
+        ]
+      }
+    },
+    {
+      "step_id": "check-3",
+      "capability": "run_checks",
+      "input": {
+        "command": "PYTHONPATH=src python -m pytest -q; python -m unittest discover -s tests; ruff check .; ruff format --check; mypy on the 3 touched files (MYPYPATH=src)"
+      },
+      "outcome": "success",
+      "output": {
+        "result": "10 passed (pytest) and 10 OK (unittest), after fixing the Windows filename test. ruff check initially flagged class OutputFormat(str, Enum) (UP042) so I switched to StrEnum; mypy flagged unused type-ignores and Any return in my tests, fixed. Final: ruff check and format clean, mypy clean on touched files. Not run: mypy/ruff on the whole project baseline beyond ruff check ."
+      }
+    },
+    {
+      "step_id": "change-2",
+      "capability": "change_code",
+      "input": {
+        "goal": "Add tests, README usage, lint/type fixes"
+      },
+      "outcome": "success",
+      "output": {
+        "summary": "New tests/test_scan_json.py (10 tests: shape, consistency, agreement with text, include, exclude, no-match include, empty folder, unknown format, default==explicit text, special chars). OutputFormat switched to StrEnum. README usage documents --format json with example.",
+        "files_changed": [
+          {
+            "path": "tests/test_scan_json.py",
+            "what": "new unittest tests via CliRunner",
+            "line": 1
+          },
+          {
+            "path": "README.md",
+            "what": "--format json usage and schema",
+            "line": 17
+          },
+          {
+            "path": "src/graph/cli/commands/scan.py",
+            "what": "StrEnum instead of str+Enum",
+            "line": 20
+          }
+        ]
+      }
+    },
+    {
+      "step_id": "reflect-1",
+      "capability": "reflect",
+      "input": {
+        "question": "What should the next person know?"
+      },
+      "outcome": "success",
+      "output": {
+        "summary": "Done: --format text|json on scan, 10 tests passing, committed. Limits: with --format json a missing repo path still prints the rich error on stdout (exit 1), not JSON; I left the existing error path alone. JSON paths use '/' while text keeps native separators (backslashes on Windows). The text-vs-JSON agreement test parses the rich table and could break if the layout changes. Only the 3 touched files were type-checked with mypy, not the whole project, and ruff was run on the whole project. Surprise: a heredoc-based replacement involving a non-ASCII character silently did nothing; verify edits by behaviour. The repo has no tests folder or rules files beforehand and uses CRLF in the working tree."
+      }
+    }
+  ]
+}

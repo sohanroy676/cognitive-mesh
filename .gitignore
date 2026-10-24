@@ -37,3 +37,5 @@ npm-debug.log*
 # Trace databases
 *.sqlite3
 *.sqlite3-*
+# Reference data kept on purpose (the user's choice, 2026-10-25); see data/README.md
+!data/agent-experiences/*.sqlite3

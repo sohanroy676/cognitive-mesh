@@ -1,0 +1,19 @@
+{
+  "task_id": "json-output-before",
+  "steps": [
+    {
+      "step_id": "report",
+      "capability": "unresolved_report"
+    },
+    {
+      "step_id": "deps-1",
+      "capability": "dependencies_of",
+      "inputs": {
+        "node_id": "module:src/graph/cli/commands/scan.py"
+      },
+      "depends_on": [
+        "report"
+      ]
+    }
+  ]
+}
