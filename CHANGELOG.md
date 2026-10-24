@@ -5,9 +5,22 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **ui:** Add read-only local web UI command
+
+### Changed
+- **experience:** Share show/claims/check JSON builders
+
 ### Documentation
 - **progress:** Record CI for v1.4.4 and final handoff
 - **adr:** Propose ADR-0031 local read-only web UI
+- Record the v1.5.0 web UI and its verified commands
+
+### Fixed
+- **ui:** Flush the URL line and tidy the page layout
+
+### Maintenance
+- **ui:** Drop a stray blank line
 
 ## [1.4.4] - 2026-10-19
 
