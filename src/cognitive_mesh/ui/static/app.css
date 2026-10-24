@@ -163,6 +163,7 @@ summary { cursor: pointer; padding: 3px 0; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 button.act.small { padding: 5px 10px; font-size: 0.9rem; }
 button.act.ghost { background: transparent; color: var(--ink); }
+.offscreen { position: fixed; left: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; }
 .pinlist { border-top: 1px solid var(--rule); padding-top: 8px; }
 .ghostlink { margin-left: 10px; color: var(--muted); }
 .findform { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin: 12px 0; }

@@ -231,6 +231,7 @@
       const inspector = h("div", { class: "inspector", "aria-live": "polite" });
       const pinList = h("div", { class: "pinlist" });
       let selected = null;
+      let shown = null; // what the inspector shows; it changes only on a deliberate hover, focus or click
 
       const folderPath = typedPath || d.folder;
       const entryFor = (n) => ({ space: "deps", id: n.id, label: n.label, folder: d.folder });
@@ -249,7 +250,9 @@
         for (const [k, g] of nodeEls) g.classList.toggle("selected", k === selected);
       };
 
-      const showNode = (n) => {
+      const showNode = (n, force) => {
+        if (!force && shown === n.key) return;
+        shown = n.key;
         const pinned = pins.has("deps", n.id);
         inspector.replaceChildren(
           h("p", { class: "claim-text small", text: n.label }),
@@ -260,12 +263,13 @@
             h("dt", { text: "Depends on" }), h("dd", { text: plural(outgoing.get(n.key) || 0, "node", "nodes") }),
             h("dt", { text: "Needed by" }), h("dd", { text: plural(incoming.get(n.key) || 0, "node", "nodes") })),
           h("div", { class: "row" },
-            h("button", { type: "button", class: "act small", onclick: () => { pins.toggle(entryFor(n)); refreshMarks(); showNode(n); renderPins(); }, text: pinned ? "Unpin this id" : "Pin this id" }),
-            h("button", { type: "button", class: "act small ghost", onclick: () => copy(n.id), text: "Copy id" }),
+            h("button", { type: "button", class: "act small", onclick: () => { pins.toggle(entryFor(n)); refreshMarks(); showNode(n, true); renderPins(); }, text: pinned ? "Unpin this id" : "Pin this id" }),
+            copyButton(n.id),
             h("button", { type: "button", class: "act small ghost", onclick: () => go("traces", { for: n.id }), text: "Show recorded runs" })),
         );
       };
       const showEdge = (e) => {
+        shown = "edge:" + e.number;
         const a = byKey.get(e.source);
         const b = byKey.get(e.target);
         inspector.replaceChildren(
@@ -278,14 +282,39 @@
         );
       };
       const showNothing = () => {
+        shown = null;
         inspector.replaceChildren(h("p", { class: "muted", text: "Hover or focus a node to see its id. Click a node to pin it. Hover an edge to see why it exists." }));
       };
-      async function copy(text) {
+      // The clipboard API needs a secure context and permission; fall back to a hidden text area, and
+      // always say what happened, because a silent copy cannot be told from a broken one.
+      async function copyText(text) {
         try {
           await navigator.clipboard.writeText(text);
+          return true;
         } catch (e) {
-          window.prompt("Copy this id", text);
+          // fall through to the older route
         }
+        try {
+          const area = h("textarea", { readonly: true, class: "offscreen", "aria-hidden": "true", tabindex: "-1" });
+          area.value = text;
+          document.body.append(area);
+          area.select();
+          const ok = document.execCommand("copy");
+          area.remove();
+          return ok;
+        } catch (e) {
+          return false;
+        }
+      }
+      function copyButton(text) {
+        const label = "Copy id";
+        const btn = h("button", { type: "button", class: "act small ghost", text: label });
+        btn.addEventListener("click", async () => {
+          const ok = await copyText(text);
+          btn.textContent = ok ? "Copied" : "Copy failed. Select the id above and press Ctrl+C";
+          window.setTimeout(() => { btn.textContent = label; }, 2500);
+        });
+        return btn;
       }
 
       const renderPins = () => {
@@ -297,7 +326,7 @@
                 p.space === "deps"
                   ? h("button", { class: "link", type: "button", onclick: () => go("graph", { path: p.folder || folderPath, focus: p.id }), text: p.id })
                   : h("button", { class: "link", type: "button", onclick: () => go("node", { id: p.id }), text: p.id }),
-                h("button", { class: "link ghostlink", type: "button", "aria-label": "Unpin " + p.id, onclick: () => { pins.remove(p.space, p.id); refreshMarks(); renderPins(); if (selected) showNode(byKey.get(selected)); }, text: "unpin" }))))
+                h("button", { class: "link ghostlink", type: "button", "aria-label": "Unpin " + p.id, onclick: () => { pins.remove(p.space, p.id); refreshMarks(); renderPins(); if (shown && byKey.has(shown)) showNode(byKey.get(shown), true); }, text: "unpin" }))))
             : h("p", { class: "note", text: "Nothing pinned yet. A pinned id is marked wherever it appears again." }),
         );
       };
@@ -306,7 +335,7 @@
         selected = key;
         highlight(key);
         refreshMarks();
-        if (key) showNode(byKey.get(key));
+        if (key) showNode(byKey.get(key), true);
         else showNothing();
         if (key && center) {
           const n = byKey.get(key);
@@ -336,8 +365,6 @@
       };
       const leave = () => {
         highlight(selected);
-        if (selected) showNode(byKey.get(selected));
-        else showNothing();
       };
       svg.addEventListener("mouseover", (ev) => inspect(ev.target));
       svg.addEventListener("mouseout", (ev) => {
