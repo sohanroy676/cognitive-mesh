@@ -139,7 +139,11 @@ Implemented 2026-10-17 on `feature/v0.6.2-groq-client` (ADR-0013). Unit, CLI and
 - Investigate different retrieval strategies for precision-critical and recall-critical tasks.
 - Test context selection and stateful task continuity.
 
-### v1.5.0 — Model Performance Tracking and Routing
+### v1.5.0 — Local Read-Only Web UI
+- A `cognitive-mesh ui` command serves a local, read-only, token-protected web UI (ADR-0031, Proposed): traces, claims with statuses and evidence, dependency graph, recall and search.
+- Stdlib only; no writes to any store; evidence rules (statuses as categories, separate groups) carry over from the CLI.
+
+### v1.6.0 — Model Performance Tracking and Routing
 - Track task outcomes, token cost, latency, and sample counts by model and task type.
 - Evaluate model selection and routing strategies.
 - Test routing behavior when provider options are unavailable or insufficiently sampled.

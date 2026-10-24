@@ -526,7 +526,35 @@ they are opt-in (marker plus environment variable) and skipped by default and in
 
 ---
 
-## v1.5.0 — Model Performance Tracking and Routing
+## v1.5.0 — Local Read-Only Web UI
+
+### Implement
+- `cognitive-mesh ui`: a stdlib `http.server` on 127.0.0.1 only, with a per-start access token, a Host check, GET only, and a restrictive CSP (ADR-0031).
+- Read-only views of traces, claims with statuses and supporting/contradicting records, a node's neighbourhood, the source check, recall, memory search, and the dependency graph (sandboxed iframe).
+- JSON payloads for `experience claims`, `show` and `check` shared between the CLI and the UI.
+
+### Test
+- Each endpoint returns the same payload as the matching CLI `--json` output.
+- A missing or wrong token, a foreign Host header, a non-GET method and path traversal are refused.
+- Every input file is byte-identical after every endpoint has been hit; missing inputs are not created.
+- Hostile text in a trace is returned as data; `app.js` uses no `innerHTML`, `eval` or similar.
+- Missing, unusable or old-format inputs, unknown ids, bad query parameters and malformed rows give explicit, path-free messages.
+- Parallel recall requests load the embedder once.
+
+### Expected Output
+- Statuses appear as categories with their fixed meaning, never as a score or a claim of truth.
+- Raw experiences, claims and unconfirmed hits stay in separate groups.
+- Warnings (malformed rows, unverified sources) are visible, not hidden.
+
+### Fix If
+- Any request writes to a store or creates a file.
+- Library text reaches the page through HTML parsing.
+- The UI shows a claim as established without its status and the records on both sides.
+- CLI `--json` output changed after the payload code moved.
+
+---
+
+## v1.6.0 — Model Performance Tracking and Routing
 
 ### Implement
 - Track model/provider performance by task type.
