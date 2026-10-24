@@ -32,6 +32,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record the experience content page, its checks and costs
 - **adr:** Propose ADR-0035 saved dependency graph files
 - Rewrite the README as a normal project page
+- Record the Linux fresh-clone check and the cleanup
 
 ### Fixed
 - **ui:** Flush the URL line and tidy the page layout
