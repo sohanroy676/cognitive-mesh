@@ -7,6 +7,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - **progress:** Record CI for v1.4.4 and final handoff
+- **adr:** Propose ADR-0031 local read-only web UI
 
 ## [1.4.4] - 2026-10-19
 
