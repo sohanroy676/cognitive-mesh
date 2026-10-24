@@ -19,6 +19,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Fixed
 - **ui:** Flush the URL line and tidy the page layout
+- **ui:** Say the graph is building while the frame is empty
 
 ### Maintenance
 - **ui:** Drop a stray blank line
