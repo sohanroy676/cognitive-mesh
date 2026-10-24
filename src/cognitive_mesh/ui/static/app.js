@@ -415,9 +415,11 @@ async function viewGraph(root) {
     root.append(h("p", { class: "banner warn", text: "The dependency graph needs an application directory. Start the UI with --root DIR." }));
     return;
   }
+  const wait = h("p", { class: "muted", text: "Building the graph. A large folder can take several seconds." });
   root.append(
     h("p", { class: "prose note", text: "The application as it is now. An edge from A to B means A depends on B. Shown in a sandboxed frame." }),
-    h("iframe", { src: "/api/graph.html", sandbox: "", title: "Dependency graph of the application" }),
+    wait,
+    h("iframe", { src: "/api/graph.html", sandbox: "", title: "Dependency graph of the application", onload: () => wait.remove() }),
   );
 }
 
