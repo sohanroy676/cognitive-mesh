@@ -8,6 +8,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 ### Added
 - **ui:** Add read-only local web UI command
 - **ui:** Redesign as an evidence ledger
+- **ui:** Typed-folder interactive graph and run history
 
 ### Changed
 - **experience:** Share show/claims/check JSON builders
@@ -17,6 +18,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Propose ADR-0031 local read-only web UI
 - Record the v1.5.0 web UI and its verified commands
 - **adr:** Propose ADR-0032 interactive graph and run history
+- Record ADR-0032 implementation and its verified commands
 
 ### Fixed
 - **ui:** Flush the URL line and tidy the page layout
