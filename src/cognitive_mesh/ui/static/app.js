@@ -94,7 +94,7 @@ function field(name, label, value, extra) {
 }
 
 function checkbox(name, label, checked) {
-  return h("label", {}, h("span", { text: label }), h("input", { type: "checkbox", name, checked: checked ? true : null }));
+  return h("label", { class: "check" }, h("input", { type: "checkbox", name, checked: checked ? true : null }), h("span", { text: label }));
 }
 
 function formParams(form) {
@@ -211,7 +211,7 @@ async function viewClaims(root, params) {
         "div",
         { class: "card" },
         h("div", {}, h("span", { class: "tag", text: row.evidence_status }), h("strong", { text: row.name })),
-        h("div", { class: "note", text: row.observations + " observation(s), " + row.still_confirmed + " still confirmed, " + row.source_fingerprints.length + " code version(s); source check: " + row.status + "; " + row.validation }),
+        h("div", { class: "note", text: row.observations + " observation(s), " + row.still_confirmed + " still confirmed, " + row.source_fingerprints.length + " code version(s); source check: " + row.status + "; claim record field validation: " + row.validation }),
         h("details", {}, h("summary", { text: "Evidence on both sides" }), renderAssessment(row.assessment)),
       ),
     );
@@ -238,7 +238,7 @@ async function viewNode(root, params) {
         go("node", out);
       },
     },
-    field("id", "node id", params.get("id") || ""),
+    field("id", "node id", params.get("id") || "", { size: 46 }),
     checkbox("incoming", "incoming", params.get("incoming") === "1"),
     checkbox("transitive", "transitive", params.get("transitive") === "1"),
     checkbox("include_unverified", "include unverified", params.get("include_unverified") === "1"),

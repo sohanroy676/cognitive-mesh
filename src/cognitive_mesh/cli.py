@@ -936,8 +936,8 @@ def _run_ui(args: argparse.Namespace) -> int:
     except OSError:
         print(f"cannot listen on 127.0.0.1:{args.port}; is the port in use?", file=sys.stderr)
         return EXIT_UI_ERROR
-    print(f"serving read-only on {server.url()}")
-    print("the URL holds this session's access token; stop with Ctrl+C")
+    print(f"serving read-only on {server.url()}", flush=True)
+    print("the URL holds this session's access token; stop with Ctrl+C", flush=True)
     if not args.no_browser:
         webbrowser.open(server.url())
     try:

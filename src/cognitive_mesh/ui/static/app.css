@@ -30,6 +30,7 @@ table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
 form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 8px 0; }
 label { display: flex; flex-direction: column; font-size: 0.85rem; color: var(--muted); }
+label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--fg); font-size: 0.95rem; }
 input { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--card); color: var(--fg); }
 input[name="q"] { min-width: min(480px, 90vw); }
 button.act { font: inherit; padding: 6px 14px; border: 1px solid var(--accent); background: var(--accent); color: var(--bg); border-radius: 4px; cursor: pointer; }
