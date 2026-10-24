@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.5.0] - 2026-10-24
 
 ### Added
 - **ui:** Add read-only local web UI command
@@ -33,6 +33,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Propose ADR-0035 saved dependency graph files
 - Rewrite the README as a normal project page
 - Record the Linux fresh-clone check and the cleanup
+- Mark v1.5.0 released and write the handoff
 
 ### Fixed
 - **ui:** Flush the URL line and tidy the page layout
