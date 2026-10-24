@@ -11,6 +11,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **ui:** Typed-folder interactive graph and run history
 - **ui:** Explain claims in plain sentences
 - **ui:** List every recorded step in an Experiences tab
+- **ui:** Show what an experience stored
 
 ### Changed
 - **experience:** Share show/claims/check JSON builders
@@ -27,6 +28,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **adr:** Propose ADR-0033 experiences tab replacing recall
 - Record the Experiences tab, its measurements and checks
 - **adr:** Propose ADR-0034 stored content of an experience
+- Record the experience content page, its checks and costs
 
 ### Fixed
 - **ui:** Flush the URL line and tidy the page layout
