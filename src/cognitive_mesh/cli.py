@@ -1365,36 +1365,21 @@ def _experience_build(args: argparse.Namespace) -> int:
 
 
 def _experience_show(args: argparse.Namespace) -> int:
-    from cognitive_mesh.experience.verify import SourceReport, check_nodes
+    from cognitive_mesh.experience.report import scoped_node_view, show_payload
 
     graph = _load_graph(args.graph)
     with TraceStore.open_existing(args.db) as store:
-        node = graph.node(args.node)
-        reached = graph.reachable(node.id, forward=not args.incoming, transitive=args.transitive)
-        # ADR-0028: only the shown node and what it reaches are checked, not the whole graph
-        report = SourceReport(
-            statuses=check_nodes(graph, store, {node.id, *(r.node.id for r in reached)}),
-            claim_support={},
-            diagnostics=(),
+        view = scoped_node_view(
+            graph,
+            store,
+            args.node,
+            incoming=args.incoming,
+            transitive=args.transitive,
+            include_unverified=args.include_unverified,
         )
-    shown = [r for r in reached if args.include_unverified or report.is_supported(r.node.id)]
-    hidden = len(reached) - len(shown)
+    node, report, shown, hidden = view.node, view.report, view.shown, view.hidden
     if args.as_json:
-        payload = {
-            "node": node.model_dump(mode="json"),
-            "status": report.statuses[node.id].value,
-            "reached": [
-                {
-                    "depth": r.depth,
-                    "status": report.statuses[r.node.id].value,
-                    "node": r.node.model_dump(mode="json"),
-                    "path": [e.model_dump(mode="json") for e in r.path],
-                }
-                for r in shown
-            ],
-            "hidden_unverified": hidden,
-        }
-        print(json.dumps(payload, indent=2))
+        print(json.dumps(show_payload(view), indent=2))
         return EXIT_OK
     print(
         f"{_printable(node.id)} [{node.kind.value}] {_printable(node.name)} "
@@ -1412,8 +1397,9 @@ def _experience_show(args: argparse.Namespace) -> int:
 
 
 def _experience_claims(args: argparse.Namespace) -> int:
-    from cognitive_mesh.experience.assess import STATUS_MEANING, assess_claims, orphaned_reviews
-    from cognitive_mesh.experience.models import CLAIM_NOTE, REPETITION_NOTE, SourceStatus
+    from cognitive_mesh.experience.assess import assess_claims, orphaned_reviews
+    from cognitive_mesh.experience.models import CLAIM_NOTE, REPETITION_NOTE
+    from cognitive_mesh.experience.report import claims_payload, claims_view
 
     _, graph, report = _experience_open(args)
     reviews, current = _evidence_inputs(args)
@@ -1424,47 +1410,18 @@ def _experience_claims(args: argparse.Namespace) -> int:
     )
     orphans = orphaned_reviews(graph, reviews)
     details = args.reviews is not None or args.root is not None
-    rows = []
-    versions: list[int] = []
-    hidden = 0
-    for claim in graph.claims():
-        status = report.statuses[claim.id]
-        if status is not SourceStatus.OK and not args.include_unverified:
-            hidden += 1
-            continue
-        evidence = graph.evidence(claim.id)
-        prints = sorted(
-            {r.source_fingerprint for e in evidence for r in e.refs if r.source_fingerprint}
-        )
-        rows.append(
-            {
-                "id": claim.id,
-                "name": claim.name,
-                "predicate": claim.predicate,
-                "detail": claim.detail,
-                "validation": claim.validation,
-                "status": status.value,
-                "observations": len(evidence),
-                "still_confirmed": report.claim_support[claim.id],
-                "source_fingerprints": prints,
-                "evidence_status": assessed[claim.id].status.value,
-                "assessment": assessed[claim.id].model_dump(mode="json"),
-            }
-        )
-        versions.append(len(prints))
-    shown = {a.status for a in assessed.values() if a.claim_id in {r["id"] for r in rows}}
-    meanings = {s.value: STATUS_MEANING[s] for s in sorted(shown, key=lambda s: s.value)}
+    view = claims_view(
+        graph,
+        report,
+        assessed,
+        orphans,
+        current,
+        today,
+        include_unverified=args.include_unverified,
+    )
+    rows, versions, hidden, meanings = view.rows, view.versions, view.hidden, view.meanings
     if args.as_json:
-        payload = {
-            "claims": rows,
-            "hidden_unverified": hidden,
-            "current_fingerprint": current.fingerprint if current else None,
-            "date_used": today.isoformat(),
-            "orphaned_reviews": [r.model_dump(mode="json") for r in orphans],
-            "status_meanings": meanings,
-            "note": CLAIM_NOTE,
-        }
-        print(json.dumps(payload, indent=2))
+        print(json.dumps(claims_payload(view), indent=2))
         return EXIT_OK
     for row, n_versions in zip(rows, versions, strict=True):
         a = assessed[str(row["id"])]
@@ -1491,19 +1448,12 @@ def _experience_claims(args: argparse.Namespace) -> int:
 
 
 def _experience_check(args: argparse.Namespace) -> int:
+    from cognitive_mesh.experience.report import check_payload, status_counts
+
     loaded, _, report = _experience_open(args)
-    counts: dict[str, int] = {}
-    for status in report.statuses.values():
-        counts[status.value] = counts.get(status.value, 0) + 1
+    counts = status_counts(report)
     if args.as_json:
-        payload = {
-            "content_sha256": loaded.content_sha256,
-            "built_at": loaded.built_at.isoformat(),
-            "statuses": dict(sorted(counts.items())),
-            "build_diagnostics": [d.model_dump(mode="json") for d in loaded.snapshot.diagnostics],
-            "diagnostics": [d.model_dump(mode="json") for d in report.diagnostics],
-        }
-        print(json.dumps(payload, indent=2))
+        print(json.dumps(check_payload(loaded, report), indent=2))
     else:
         print(f"graph file OK: content hash matches ({loaded.content_sha256[:12]}...)")
         print(f"built at {loaded.built_at.isoformat()}")

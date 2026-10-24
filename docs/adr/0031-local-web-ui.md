@@ -1,7 +1,7 @@
 # ADR-0031: Local read-only web UI
 
 ## Status
-Proposed (needs the user's acceptance before any code is written)
+Accepted (text reviewed and accepted by the user 2026-10-24, before any code was written)
 
 ## Date
 2026-10-24
