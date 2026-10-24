@@ -78,6 +78,7 @@ EXIT_EXPERIENCE_SOURCES = 14
 EXIT_REVIEW_STORE_ERROR = 15
 EXIT_OUTCOME_STORE_ERROR = 16
 EXIT_PROMOTION_REFUSED = 17
+EXIT_UI_ERROR = 18
 MAX_PLAN_BYTES = 256 * 1024
 DEFAULT_MIN_SIMILARITY = 0.2  # from one live run on 3 documents (ADR-0014); a rough starting point
 
@@ -211,6 +212,21 @@ def _build_parser() -> argparse.ArgumentParser:
         help="drop hits below this cosine similarity, 0 to 1 (default 0.2, recall 0.1)",
     )
     task.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
+    ui = sub.add_parser(
+        "ui", help="serve a local, read-only web UI over the recorded data (ADR-0031)"
+    )
+    ui.add_argument("--db", type=Path, metavar="FILE", help="trace database")
+    ui.add_argument("--graph", type=Path, metavar="FILE", help="graph file")
+    ui.add_argument("--index", type=Path, metavar="DIR", help="index directory")
+    ui.add_argument("--reviews", type=Path, metavar="FILE", help="reviews file (optional)")
+    ui.add_argument("--outcomes", type=Path, metavar="FILE", help="outcomes file (optional)")
+    ui.add_argument(
+        "--root", type=Path, metavar="DIR", help="application directory: check claims, draw graph"
+    )
+    ui.add_argument(
+        "--port", type=_port, default=8765, help="port on 127.0.0.1 (0: pick a free one)"
+    )
+    ui.add_argument("--no-browser", action="store_true", help="print the URL, do not open it")
     experience = sub.add_parser("experience", help="build and query the experience graph")
     exp_sub = experience.add_subparsers(dest="experience_command", required=True)
     exp_build = exp_sub.add_parser("build", help="build the graph file from the trace database")
@@ -317,6 +333,16 @@ _VALID_UNTIL_HELP = (
     "last day this stays in force (YYYY-MM-DD, not in the past); after it the claim shows as "
     "expired (ADR-0022). Without it nothing expires by time"
 )
+
+
+def _port(text: str) -> int:
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("must be an integer") from None
+    if not 0 <= value <= 65535:
+        raise argparse.ArgumentTypeError("must be between 0 and 65535")
+    return value
 
 
 def _positive_int(text: str) -> int:
@@ -884,6 +910,42 @@ def _recall(args: argparse.Namespace) -> int:
         print(f"{found.dropped_weak} weak match(es) below {found.min_similarity} dropped")
     for note in found.notes:
         print(note)
+    return EXIT_OK
+
+
+def _run_ui(args: argparse.Namespace) -> int:
+    """Serve until interrupted. Read-only; binds 127.0.0.1 only (ADR-0031)."""
+    import webbrowser
+
+    from cognitive_mesh.ui.config import UiConfig
+    from cognitive_mesh.ui.server import make_server
+
+    config = UiConfig(
+        db=args.db,
+        graph=args.graph,
+        index=args.index,
+        reviews=args.reviews,
+        outcomes=args.outcomes,
+        root=args.root,
+        port=args.port,
+        min_similarity=DEFAULT_MIN_SIMILARITY,
+        embedder_factory=_make_embedder,
+    )
+    try:
+        server = make_server(config)
+    except OSError:
+        print(f"cannot listen on 127.0.0.1:{args.port}; is the port in use?", file=sys.stderr)
+        return EXIT_UI_ERROR
+    print(f"serving read-only on {server.url()}")
+    print("the URL holds this session's access token; stop with Ctrl+C")
+    if not args.no_browser:
+        webbrowser.open(server.url())
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
     return EXIT_OK
 
 
@@ -1493,6 +1555,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_recall(args)
     if args.command == "task":
         return _run_task(args)
+    if args.command == "ui":
+        return _run_ui(args)
     if args.command == "agents":
         return _run_agents(args.as_json)
     if args.command == "graph":

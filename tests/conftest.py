@@ -1,8 +1,12 @@
 import os
 from collections.abc import Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from ui_support import World as UiWorld
 
 
 @pytest.fixture(autouse=True)
@@ -13,3 +17,15 @@ def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pa
             monkeypatch.delenv(name)
     monkeypatch.chdir(tmp_path)
     yield tmp_path
+
+
+@pytest.fixture(scope="module")
+def ui_world(tmp_path_factory: pytest.TempPathFactory) -> "UiWorld":
+    """One real world for the read-only web UI tests (built through the CLI, fake embedder)."""
+    from cognitive_mesh import cli
+    from memory_support import FakeEmbedder
+    from ui_support import build_world
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(cli, "_make_embedder", lambda: FakeEmbedder())
+        return build_world(tmp_path_factory.mktemp("ui"))

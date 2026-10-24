@@ -101,3 +101,22 @@ graph, authentication beyond the token, remote access, caching, and live updates
   server has been run on until the verification step says otherwise.
 - Nothing in this ADR is implemented yet. The README, ROADMAP and verified-commands lists must not describe the UI as
   existing until the criteria in `docs/DETAILED_ROADMAP.md` v1.5.0 pass.
+
+## Amendments made during implementation (2026-10-24)
+Details that changed when the code met the existing code base; the decisions above stand.
+- **Exit code 18**, not 17: 17 is already `EXIT_PROMOTION_REFUSED`. The listen socket does not allow address reuse,
+  so on Windows a busy port fails instead of being shared.
+- **Endpoints take ids as query parameters:** `/api/trace?id=RUN` and `/api/node?id=NODE`, because node ids
+  contain `:` and `/`. The full list is `/api/status`, `/api/traces`, `/api/trace`, `/api/claims`, `/api/node`,
+  `/api/check`, `/api/recall`, `/api/search`, `/api/graph.html`.
+- **Envelope:** every JSON view returns `{"data": ..., "notes": [...], "warnings": [...]}`. `data` equals the
+  matching CLI `--json` output (tests compare them); the notes carry the sentences the CLI prints in text mode.
+- **Messages:** store errors contain no paths; an ingestion error names the `--root` directory the user gave. Neither
+  contains a traceback. Unexpected errors are an opaque 500.
+- **Serialised heavy calls:** `recall` and `search` run under one lock, because the embedding model and the Chroma
+  client are not shared across threads. Other views run in parallel.
+- **Graph page:** served with its own policy (`default-src 'none'; style-src 'unsafe-inline'`, no script) and
+  `frame-ancestors 'self'`; every other response carries the page policy including `frame-ancestors 'self'`.
+- **Status view:** it opens the trace, reviews and outcomes files to say "unusable", but only checks that the graph
+  file, the index directory and the root exist (loading the graph verifies a hash and can take seconds).
+
