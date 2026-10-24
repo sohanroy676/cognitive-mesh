@@ -3,6 +3,8 @@
 <!-- Update this at the end of every session. This is the first thing to read when resuming. -->
 
 ## Current focus
+Session 5 (latest): real agent experience data is committed on `chore/agent-experience-data` (off `feature/ui-experience-content`; unmerged, unpushed) under `data/`; ADR-0035 (saved graph files in the Graph tab) is Proposed and waits for the user. Merge order now ends: ..., `docs/adr-0034-experience-content`, `feature/ui-experience-content`, `chore/agent-experience-data`.
+
 Session 5 (latest): ADR-0034 is implemented on `feature/ui-experience-content` (off `docs/adr-0034-experience-content`, off `feature/ui-experiences`; all unmerged and unpushed). Merge order for approval: `docs/adr-0031-local-web-ui`, `feature/v1.5.0-web-ui`, `docs/adr-0032-ui-graph-history`, `feature/ui-graph-history`, `docs/adr-0033-ui-experiences`, `feature/ui-experiences`, `docs/adr-0034-experience-content`, `feature/ui-experience-content` (each contains the earlier ones).
 
 Session 5 (latest): ADR-0033 is implemented on `feature/ui-experiences` (off `docs/adr-0033-ui-experiences`, off `feature/ui-graph-history`; all unmerged and unpushed). Merge order for approval: `docs/adr-0031-local-web-ui`, `feature/v1.5.0-web-ui`, `docs/adr-0032-ui-graph-history`, `feature/ui-graph-history`, `docs/adr-0033-ui-experiences`, `feature/ui-experiences` (each contains the earlier ones).
