@@ -7,6 +7,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - Record CI runs for v1.5.0
+- **roadmap:** Add extended roadmap v1.6.0-v2.1.0
+- Add session_prompt.md and roadmap pointers
+- **adr:** Propose ADR-0036 workspace and package edges
 
 ## [1.5.0] - 2026-10-24
 
