@@ -67,6 +67,67 @@ class PackageEdge(_Frozen):
     candidates: tuple[str, ...] = ()  # all publishers when ambiguous
 
 
+Site = ManifestRef  # a location inside one project; the same shape serves every edge kind
+
+
+class ApiEdge(_Frozen):
+    """`source` calls an endpoint that `target` serves (ADR-0037). Method equal, path aligned;
+    `match` says how exactly. The host is never used."""
+
+    source: str
+    target: str
+    method: str
+    path: str  # the provider's path
+    match: str  # exact | param_style | value_for_param
+    caveats: tuple[str, ...] = ()  # e.g. base_unknown
+    consumer: Site
+    provider: Site
+    ambiguous: bool = False
+    candidates: tuple[str, ...] = ()
+
+
+class SchemaEdge(_Frozen):
+    """`source` and `target` use the same table (or JSON Schema `$id`). Symmetric: `source` sorts
+    before `target`. A column difference is shown, never judged."""
+
+    source: str
+    target: str
+    kind: str  # table | json_schema
+    name: str
+    source_sites: tuple[Site, ...]
+    target_sites: tuple[Site, ...]
+    source_roles: tuple[str, ...]  # defines | maps | describes
+    target_roles: tuple[str, ...]
+    only_in_source: tuple[str, ...] = ()
+    only_in_target: tuple[str, ...] = ()
+
+    @property
+    def column_difference(self) -> bool:
+        return bool(self.only_in_source or self.only_in_target)
+
+
+class ConfigEdge(_Frozen):
+    """`source` reads an environment variable name that `target` sets (names only, never values)."""
+
+    source: str
+    target: str
+    name: str
+    generic: bool
+    readers: tuple[Site, ...]
+    setters: tuple[Site, ...]
+    ambiguous: bool = False
+    candidates: tuple[str, ...] = ()
+
+
+class Unresolved(_Frozen):
+    """Something seen in a project that matched nothing. Listed, never dropped."""
+
+    project: str
+    kind: str  # api | schema | config
+    reason: str
+    site: Site
+
+
 class WorkspaceDiagnostic(_Frozen):
     project: str | None
     code: str  # not_fetched | unreadable | ingestion_error

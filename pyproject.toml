@@ -8,6 +8,7 @@ dependencies = [
     "chromadb>=1.5.9",
     "networkx>=3.7",
     "pydantic-settings>=2.16.0",
+    "pyyaml>=6.0.3",
     "sentence-transformers>=6.1.0",
     "torch>=2.2",
     "tree-sitter>=0.26.0",
@@ -46,6 +47,7 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.17.1",
     "types-networkx>=3.6.1.20261006",
+    "types-pyyaml>=6.0.12.20261103",
 ]
 
 [tool.ruff]

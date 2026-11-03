@@ -86,6 +86,11 @@ def _looks_random(value: str) -> bool:
     )
 
 
+def looks_random(value: str) -> bool:
+    """True when `value` has the shape of a random token (used to drop secret-like names)."""
+    return _looks_random(value)
+
+
 @dataclass(frozen=True)
 class _Match:
     start: int

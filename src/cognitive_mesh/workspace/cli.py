@@ -15,9 +15,15 @@ from cognitive_mesh.workspace.fetch import (
     normalise_github_url,
     parse_github_url,
 )
-from cognitive_mesh.workspace.graph import build_workspace_graph
+from cognitive_mesh.workspace.graph import WorkspaceGraph, build_workspace_graph
 from cognitive_mesh.workspace.models import Project, ProjectKind, WorkspaceError
-from cognitive_mesh.workspace.render import to_json, to_mermaid, to_text
+from cognitive_mesh.workspace.render import (
+    deps_json,
+    deps_text,
+    to_json,
+    to_mermaid,
+    to_text,
+)
 from cognitive_mesh.workspace.store import WorkspaceStore
 
 EXIT_OK = 0
@@ -59,6 +65,11 @@ def add_parser(sub: Any) -> None:
     cached(graph)
     graph.add_argument("--json", action="store_true", dest="as_json")
     graph.add_argument("--format", choices=["mermaid"], default=None, dest="fmt")
+    deps = ws_sub.add_parser("deps", help="what one project uses and what uses it")
+    common(deps)
+    cached(deps)
+    deps.add_argument("project")
+    deps.add_argument("--json", action="store_true", dest="as_json")
     refresh = ws_sub.add_parser("refresh", help="fetch GitHub projects missing from the cache")
     common(refresh)
     cached(refresh)
@@ -111,12 +122,24 @@ def _dispatch(args: argparse.Namespace) -> int:
         if command == "refresh":
             return _refresh(args, projects)
         wg = build_workspace_graph(projects, store.links(), _resolver(_cache(args)))
+    if command == "deps":
+        return _deps(args, wg)
     if args.as_json:
         print(json.dumps(to_json(wg), indent=2, sort_keys=True))
     elif args.fmt == "mermaid":
         print(to_mermaid(wg), end="")
     else:
         print(to_text(wg), end="")
+    return EXIT_OK
+
+
+def _deps(args: argparse.Namespace, wg: WorkspaceGraph) -> int:
+    if args.project not in {p.name for p in wg.projects}:
+        raise WorkspaceError("no project has that name")
+    if args.as_json:
+        print(json.dumps(deps_json(wg, args.project), indent=2, sort_keys=True))
+    else:
+        print(deps_text(wg, args.project), end="")
     return EXIT_OK
 
 

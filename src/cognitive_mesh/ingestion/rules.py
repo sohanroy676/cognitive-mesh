@@ -78,7 +78,7 @@ SOURCE_LANGUAGES = {
     ".py": "python", ".js": "javascript", ".jsx": "javascript", ".ts": "typescript",
     ".tsx": "typescript", ".go": "go", ".java": "java", ".rs": "rust", ".c": "c",
     ".h": "c", ".cpp": "cpp", ".hpp": "cpp", ".cs": "csharp", ".rb": "ruby",
-    ".sh": "shell", ".ps1": "powershell", ".sql": "sql",
+    ".sh": "shell", ".ps1": "powershell", ".sql": "sql", ".prisma": "prisma",
 }  # fmt: skip
 
 
