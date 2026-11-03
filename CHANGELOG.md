@@ -16,6 +16,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Maintenance
 - Remove strings that trip the secret scanner
+- Ignore three verified gitleaks false positives
 
 ## [1.6.0] - 2026-11-03
 
