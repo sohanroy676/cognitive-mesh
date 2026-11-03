@@ -3,7 +3,7 @@
 import hashlib
 import platform
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 
 from pydantic import JsonValue, TypeAdapter
@@ -14,6 +14,7 @@ from cognitive_mesh.identity import AppIdentity
 from cognitive_mesh.ingestion import IngestionResult
 from cognitive_mesh.ingestion.secrets import redact_secrets
 from cognitive_mesh.orchestrator import StepRecord, TaskRun, ValidatedPlan
+from cognitive_mesh.providers.recording import CallRecord
 from cognitive_mesh.traces.models import (
     AttemptTrace,
     RunTrace,
@@ -118,13 +119,13 @@ class TraceRecorder:
         self._rules[run_id] = rules
         return run_id
 
-    def finish(self, run_id: str, run: TaskRun) -> TraceStatus:
+    def finish(self, run_id: str, run: TaskRun, calls: Sequence[CallRecord] = ()) -> TraceStatus:
         rules = self._rules.pop(run_id, set())
         steps = tuple(
             _step_trace(seq, step, run.task_id, rules) for seq, step in enumerate(run.steps)
         )
         status = trace_status(run.status)
-        self._store.finish_run(run_id, status, self._now(), sorted(rules), steps)
+        self._store.finish_run(run_id, status, self._now(), sorted(rules), steps, calls)
         return status
 
 

@@ -2,6 +2,8 @@
 
 from cognitive_mesh.traces.models import (
     AttemptTrace,
+    CallListing,
+    CallRow,
     RunSummary,
     RunTrace,
     StepTrace,
@@ -18,6 +20,8 @@ from cognitive_mesh.traces.store import SCHEMA_VERSION, TraceStore
 __all__ = [
     "SCHEMA_VERSION",
     "AttemptTrace",
+    "CallListing",
+    "CallRow",
     "RunSummary",
     "RunTrace",
     "StepTrace",

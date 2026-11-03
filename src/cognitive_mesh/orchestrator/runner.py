@@ -39,7 +39,10 @@ class Orchestrator:
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
         now: Callable[[], datetime] | None = None,
+        on_attempt: Callable[[str, str, str, str], None] | None = None,
     ) -> None:
+        # on_attempt(agent_task_id, step_id, agent_id, capability) runs just before each agent call
+        # (ADR-0038); it must not raise. The call log uses it to attribute model calls to attempts.
         if run_budget_s is not None and run_budget_s <= 0:
             raise ValueError("run_budget_s must be positive")
         self._registry = registry
@@ -48,6 +51,7 @@ class Orchestrator:
         self._clock = clock
         self._sleep = sleep
         self._now = now
+        self._on_attempt = on_attempt
 
     def run(self, plan: ValidatedPlan, context: AgentContext) -> TaskRun:
         start = self._clock()
@@ -126,6 +130,8 @@ class Orchestrator:
                 count += 1
                 tries += 1
                 agent_task_id = f"{task_id}.{step.step_id}.{count}"
+                if self._on_attempt is not None:
+                    self._on_attempt(agent_task_id, step.step_id, agent.id, step.capability)
                 try:
                     result = agent.run(
                         AgentTask(task_id=agent_task_id, capability=step.capability, inputs=inputs),

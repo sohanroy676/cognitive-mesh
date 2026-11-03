@@ -62,5 +62,5 @@ def request(fmt: str = "json", max_chars: int = 1000) -> ModelRequest:
         prompt=CANARY_PROMPT,
         timeout_s=7.5,
         max_output_chars=max_chars,
-        response_format=fmt,  # type: ignore[arg-type]
+        response_format=fmt,
     )

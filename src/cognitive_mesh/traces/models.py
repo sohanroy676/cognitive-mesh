@@ -2,13 +2,14 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, JsonValue, model_validator
 
 from cognitive_mesh.agents import AgentResult, RecalledContext
 from cognitive_mesh.identity import IdentityHow
 from cognitive_mesh.orchestrator import StepRecord, StepStatus, TaskRun, TaskStatus
+from cognitive_mesh.providers.recording import CallRecord
 
 
 class TraceStoreError(Exception):
@@ -129,6 +130,22 @@ class RunSummary(_Frozen):
 class TraceListing(_Frozen):
     runs: tuple[RunSummary, ...]
     malformed: tuple[str, ...]  # run ids that could not be read
+
+
+class CallRow(_Frozen):
+    """A recorded model call joined to its run, the status of its step and of its attempt."""
+
+    run_id: str
+    call: CallRecord
+    step_status: StepStatus
+    attempt_status: Literal["success", "failure"] | None = None  # None: no attempt row matches
+
+
+class CallListing(_Frozen):
+    rows: tuple[CallRow, ...]
+    malformed_runs: tuple[str, ...]  # run ids with a call row that could not be read
+    runs_total: int
+    runs_with_calls: int
 
 
 def trace_status(status: TaskStatus) -> TraceStatus:

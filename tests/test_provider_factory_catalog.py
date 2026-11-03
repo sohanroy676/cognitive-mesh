@@ -1,9 +1,11 @@
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 
-from cognitive_mesh.config import ConfigError, load_settings
+from cognitive_mesh.config import ConfigError, Settings, load_settings
 from cognitive_mesh.providers import (
+    ModelClient,
     OllamaClient,
     OpenAICompatClient,
     build_model_client,
@@ -50,11 +52,13 @@ def catalog_file(tmp_path: Path) -> Path:
     return path
 
 
-def _settings(catalog_file: Path, model: str, **extra: object):  # type: ignore[no-untyped-def]
+def _settings(catalog_file: Path, model: str, **extra: object) -> Settings:
     return load_settings(provider="catalog", model=model, model_catalog=catalog_file, **extra)
 
 
-def _build(settings, roles=("code_explainer",)):  # type: ignore[no-untyped-def]
+def _build(
+    settings: Settings, roles: Sequence[str] = ("code_explainer",)
+) -> tuple[ModelClient, list[str]]:
     warnings: list[str] = []
     client = build_model_client(settings, roles, warn=warnings.append)
     return client, warnings

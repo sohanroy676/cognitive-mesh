@@ -19,8 +19,11 @@ from pydantic import TypeAdapter, ValidationError
 
 from cognitive_mesh.agents import AgentResult, AgentSuccess, RecalledContext
 from cognitive_mesh.orchestrator import StepStatus
+from cognitive_mesh.providers.recording import CallRecord
 from cognitive_mesh.traces.models import (
     AttemptTrace,
+    CallListing,
+    CallRow,
     RunSummary,
     RunTrace,
     StepTrace,
@@ -55,6 +58,28 @@ ALTER TABLE runs ADD COLUMN app_id_how TEXT;
     # pack so it can be queried and cross-checked. Older rows keep NULL = read as `precision`.
     3: """
 ALTER TABLE run_context ADD COLUMN profile TEXT;
+""",
+    # 4 -> 5 (ADR-0038): one row per model call, keyed to the attempt that made it. Runs recorded
+    # earlier have none; nothing is back-filled. Token columns are NULL when the provider did not
+    # report them (unknown, never 0).
+    4: """
+CREATE TABLE model_calls (
+    run_id TEXT NOT NULL,
+    agent_task_id TEXT NOT NULL,
+    call_no INTEGER NOT NULL CHECK (call_no >= 1),
+    step_id TEXT NOT NULL,
+    entry_id TEXT,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    role TEXT NOT NULL,
+    task_type TEXT NOT NULL,
+    latency_ms INTEGER NOT NULL CHECK (latency_ms >= 0),
+    prompt_tokens INTEGER CHECK (prompt_tokens IS NULL OR prompt_tokens >= 0),
+    completion_tokens INTEGER CHECK (completion_tokens IS NULL OR completion_tokens >= 0),
+    result TEXT NOT NULL,
+    PRIMARY KEY (run_id, agent_task_id, call_no),
+    FOREIGN KEY (run_id, step_id) REFERENCES steps(run_id, step_id)
+);
 """,
 }
 SCHEMA_VERSION = 1 + len(MIGRATIONS)
@@ -245,8 +270,9 @@ class TraceStore:
         finished_at: datetime,
         redactions: Sequence[str],
         steps: Sequence[StepTrace],
+        calls: Sequence[CallRecord] = (),
     ) -> None:
-        """Write steps, attempts and the final status in one transaction, or nothing."""
+        """Write steps, attempts, calls and the final status in one transaction, or nothing."""
         if status not in _FINISHED:
             raise ValueError("a finished run must be succeeded, failed or incomplete")
         conn = self._conn
@@ -298,6 +324,32 @@ class TraceStore:
                             basis,
                         ),
                     )
+            step_ids = {step.step_id for step in steps}
+            for call in calls:
+                if (
+                    call.step_id not in step_ids
+                ):  # cannot happen from the orchestrator; never lose the run
+                    continue
+                conn.execute(
+                    "INSERT INTO model_calls (run_id, agent_task_id, call_no, step_id, entry_id,"
+                    " provider, model, role, task_type, latency_ms, prompt_tokens,"
+                    " completion_tokens, result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        run_id,
+                        call.agent_task_id,
+                        call.call_no,
+                        call.step_id,
+                        call.entry_id,
+                        call.provider,
+                        call.model,
+                        call.role,
+                        call.task_type,
+                        call.latency_ms,
+                        call.prompt_tokens,
+                        call.completion_tokens,
+                        call.result.value,
+                    ),
+                )
             conn.execute("COMMIT")
         except sqlite3.Error:
             _rollback(conn)
@@ -327,6 +379,56 @@ class TraceStore:
         except sqlite3.Error:
             raise TraceStoreError("cannot read the trace database (sqlite error)") from None
         return _build_run(row, steps, attempts, context)
+
+    def call_rows(self) -> CallListing:
+        """Every recorded model call with the status of its step and attempt (ADR-0038).
+
+        A malformed row, or one that contradicts its run, is reported by run id, not dropped.
+        """
+        try:
+            rows = self._conn.execute(
+                "SELECT c.*, r.task_id AS task_id, s.status AS step_status,"
+                " a.result_status AS attempt_status"
+                " FROM model_calls c"
+                " JOIN runs r ON r.run_id = c.run_id"
+                " JOIN steps s ON s.run_id = c.run_id AND s.step_id = c.step_id"
+                " LEFT JOIN attempts a ON a.run_id = c.run_id AND a.step_id = c.step_id"
+                " AND a.agent_task_id = c.agent_task_id"
+                " ORDER BY c.run_id, c.agent_task_id, c.call_no"
+            ).fetchall()
+            runs_total = int(self._conn.execute("SELECT count(*) FROM runs").fetchone()[0])
+        except sqlite3.Error:
+            raise TraceStoreError("cannot read the trace database (sqlite error)") from None
+        parsed: list[CallRow] = []
+        malformed: set[str] = set()
+        for row in rows:
+            run_id = str(row["run_id"])
+            try:
+                record = CallRecord.model_validate(
+                    {name: row[name] for name in CallRecord.model_fields}
+                )
+                if not record.agent_task_id.startswith(f"{row['task_id']}.{record.step_id}."):
+                    raise ValueError("the call does not belong to its step")
+                attempt = row["attempt_status"]
+                if attempt not in (None, "success", "failure"):
+                    raise ValueError("the attempt status is unknown")
+                parsed.append(
+                    CallRow(
+                        run_id=run_id,
+                        call=record,
+                        step_status=StepStatus(row["step_status"]),
+                        attempt_status=attempt,
+                    )
+                )
+            except ValueError:  # pydantic's ValidationError is a ValueError
+                malformed.add(run_id)
+        with_calls = len({row.run_id for row in parsed} | malformed)
+        return CallListing(
+            rows=tuple(parsed),
+            malformed_runs=tuple(sorted(malformed)),
+            runs_total=runs_total,
+            runs_with_calls=with_calls,
+        )
 
     def iter_runs(self) -> Iterator[tuple[str, RunTrace | None]]:
         """Every run once, newest first, as (run id, trace). An unreadable run gives (id, None).
