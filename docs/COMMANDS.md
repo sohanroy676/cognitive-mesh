@@ -39,10 +39,14 @@ uv run cognitive-mesh experience outcome CLAIM_ID --source check|person --result
 uv run cognitive-mesh experience promote CLAIM_ID --by NAME --root DIR --db FILE --graph FILE --outcomes FILE [--reviews FILE] [--json]   # exit 17 if refused; the refusal is recorded
 uv run cognitive-mesh recall "QUERY" --db FILE --index DIR --graph FILE [--reviews FILE] [--root DIR] [--k N] [--min-similarity X] [--json]   # needs no provider
 uv run cognitive-mesh task "REQUEST" --plan PLAN.json --root DIR --db FILE --index DIR --graph FILE [--reviews FILE] [--k N] [--min-similarity X] [--json]   # recalled context + run; no provider unless the plan has a model step
+uv run cognitive-mesh workspace add PATH|https://github.com/OWNER/REPO --workspace FILE [--name NAME] [--cache DIR]   # v1.6.0, ADR-0036: public GitHub only; pins the commit it cloned
+uv run cognitive-mesh workspace list|refresh|graph --workspace FILE [--json] [--format mermaid] [--cache DIR]   # read commands never create the file
+uv run cognitive-mesh workspace remove NAME --workspace FILE   # hides the project and its edges, keeps its rows
+uv run cognitive-mesh workspace link SOURCE TARGET --kind K --note TEXT --by NAME --workspace FILE   # a declared edge, never detected evidence
 uv run cognitive-mesh ui [--db FILE] [--graph FILE] [--index DIR] [--reviews FILE] [--outcomes FILE] [--root DIR] [--port N] [--no-browser]   # local read-only web UI on 127.0.0.1; prints a URL with this session's token (ADR-0031)
 ```
 
 Exit codes: 0 ok, 2 configuration or usage error, 3 unusable ingestion root, 4 unknown graph node,
-5 output file could not be written, 6 invalid or unreadable plan, 7 task failed or incomplete, 8 trace store error or malformed trace, 9 unknown trace run id, 11 memory index missing, unusable or built with another model, 12 experience graph file missing or unusable, 13 unknown experience graph node, 14 graph sources not confirmed (`experience check`), 15 reviews file missing or unusable, or a review that was refused, 14 `experience check` found trace sources that no longer match, 18 `ui` could not listen on its port.
+5 output file could not be written, 6 invalid or unreadable plan, 7 task failed or incomplete, 8 trace store error or malformed trace, 9 unknown trace run id, 11 memory index missing, unusable or built with another model, 12 experience graph file missing or unusable, 13 unknown experience graph node, 14 graph sources not confirmed (`experience check`), 15 reviews file missing or unusable, or a review that was refused, 14 `experience check` found trace sources that no longer match, 18 `ui` could not listen on its port, 19 `workspace` file, project or fetch problem.
 Configuration comes from the environment or an ignored `.env` (copy `.env.example`); never commit
 secrets. `uv build --out-dir DIR` builds an sdist and wheel (wheel installed and run in a fresh venv on Windows; not published, not run in CI). The package version is derived from git tags (hatch-vcs): a build at tag `vX.Y.Z` is `X.Y.Z`, later commits are `X.Y.(Z+1).devN`, and a checkout without tags is `0.1.devN`.

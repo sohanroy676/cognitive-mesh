@@ -47,6 +47,7 @@ from cognitive_mesh.traces import (
     utc_now,
 )
 from cognitive_mesh.validity import current_environment, utc_today
+from cognitive_mesh.workspace import cli as workspace_cli
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -79,6 +80,7 @@ EXIT_REVIEW_STORE_ERROR = 15
 EXIT_OUTCOME_STORE_ERROR = 16
 EXIT_PROMOTION_REFUSED = 17
 EXIT_UI_ERROR = 18
+EXIT_WORKSPACE_ERROR = workspace_cli.EXIT_WORKSPACE_ERROR  # 19 (ADR-0036)
 MAX_PLAN_BYTES = 256 * 1024
 DEFAULT_MIN_SIMILARITY = 0.2  # from one live run on 3 documents (ADR-0014); a rough starting point
 
@@ -227,6 +229,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--port", type=_port, default=8765, help="port on 127.0.0.1 (0: pick a free one)"
     )
     ui.add_argument("--no-browser", action="store_true", help="print the URL, do not open it")
+    workspace_cli.add_parser(sub)
     experience = sub.add_parser("experience", help="build and query the experience graph")
     exp_sub = experience.add_subparsers(dest="experience_command", required=True)
     exp_build = exp_sub.add_parser("build", help="build the graph file from the trace database")
@@ -1555,6 +1558,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_recall(args)
     if args.command == "task":
         return _run_task(args)
+    if args.command == "workspace":
+        return workspace_cli.run(args)
     if args.command == "ui":
         return _run_ui(args)
     if args.command == "agents":

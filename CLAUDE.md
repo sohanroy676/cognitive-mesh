@@ -15,7 +15,7 @@ Tooling (uv, ruff, mypy, pytest), config loading, and a minimal CLI exist; no pr
 @memory-bank/architecture.md
 @memory-bank/activeContext.md
 
-Read on demand: `memory-bank/progress.md`, `memory-bank/systemPatterns.md` (fill in as patterns emerge), `ROADMAP.md` (version plan), `docs/DETAILED_ROADMAP.md` (per-version implement/test/expected/fix-if criteria), `docs/adr/` (ADRs for significant, hard-to-reverse decisions; copy `adr-template.md`).
+Read on demand: `memory-bank/progress.md`, `memory-bank/systemPatterns.md` (fill in as patterns emerge), `ROADMAP.md` (version plan), `docs/extended_roadmap.md` (v1.6.0 to v2.1.0 plan, being worked on branch `feature/extended-roadmap`), `session_prompt.md` (start-of-session prompt and rules; keep it updated), `docs/DETAILED_ROADMAP.md` (per-version implement/test/expected/fix-if criteria), `docs/adr/` (ADRs for significant, hard-to-reverse decisions; copy `adr-template.md`).
 
 ## Rules and commands
 

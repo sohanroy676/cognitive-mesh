@@ -19,7 +19,7 @@ code version, never stored as a verdict.
 
 ## Status
 
-Early development. Everything described below runs and is tested. Releases up to v1.5.0 (the local
+Early development. Everything described below runs and is tested. Releases up to v1.6.0 (workspace of related projects and manifest-evidenced cross-project package edges, `cognitive-mesh workspace`; v1.5.0 is the local
 read-only web UI) are on `main`. There is no model-quality
 claim here: what a model does with recalled context is unverified. The detailed record of what each version added
 and what it does not do is in [docs/STATUS.md](docs/STATUS.md).

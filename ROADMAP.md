@@ -149,6 +149,8 @@ Implemented 2026-10-17 on `feature/v0.6.2-groq-client` (ADR-0013). Unit, CLI and
 - Status 2026-10-25: ADR-0031 to ADR-0035 implemented and merged to `main` in the v1.5.0 release branch (suite 1529 passed on Windows; a Linux fresh clone 1508 passed, 26 skipped). CI run ids are in `memory-bank/progress.md`.
 
 ### v1.6.0 — Model Performance Tracking and Routing
+
+> Superseded by `docs/extended_roadmap.md`: this work is folded into v1.8.0 and v1.10.0 there (draft, nothing implemented).
 - Track task outcomes, token cost, latency, and sample counts by model and task type.
 - Evaluate model selection and routing strategies.
 - Test routing behavior when provider options are unavailable or insufficiently sampled.

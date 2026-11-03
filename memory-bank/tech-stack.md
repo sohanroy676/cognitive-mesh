@@ -84,6 +84,12 @@ Run 2026-10-17 in a scratch directory (nothing added to the repo): `npm install 
 
 ### Verified commands
 ```
+# v1.6.0 workspace (ADR-0036), run 2026-11-03 on branch `feature/extended-roadmap`, scratch directory via uv run --project (each exit 0 unless stated)
+uv run cognitive-mesh workspace add tests/fixtures/workspace/lib_core --workspace ws.sqlite3   # also web_app, shop_ui, ui_kit, orphan_app
+uv run cognitive-mesh workspace graph --workspace ws.sqlite3 [--json|--format mermaid]   # 2 detected package edges, manifest lines on both sides; ghost-pkg and left-pad stay external
+uv run cognitive-mesh workspace add https://github.com/octocat/Hello-World --workspace ws.sqlite3   # real public clone, pinned to a full commit
+uv run cognitive-mesh workspace add https://github.com/octocat/this-repo-does-not-exist-xyz --workspace ws.sqlite3 --name nope   # exit 19, "does not exist or is private"
+RUN_LIVE_GITHUB=1 uv run pytest -m live tests/test_live_github.py   # 1 passed; skipped by default and in CI
 uv sync --locked
 uv run pytest
 uv run ruff check .
