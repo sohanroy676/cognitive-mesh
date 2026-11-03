@@ -161,3 +161,11 @@ def test_a_key_variable_shared_across_hosts_is_reported() -> None:
     assert shared == {
         "GEMINI_API_KEY": ("generativelanguage.googleapis.com", "openrouter.example.test")
     }
+
+
+def test_the_shipped_example_catalog_is_valid_and_holds_no_keys() -> None:
+    path = Path(__file__).parent.parent / "docs" / "model-catalog.example.toml"
+    catalog = load_catalog(path)
+    assert {"local-ollama", "gemini-flash", "openrouter-free"} <= set(catalog.models)
+    assert catalog.models["local-ollama"].remote is False
+    assert catalog.models["gemini-flash"].data_use == "may_train"

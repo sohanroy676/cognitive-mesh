@@ -125,7 +125,7 @@ Design:
 - Not done: streaming, `Retry-After`, plan-drafting records, pruning, verifying the request shape for any
   provider other than Groq and Ollama before a live test is run.
 
-## Tests (to be written with the code)
+## Tests
 Fake transport per wire format and every failure row; parity of OpenAI-compatible, Groq and Ollama on the same
 failures; 429 and quota-shaped 429 mapped to `rate_limited` with bounded retries; timeout; 404 for a removed
 model; missing or garbled usage becomes unknown; canary key never in errors, traces, catalog output or CLI
@@ -133,3 +133,39 @@ output; refused catalog cases (http remote URL, key-looking value, unknown field
 missing opt-ins, missing key) all exit 2 or 20 as specified; records of two task types never merged; call records
 persist across processes; migration 4 to 5 on an old database; opt-in live tests per provider (`live` marker plus
 `RUN_LIVE_<PROVIDER>=1` and a key variable), skipped by default and in CI.
+
+## Amendments made during implementation (2026-11-04)
+- **Roles are agent ids.** `Agent.role` is display text ("Code explainer"), so catalog `roles` and the `role`
+  of a call record use the agent id (`code_explainer`, `dependency_analyst`) plus `planner` for `plan`. A test pins
+  the list to the default registry. `build_model_client(settings, roles)` requires the entry to list every agent
+  id that has a model step in the plan.
+- **Ollama entries are local only.** An `ollama` entry may not name a key variable and a remote host needs one, so
+  an ollama entry must be loopback.
+- **Host and wording checks.** The catalog host may contain only letters, digits and `. _ : -`, so it can be
+  printed in the warning; every string value is scanned with `redact_secrets` and the file is refused if one
+  matches (no value is echoed).
+- **Call attribution.** `Orchestrator(on_attempt=...)` is called with `(agent_task_id, step_id, agent_id,
+  capability)`. A record is kept only for a call made inside an attempt; a record that fails validation is counted
+  in `CallLog.dropped` and never changes the call. A reply that is not a `ModelResponse` is recorded as
+  `client_error`. A failed call cannot carry token counts.
+- **Reading.** `TraceStore.call_rows()` returns every call joined to its step and attempt status plus the run
+  totals; a malformed row, or one whose `agent_task_id` does not belong to its step, puts the run id in
+  `malformed_runs` (stats print a warning, exit 0). An attempt with no matching row is shown as "no matching
+  attempt". `open_existing` still requires the current schema, so a version 4 database is upgraded by running
+  with `--trace-db` or `TraceStore.create`.
+- **Output.** A group with no ok call shows "none reported" for tokens instead of 0.
+- **Exit codes.** `models list` without a usable catalog exits 20; a bad catalog for `run`, `task` and `plan`
+  exits 2. `models stats` with a missing database exits 8.
+- **Dependency.** `python-dotenv>=1.2.4` is declared (it was already locked through `pydantic-settings`); only
+  `dotenv_values` is used, to read a key variable from the ignored `.env` when it is not in the process
+  environment.
+
+## Outcome
+Implemented on `feature/extended-roadmap-v1.7` (v1.8.0). Suite 1704 passed, 7 skipped; ruff, format and mypy
+clean. Run by hand 2026-11-04 in a scratch directory against a scratch stub server on 127.0.0.1 (not in the
+repo): `models list`, `run ... --model stub` with `--trace-db`, `models stats`, a remote entry refused first for
+`COGMESH_ALLOW_REMOTE_CONTENT` and then for `COGMESH_ALLOW_TRAINING_USE`, the same entry with both opt-ins and a
+placeholder key (warning printed; the host does not resolve, so the call failed as `provider_unavailable` and was
+recorded), `models stats --task-type`, a missing database (exit 8) and a missing catalog (exit 20). Not run: any
+real remote service (Gemini, OpenRouter, Mistral), a real Ollama through a catalog entry, `task` and `plan`
+with `--model` outside the tests, and `tests/test_live_openai_compat.py`.

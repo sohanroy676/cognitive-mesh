@@ -100,15 +100,27 @@ that needs a model.
 
 | Variable | Meaning |
 |---|---|
-| `COGMESH_PROVIDER` | `ollama` (local; default model `llama3.2`) or `groq` |
+| `COGMESH_PROVIDER` | `ollama` (local; default model `llama3.2`), `groq`, or `catalog` (a model from your catalog file) |
 | `COGMESH_OLLAMA_BASE_URL`, `COGMESH_OLLAMA_MODEL` | where Ollama runs and which model it uses |
 | `GROQ_API_KEY`, `COGMESH_GROQ_MODEL` | Groq credentials and model |
 | `COGMESH_ALLOW_REMOTE_CONTENT` | must be `true` for Groq: file contents leave your machine |
+| `COGMESH_MODEL_CATALOG`, `COGMESH_MODEL` | with `catalog`: the catalog file and the entry id to use (also `--catalog FILE` and `--model ID` on `run`, `task` and `plan`) |
+| `COGMESH_ALLOW_TRAINING_USE` | must be `true` for catalog entries that declare `data_use` `may_train` or `unknown` |
 | `COGMESH_MODEL_TIMEOUT_S`, `COGMESH_LOG_LEVEL` | timeout (seconds) and log level |
 
 ```bash
 uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app
 ```
+
+A catalog (v1.8.0, [ADR-0038](docs/adr/0038-model-catalog-and-call-records.md); example in
+[docs/model-catalog.example.toml](docs/model-catalog.example.toml)) lists models behind an OpenAI-compatible
+endpoint or Ollama. It never holds a key, only the name of the variable that does. A remote entry needs
+`COGMESH_ALLOW_REMOTE_CONTENT=true`, and a free tier whose `data_use` you declared `may_train` or `unknown`
+also needs `COGMESH_ALLOW_TRAINING_USE=true`; `data_use` is your statement, not checked. Each model call is
+recorded with the run (latency, tokens when the provider reports them, result kind; never prompt or reply
+text): `cognitive-mesh models stats --db FILE` shows counts per model, role and task type and does not rank
+models. Request shapes for Gemini, OpenRouter and Mistral are from their documentation and have not been run
+against the real services.
 
 Keys come only from the environment or an ignored `.env`; never commit one. Every command, option and exit code is
 listed in [docs/COMMANDS.md](docs/COMMANDS.md).

@@ -737,7 +737,7 @@ def test_cli_show_escapes_hostile_stored_text(
 def test_cli_prints_the_run_and_warns_when_the_final_write_fails(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def broken(self: TraceRecorder, run_id: str, run: TaskRun) -> TraceStatus:
+    def broken(self: TraceRecorder, run_id: str, run: TaskRun, calls: object = ()) -> TraceStatus:
         raise TraceStoreError("cannot finish the run (sqlite error); nothing was written")
 
     monkeypatch.setattr(TraceRecorder, "finish", broken)

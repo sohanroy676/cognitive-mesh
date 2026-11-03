@@ -84,6 +84,12 @@ Run 2026-10-17 in a scratch directory (nothing added to the repo): `npm install 
 
 ### Verified commands
 ```
+# v1.8.0 model catalog (ADR-0038), run 2026-11-04 on branch `feature/extended-roadmap-v1.7`, scratch directory via uv run --project, scratch stub OpenAI-compatible server on 127.0.0.1:18765 (script in the session scratchpad, not in the repo; no real remote service was called)
+uv run cognitive-mesh models list --catalog catalog.toml   # exit 0; remote and local entries, key variable and whether it is set
+uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app --model stub --catalog catalog.toml --trace-db t.sqlite3   # exit 0, explain_file succeeded
+uv run cognitive-mesh models stats --db t.sqlite3 [--task-type explain_file]   # exit 0: 1 call, ok, tokens 321/17 from the stub's usage, latency, attempts
+uv run cognitive-mesh run ... --model cloud --catalog catalog.toml   # remote entry: exit 2 naming COGMESH_ALLOW_REMOTE_CONTENT; with it, exit 2 naming COGMESH_ALLOW_TRAINING_USE; with both and a placeholder key: warning on stderr, exit 7 provider_unavailable (host does not resolve), calls recorded
+uv run cognitive-mesh models stats --db missing.sqlite3   # exit 8; models list --catalog nope.toml: exit 20
 # v1.6.0 workspace (ADR-0036), run 2026-11-03 on branch `feature/extended-roadmap`, scratch directory via uv run --project (each exit 0 unless stated)
 uv run cognitive-mesh workspace add tests/fixtures/workspace/lib_core --workspace ws.sqlite3   # also web_app, shop_ui, ui_kit, orphan_app
 uv run cognitive-mesh workspace graph --workspace ws.sqlite3 [--json|--format mermaid]   # 2 detected package edges, manifest lines on both sides; ghost-pkg and left-pad stay external
@@ -272,7 +278,8 @@ Do not document unverified commands as working commands.
 ## Configuration (ADR-0004)
 Settings load via `cognitive_mesh.config.load_settings()` from the environment, then an
 ignored `.env` in the working directory. Copy `.env.example` to `.env` to start.
-- `COGMESH_PROVIDER` (required): `groq` or `ollama`
+- `COGMESH_PROVIDER` (required): `groq`, `ollama` or `catalog` (ADR-0038)
+- With `catalog`: `COGMESH_MODEL` (entry id) and `COGMESH_MODEL_CATALOG` (TOML file, no keys; also `--model`/`--catalog` on `run`, `task`, `plan`); `COGMESH_ALLOW_TRAINING_USE` (default `false`) for entries declared `may_train` or `unknown`; remote entries also need `COGMESH_ALLOW_REMOTE_CONTENT=true`. An entry names its key variable (`*_API_KEY`), read from the environment or the ignored `.env` (python-dotenv, declared direct dependency since v1.8.0, already locked)
 - `GROQ_API_KEY`: required when provider is `groq`; held as `SecretStr`; must be printable ASCII without spaces or line breaks
 - `COGMESH_ALLOW_REMOTE_CONTENT` (default `false`): must be `true` for `COGMESH_PROVIDER=groq` (file contents go to Groq's servers); checked in `providers/factory.py`, otherwise exit 2 naming the variable; Ollama is unaffected. The two older `run` commands above that make a real Groq call from the repo (the `.env` one and the `no/such-model` one) now also need it; they were run before it existed. The live test builds `GroqClient` directly and is unaffected.
 - `COGMESH_GROQ_MODEL` (default `qwen/qwen3.8-27b`), `COGMESH_GROQ_REASONING_EFFORT` (`none` default; `default|low|medium|high`, or empty to omit)

@@ -1,0 +1,41 @@
+# Example model catalog (ADR-0038). Copy it, edit it, and point COGMESH_MODEL_CATALOG (or --catalog)
+# at your copy. It holds no keys: `api_key_env` only names the environment variable (or the ignored
+# .env entry) that does. Values here are examples; check each provider's current endpoint and terms.
+#
+# data_use is YOUR statement about whether the provider may keep or train on prompts. The program
+# does not verify it. "may_train" and "unknown" also need COGMESH_ALLOW_TRAINING_USE=true, and every
+# remote entry needs COGMESH_ALLOW_REMOTE_CONTENT=true. Roles are agent ids plus "planner".
+#
+# Use an entry:  COGMESH_PROVIDER=catalog COGMESH_MODEL=local-ollama   (or --model local-ollama)
+
+[models.local-ollama]
+wire = "ollama"
+base_url = "http://localhost:11434"
+model = "llama3.2"
+context_tokens = 131072
+tier = "free"
+data_use = "no_training"
+roles = ["code_explainer", "planner"]
+
+# Gemini through its OpenAI-compatible endpoint (request shape unverified until a live run).
+[models.gemini-flash]
+wire = "openai_compatible"
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+model = "gemini-2.5-flash"
+api_key_env = "GEMINI_API_KEY"
+context_tokens = 1000000
+tier = "free"
+data_use = "may_train"
+roles = ["code_explainer", "planner"]
+
+# OpenRouter free model (request shape unverified until a live run).
+[models.openrouter-free]
+wire = "openai_compatible"
+base_url = "https://openrouter.ai/api/v1"
+model = "meta-llama/llama-3.3-70b-instruct:free"
+api_key_env = "OPENROUTER_API_KEY"
+context_tokens = 65536
+tier = "free"
+data_use = "unknown"
+roles = ["code_explainer"]
+json_mode = false

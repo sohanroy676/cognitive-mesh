@@ -64,7 +64,7 @@ def _key_state(variable: str | None) -> str:
     try:
         read_key(variable)
     except ConfigError:
-        return "not set (or not valid)"
+        return "not set or not valid"
     return "set"
 
 
@@ -166,6 +166,12 @@ def _print_group(g: GroupStats) -> None:
             f"p90 {g.p90_latency_ms} ms (n={g.ok_latency_n})"
         )
     for label, tokens in (("prompt", g.prompt_tokens), ("completion", g.completion_tokens)):
+        if tokens.known_calls == 0:
+            print(
+                f"    {label} tokens: none reported "
+                f"(ok calls without a count: {tokens.unknown_calls})"
+            )
+            continue
         print(
             f"    {label} tokens: {tokens.total} over {tokens.known_calls} ok call(s) that "
             f"reported them; unknown for {tokens.unknown_calls}"

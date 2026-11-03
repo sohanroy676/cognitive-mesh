@@ -185,7 +185,7 @@ def test_stats_counts_failures_and_unknown_tokens_separately(
     assert main(["models", "stats", "--db", str(db)]) == EXIT_OK
     out = capsys.readouterr().out
     assert "calls: 3 (ok 1, rate_limited 2)" in out  # two attempts for the 429 run
-    assert "prompt tokens: 0 over 0 ok call(s) that reported them; unknown for 1" in out
+    assert "prompt tokens: none reported (ok calls without a count: 1)" in out
 
 
 def test_stats_with_a_missing_database_exits_8_and_creates_nothing(
