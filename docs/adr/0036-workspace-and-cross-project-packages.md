@@ -1,7 +1,7 @@
 # ADR-0036: Workspace and cross-project package dependencies (v1.6.0)
 
 ## Status
-Proposed. Nothing here is implemented. No code is written until the user accepts it. Amends ADR-0006 (name matching) for cross-project edges only.
+Accepted by the user 2026-11-03. Implementation in progress on `feature/extended-roadmap`. Amends ADR-0006 (name matching) for cross-project edges only.
 
 ## Date
 2026-11-03
@@ -49,3 +49,10 @@ The workspace graph reuses `graph/view.py` and the text, JSON, Mermaid and HTML 
 - Cross-project edges rest on manifest evidence on both sides, so a project that publishes nothing or uses an unusual manifest produces no edge; the miss is visible as an external dependency.
 - Version-aware matching, lockfiles across projects, monorepo sub-packages beyond what ingestion finds, private repositories and API/schema/config edges (v1.7.0) are out of scope.
 - Risks accepted: cloned third-party content is untrusted data and is read, never run; a clone cache can grow without a limit in v1.6.0 (the cache path is listed by `workspace list`; cleanup is left to the user).
+
+## Amendment during implementation (2026-11-03)
+- The HTML renderer from section 5 is not implemented: text, JSON and Mermaid exist. Reason: the existing HTML page is built from a single-application `DependencyGraph` whose evidence needs a file hash per node, which a project-level graph does not have. Decide separately whether to add a workspace HTML view.
+- A workspace is the file itself; it has no separate name.
+- A GitHub project's application id is declared as `OWNER/REPO` (how = declared), because the cache directory name would be a poor derived id.
+- Added failure kind `timeout` (300 s per git call).
+- `set_commit` exists in the store but no command calls it yet; moving a pin is not exposed.

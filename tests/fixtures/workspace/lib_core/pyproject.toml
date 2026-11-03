@@ -1,0 +1,4 @@
+[project]
+name = "lib-core"
+version = "1.0"
+dependencies = []

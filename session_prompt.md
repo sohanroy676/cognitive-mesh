@@ -8,8 +8,9 @@ Continue Cognitive Mesh on branch `feature/extended-roadmap`. Read `session_prom
 ## Where we are (2026-11-03, session 6)
 - Work: `docs/extended_roadmap.md` (v1.6.0 to v2.1.0, draft, nothing implemented). All changes go on `feature/extended-roadmap` (off main `3a4e4c8`, tag v1.5.0). Main is not touched. Merge to main only after the user approves the finished roadmap.
 - Decided with the user: one long-lived branch; GitHub repos fetched with the `git` CLI as a subprocess; v1.6.0 supports public repos only (token vs `gh` login is decided in the v1.12.0 ADR).
-- Next: user reviews ADR-0036 (`docs/adr/0036-workspace-and-cross-project-packages.md`); after acceptance implement v1.6.0 (plan: new `workspace/` package, tests, CLI, docs). Each later version gets its own ADR first.
-- ADR status: ADR-0036 is drafted (Proposed) on this branch and waits for the user's acceptance; no v1.6.0 code yet.
+- v1.6.0 is IMPLEMENTED on this branch (workspace package, CLI, tests; suite 1575 passed). Not done: HTML view of the workspace graph (ADR-0036 amendment); ask the user whether to add it or move on.
+- Next: draft ADR-0037 (v1.7.0) after the user decides on the HTML view. Old note: user reviews ADR-0036 (`docs/adr/0036-workspace-and-cross-project-packages.md`); after acceptance implement v1.6.0 (plan: new `workspace/` package, tests, CLI, docs). Each later version gets its own ADR first.
+- ADR status: ADR-0036 accepted. Next ADR: 0037 for v1.7.0 (API contracts, schemas, config), Proposed first, no code until accepted.
 
 ## Start of session
 1. `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3` (expect v1.5.0), `gh auth status` (must be sohanroy676), `gh run list --limit 6`.

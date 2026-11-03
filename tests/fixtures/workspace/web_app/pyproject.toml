@@ -1,0 +1,4 @@
+[project]
+name = "web-app"
+version = "1.0"
+dependencies = ["Lib_Core>=1.0", "requests>=2"]

@@ -1,0 +1,4 @@
+[project]
+name = "orphan"
+version = "1.0"
+dependencies = ["ghost-pkg"]
