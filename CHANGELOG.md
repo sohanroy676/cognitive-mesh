@@ -7,6 +7,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - Record v1.7.0 CI runs and session workflow notes
+- **adr:** Propose ADR-0038 model catalog and call records
 
 ## [1.7.0] - 2026-11-03
 
