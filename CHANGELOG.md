@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.6.0] - 2026-11-03
 
 ### Added
 - **workspace:** Add workspace and cross-project package edges
@@ -13,6 +13,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **roadmap:** Add extended roadmap v1.6.0-v2.1.0
 - Add session_prompt.md and roadmap pointers
 - **adr:** Propose ADR-0036 workspace and package edges
+- Hand off after v1.6.0
 
 ## [1.5.0] - 2026-10-24
 
