@@ -3,7 +3,7 @@
 <!-- Update this at the end of every session. This is the first thing to read when resuming. -->
 
 ## Current focus
-Session 6 (2026-11-03): working the extended roadmap (`docs/extended_roadmap.md`) on `feature/extended-roadmap`; main is untouched. v1.6.0 is implemented there (ADR-0036 accepted); next is ADR-0037 for v1.7.0. See `session_prompt.md`.
+Session 6 end (2026-11-03): v1.6.0 (ADR-0036, workspace) is on main, pushed and tagged `v1.6.0` (CI 41674254292, tag run 41674929331 passed). Next: ADR-0037 for v1.7.0 on a new branch off main; see `session_prompt.md`.
 
 Session 5 (final): v1.5.0 (local read-only web UI, ADR-0031 to ADR-0035) is merged to main, pushed (`1326aae`, CI run 40130681538 passed) and tagged `v1.5.0` (tag run 40130991203 passed). The stacked review branches are kept locally and are all contained in main. Nothing is in flight.
 
