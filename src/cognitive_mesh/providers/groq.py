@@ -9,45 +9,16 @@ from typing import Any
 
 from pydantic import SecretStr
 
-from cognitive_mesh.providers.base import ModelRequest, ModelResponse, ProviderError
-from cognitive_mesh.providers.errors import bad_reply, status_error, transport_error
+from cognitive_mesh.providers.base import ModelRequest, ModelResponse
+from cognitive_mesh.providers.errors import status_error, transport_error
 from cognitive_mesh.providers.http import HttpTransport, StdlibTransport, TransportError
+from cognitive_mesh.providers.openai_wire import parse_chat_reply
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MAX_COMPLETION_TOKENS = 16_384  # the documented limit of the default Qwen model
 _BODY_SLACK = 64 * 1024
 _ESCAPE_FACTOR = 6  # worst case: every output char is a \uXXXX escape
 _REASONING_MARKERS = ("<think>", "</think>")
-
-
-def _bad(reason: str) -> ProviderError:
-    return bad_reply("groq", reason)
-
-
-def _parse_reply(body: bytes) -> str:
-    try:
-        data: Any = json.loads(body)
-    except (ValueError, RecursionError):  # UnicodeDecodeError is a ValueError
-        raise _bad("not JSON") from None
-    if not isinstance(data, dict):
-        raise _bad("not an object")
-    choices = data.get("choices")
-    choice = choices[0] if isinstance(choices, list) and choices else None
-    if not isinstance(choice, dict):
-        raise _bad("no choice")
-    message = choice.get("message")
-    content = message.get("content") if isinstance(message, dict) else None
-    if not isinstance(content, str):
-        raise _bad("no message content")
-    finish = choice.get("finish_reason")
-    if finish == "length":
-        raise _bad("truncated")
-    if finish != "stop":
-        raise _bad("not finished")
-    # Reasoning text is never stripped and trusted; a reply that still carries it is rejected.
-    if any(marker in content for marker in _REASONING_MARKERS):
-        raise _bad("reasoning text in reply")
-    return content
 
 
 class GroqClient:
@@ -98,6 +69,11 @@ class GroqClient:
         error = status_error(self.provider, reply.status)
         if error is not None:
             raise error
+        text, prompt_tokens, completion_tokens = parse_chat_reply(self.provider, reply.body)
         return ModelResponse(
-            provider=self.provider, model=self.model, text=_parse_reply(reply.body)
+            provider=self.provider,
+            model=self.model,
+            text=text,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
         )

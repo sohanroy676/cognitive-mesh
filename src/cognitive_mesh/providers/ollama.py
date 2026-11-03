@@ -9,6 +9,7 @@ from typing import Any
 from cognitive_mesh.providers.base import ModelRequest, ModelResponse, ProviderError
 from cognitive_mesh.providers.errors import bad_reply, status_error, transport_error
 from cognitive_mesh.providers.http import HttpTransport, StdlibTransport, TransportError
+from cognitive_mesh.providers.openai_wire import token_count
 
 _HEADERS = {"Content-Type": "application/json", "Accept": "application/json"}
 _BODY_SLACK = 64 * 1024
@@ -19,7 +20,7 @@ def _bad(reason: str) -> ProviderError:
     return bad_reply("ollama", reason)
 
 
-def _parse_reply(body: bytes) -> str:
+def _parse_reply(body: bytes) -> tuple[str, int | None, int | None]:
     try:
         data: Any = json.loads(body)
     except (ValueError, RecursionError):  # UnicodeDecodeError is a ValueError
@@ -34,7 +35,11 @@ def _parse_reply(body: bytes) -> str:
         raise _bad("not finished")
     if data.get("done_reason") == "length":
         raise _bad("truncated")
-    return content
+    return (
+        content,
+        token_count(data.get("prompt_eval_count")),
+        token_count(data.get("eval_count")),
+    )
 
 
 class OllamaClient:
@@ -69,6 +74,11 @@ class OllamaClient:
         error = status_error(self.provider, reply.status)
         if error is not None:
             raise error
+        text, prompt_tokens, completion_tokens = _parse_reply(reply.body)
         return ModelResponse(
-            provider=self.provider, model=self.model, text=_parse_reply(reply.body)
+            provider=self.provider,
+            model=self.model,
+            text=text,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
         )

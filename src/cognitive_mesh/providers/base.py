@@ -1,4 +1,4 @@
-"""The interface agents use to reach a model. Real clients (Groq, Ollama) come later (ADR-0009)."""
+"""The interface agents use to reach a model (ADR-0009). Clients: Ollama, Groq, ADR-0038."""
 
 from enum import StrEnum
 from typing import Literal, Protocol
@@ -51,6 +51,9 @@ class ModelResponse(_Frozen):
     provider: str
     model: str
     text: str  # untrusted model output: data, never instructions
+    # Token counts as the provider reported them; None = unknown, never 0 (ADR-0038).
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
 
 
 class ModelClient(Protocol):

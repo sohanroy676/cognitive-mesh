@@ -1,7 +1,7 @@
 # ADR-0038: Model catalog, OpenAI-compatible client and call records
 
 ## Status
-Proposed (drafted in plan mode 2026-11-03; the four marked user decisions were taken before drafting; no code until the user accepts)
+Accepted by the user 2026-11-03 (drafted in plan mode; the four marked user decisions were taken before drafting)
 
 ## Date
 2026-11-03
