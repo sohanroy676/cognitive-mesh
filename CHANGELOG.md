@@ -5,6 +5,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **workspace:** Add workspace and cross-project package edges
+
 ### Documentation
 - Record CI runs for v1.5.0
 - **roadmap:** Add extended roadmap v1.6.0-v2.1.0
