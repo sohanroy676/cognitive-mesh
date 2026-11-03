@@ -53,7 +53,7 @@ def outcome(
 
 
 # built at run time so no secret-shaped literal sits in the source
-FAKE_TOKEN = "abcdef1234567890" * 2
+SAMPLE_VALUE = "abcdef1234567890" * 2
 
 
 def test_add_then_list_round_trips_every_field(tmp_path: Path) -> None:
@@ -136,10 +136,10 @@ def test_a_secret_in_a_check_command_is_redacted_before_storing(tmp_path: Path) 
             FP1,
             OutcomeSource.CHECK,
             OutcomeResult.FAILED,
-            f"API_TOKEN={FAKE_TOKEN} pytest",
+            f"API_TOKEN={SAMPLE_VALUE} pytest",
             "ci",
         )
-    assert FAKE_TOKEN not in row.detail
+    assert SAMPLE_VALUE not in row.detail
 
 
 def test_read_only_open_never_creates_or_writes(tmp_path: Path) -> None:

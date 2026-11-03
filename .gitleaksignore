@@ -1,0 +1,4 @@
+# Verified false positives (fake test value, a browser storage key name). Exact fingerprints only.
+85a62527328abdb180f93852ea0f5fdb1be33dcb:tests/test_experience_outcomes.py:generic-api-key:135
+a29ac27f26d8351d3e4fe53abbd7edc40dc64b94:tests/test_experience_outcomes.py:generic-api-key:56
+d5d441728ade5aa3d60bcae8308a23340d167876:src/cognitive_mesh/ui/static/app.js:generic-api-key:29
