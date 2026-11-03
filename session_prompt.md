@@ -6,7 +6,7 @@ Update this file at the end of every session and whenever the user asks for a ne
 Continue Cognitive Mesh (extended roadmap, next v1.7.0; branch from main as session_prompt.md says). Read `session_prompt.md` at the repo root first and follow it. Update it at the end of the session or when I ask for a new prompt.
 
 ## Where we are (end of session 6, 2026-11-03)
-- v1.6.0 (workspace and cross-project package edges, ADR-0036) is merged to main, pushed and tagged `v1.6.0` (CI run ids: see `memory-bank/progress.md`). Suite 1575 passed, 6 skipped.
+- v1.6.0 (workspace and cross-project package edges, ADR-0036) is merged to main, pushed and tagged `v1.6.0` (CI runs 41674254292 and, for the tag, 41674929331 passed). Suite 1575 passed, 6 skipped.
 - The extended roadmap `docs/extended_roadmap.md` continues from v1.7.0. Work on a NEW branch `feature/extended-roadmap-v1.7` off main (the old `feature/extended-roadmap` is kept, contained in main). Merge/push/tag only when the user asks.
 - Open from v1.6.0: no HTML view of the workspace graph (ADR-0036 amendment; ask the user), no command moves a github pin (`WorkspaceStore.set_commit` exists), clone cache has no size limit, private repos only checked with a nonexistent repo.
 - Next: draft ADR-0037 for v1.7.0 (API contracts, schemas, config across projects; see the roadmap) as Proposed, no code until the user accepts it. Then implement, tests, docs, changelog last.
