@@ -3,21 +3,22 @@
 Update this file at the end of every session and whenever the user asks for a new-session prompt.
 
 ## Short prompt to paste into a new session
-Continue Cognitive Mesh (extended roadmap, v1.7.0 awaits review, then v1.8.0; branch from main as session_prompt.md says). Read `session_prompt.md` at the repo root first and follow it. Update it at the end of the session or when I ask for a new prompt.
+Continue Cognitive Mesh (extended roadmap, next v1.8.0). Work only on branch `feature/extended-roadmap-v1.7` (do not branch off main); check it out and pull first. Read `session_prompt.md` at the repo root first and follow it. Update it at the end of the session or when I ask for a new prompt.
 
-## Where we are (session 7, 2026-11-03)
-- v1.6.0 is released (tag `v1.6.0`). v1.7.0 (ADR-0037, accepted) is implemented on `feature/extended-roadmap-v1.7` off main: API contract, shared schema and config edges, `workspace deps`. Suite 1604 passed, 6 skipped. NOT merged, pushed or tagged; wait for the user.
-- Open from v1.7.0: no HTML workspace view; Express routers mounted from another file stay `prefix_unknown`; destructured `process.env` and `from os import environ` are not seen; not run on Linux/CI or on real GitHub repositories.
+## Where we are (end of session 7, 2026-11-03)
+- Branch policy (user decision 2026-11-03): ALL extended-roadmap work (v1.7.0 onwards) happens on `feature/extended-roadmap-v1.7` and is pushed to `origin/feature/extended-roadmap-v1.7`. Do not branch off main or merge into main until the user approves completion of the whole extended roadmap. Each version: ADR first (Proposed, wait for acceptance), code, tests, docs, regenerate the changelog with `--tag vX.Y.Z` as the last commit, push the branch, wait for CI, then tag that commit and push the tag (the user pre-approved push and tag on this branch only). Merging to main, deleting branches and force-pushing still need explicit approval.
+- v1.7.0 (ADR-0037, accepted): API contract, shared schema and config edges across workspace projects, `workspace deps`. Suite 1604 passed, 6 skipped. See `memory-bank/progress.md` for the CI run ids and the tag.
+- Open from v1.7.0: no HTML workspace view; Express routers mounted from another file stay `prefix_unknown`; destructured `process.env` and `from os import environ` are not seen; not run on Linux or on real GitHub repositories (CI covers Linux).
 - Open from v1.6.0: no command moves a github pin, clone cache has no size limit, private repos only checked with a nonexistent repo.
-- Next after review/merge: v1.8.0 (any model with an API key, model performance records; see `docs/extended_roadmap.md`): new branch off main, draft ADR-0038 as Proposed, no code until accepted.
+- Next: v1.8.0 (any model with an API key, model performance records; read `docs/extended_roadmap.md` and `docs/DETAILED_ROADMAP.md`): plan mode, draft ADR-0038 as Proposed on this branch, no code until the user accepts. ADR-0013 (`COGMESH_ALLOW_REMOTE_CONTENT`) must stay in force.
 - Decided earlier: GitHub fetch uses the `git` CLI; public repos only until the v1.12.0 ADR; other projects in a workspace are read-only.
 
 ## Start of session
-1. `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3` (expect v1.5.0), `gh auth status` (must be sohanroy676), `gh run list --limit 6`.
+1. `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3` (expect v1.7.0), `gh auth status` (must be sohanroy676), `gh run list --limit 6`.
 2. Read this file, then `docs/extended_roadmap.md` for the current version, and `memory-bank/activeContext.md` / `progress.md` on demand.
 
 ## Rules
-- Never commit to main. Work on a feature branch. Never push, merge, tag or delete branches (local or remote) without approval. Local branches are all kept.
+- Never commit to main. Extended-roadmap work stays on `feature/extended-roadmap-v1.7`. Never push, merge, tag or delete branches (local or remote) without approval. Local branches are all kept.
 - Draft an ADR and get acceptance before any code that needs a design decision.
 - Regenerate `CHANGELOG.md` as the last commit with plain `uv run git-cliff -o CHANGELOG.md` (`--tag vX.Y.Z` only on a `chore/release-vX.Y.Z` branch; compare the section date with `date -u +%F`). Only after the branch contains every commit. After any merge into main, run git-cliff to a temp file and diff against `CHANGELOG.md` (ignoring CR) BEFORE pushing.
 - Never `git checkout` a file to undo an experiment while it has uncommitted work (use cp backups).
