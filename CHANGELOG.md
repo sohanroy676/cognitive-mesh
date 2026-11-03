@@ -3,11 +3,18 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.8.0] - 2026-11-03
+
+### Added
+- **providers:** Add OpenAI-compatible client and token usage
+- **providers:** Add model catalog, catalog settings and factory
+- **traces:** Record model calls in trace schema 5
+- **cli:** Select catalog models and add models list/stats
 
 ### Documentation
 - Record v1.7.0 CI runs and session workflow notes
 - **adr:** Propose ADR-0038 model catalog and call records
+- Document v1.8.0 model catalog and call records
 
 ## [1.7.0] - 2026-11-03
 
