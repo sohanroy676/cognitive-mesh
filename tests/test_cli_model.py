@@ -20,6 +20,7 @@ from cognitive_mesh.cli import (
 )
 from cognitive_mesh.orchestrator import TaskPlan, plan_task
 from cognitive_mesh.providers.http import HttpReply
+from cognitive_mesh.providers.recording import CallLog
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_app"
 DEP_FIXTURE = Path(__file__).parent / "fixtures" / "dep_app"
@@ -179,7 +180,7 @@ def test_the_configured_timeout_reaches_the_code_explainer(
     validated = plan_task(plan, default_registry())
     monkeypatch.setenv("COGMESH_PROVIDER", "ollama")
     monkeypatch.setenv("COGMESH_MODEL_TIMEOUT_S", "77")
-    explainer = _registry_for(validated).get("code_explainer")
+    explainer = _registry_for(validated, {}, CallLog()).get("code_explainer")
     assert explainer._timeout_s == 77.0  # type: ignore[attr-defined]  # noqa: SLF001
 
 

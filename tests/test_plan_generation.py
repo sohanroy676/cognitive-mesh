@@ -181,7 +181,7 @@ def test_an_oversized_reply_is_rejected() -> None:
 def model_env(monkeypatch: pytest.MonkeyPatch) -> list[FakeClient]:
     made: list[FakeClient] = []
 
-    def build(settings: object) -> FakeClient:
+    def build(settings: object, roles: object = ()) -> FakeClient:
         client = FakeClient(GOOD)
         made.append(client)
         return client
@@ -224,7 +224,8 @@ def test_the_plan_command_reports_a_bad_reply(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(
-        "cognitive_mesh.cli.build_model_client", lambda settings: FakeClient("nonsense")
+        "cognitive_mesh.cli.build_model_client",
+        lambda settings, roles=(): FakeClient("nonsense"),
     )
     assert main(["plan", "x"]) == EXIT_PLAN_GENERATION_ERROR
     assert "not valid JSON" in capsys.readouterr().err

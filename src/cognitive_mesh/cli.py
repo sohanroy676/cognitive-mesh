@@ -6,11 +6,11 @@ import sys
 from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
-from cognitive_mesh import __version__
+from cognitive_mesh import __version__, models_cli
 from cognitive_mesh.agents import AgentContext, AgentRegistry, default_registry
 from cognitive_mesh.config import ConfigError, load_settings, load_settings_if_configured
 from cognitive_mesh.graph import (
@@ -36,7 +36,8 @@ from cognitive_mesh.orchestrator import (
     generate_plan,
     plan_task,
 )
-from cognitive_mesh.providers import build_model_client
+from cognitive_mesh.providers import build_model_client, catalog_entry_id
+from cognitive_mesh.providers.recording import CallLog, RecordingClient
 from cognitive_mesh.traces import (
     RunTrace,
     TraceNotFoundError,
@@ -81,6 +82,7 @@ EXIT_OUTCOME_STORE_ERROR = 16
 EXIT_PROMOTION_REFUSED = 17
 EXIT_UI_ERROR = 18
 EXIT_WORKSPACE_ERROR = workspace_cli.EXIT_WORKSPACE_ERROR  # 19 (ADR-0036)
+EXIT_CATALOG_ERROR = models_cli.EXIT_CATALOG_ERROR  # 20 (ADR-0038)
 MAX_PLAN_BYTES = 256 * 1024
 DEFAULT_MIN_SIMILARITY = 0.2  # from one live run on 3 documents (ADR-0014); a rough starting point
 
@@ -94,6 +96,30 @@ _APP_ID_HELP = (
     "label for the application (ADR-0021); default: the manifest name plus directory name, "
     "else the directory name. A label, not proof of identity"
 )
+
+
+def _add_model_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--model",
+        metavar="ID",
+        help="use this model catalog entry instead of COGMESH_PROVIDER (ADR-0038)",
+    )
+    parser.add_argument(
+        "--catalog",
+        type=Path,
+        metavar="FILE",
+        help="model catalog file (default: COGMESH_MODEL_CATALOG); read from nowhere else",
+    )
+
+
+def _model_overrides(args: argparse.Namespace) -> dict[str, Any]:
+    """Settings overrides from --model and --catalog; --model selects the catalog provider."""
+    overrides: dict[str, Any] = {}
+    if args.model is not None:
+        overrides.update(provider="catalog", model=args.model)
+    if args.catalog is not None:
+        overrides["model_catalog"] = args.catalog
+    return overrides
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -126,11 +152,13 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--trace-db", type=Path, metavar="FILE", help="record the run in this SQLite trace database"
     )
+    _add_model_args(run)
     plan = sub.add_parser(
         "plan", help="draft a plan (JSON) from a request with the configured model; runs nothing"
     )
     plan.add_argument("request", help="what you want done, in plain words")
     plan.add_argument("--task-id", default="generated", help="task id for the plan")
+    _add_model_args(plan)
     plan.add_argument("--output", type=Path, metavar="FILE", help="write the plan to FILE")
     plan.add_argument(
         "--root",
@@ -198,6 +226,7 @@ def _build_parser() -> argparse.ArgumentParser:
     task.add_argument("--reviews", type=Path, metavar="FILE", help="reviews file (optional)")
     task.add_argument("--outcomes", type=Path, metavar="FILE", help="outcomes file (optional)")
     task.add_argument("--app-id", metavar="NAME", help=_APP_ID_HELP)
+    _add_model_args(task)
     task.add_argument(
         "--profile",
         choices=("precision", "recall"),
@@ -230,6 +259,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     ui.add_argument("--no-browser", action="store_true", help="print the URL, do not open it")
     workspace_cli.add_parser(sub)
+    models_cli.add_parser(sub)
     experience = sub.add_parser("experience", help="build and query the experience graph")
     exp_sub = experience.add_subparsers(dest="experience_command", required=True)
     exp_build = exp_sub.add_parser("build", help="build the graph file from the trace database")
@@ -493,7 +523,13 @@ def _load_plan(path: Path) -> TaskPlan:
         raise PlanError(f"the plan file is not a valid plan ({kinds})") from None
 
 
-def _run_plan_request(request: str, task_id: str, output: Path | None, root: Path | None) -> int:
+def _run_plan_request(
+    request: str,
+    task_id: str,
+    output: Path | None,
+    root: Path | None,
+    overrides: dict[str, Any],
+) -> int:
     """Draft a plan with the configured model. The plan is printed or written, never executed."""
     from cognitive_mesh.ingestion import IngestionError, ingest_application
 
@@ -505,8 +541,8 @@ def _run_plan_request(request: str, task_id: str, output: Path | None, root: Pat
             print(_printable(str(exc)), file=sys.stderr)
             return EXIT_INGESTION_ERROR
     try:
-        settings = load_settings()
-        client = build_model_client(settings)
+        settings = load_settings(**overrides)
+        client = build_model_client(settings, ("planner",))
     except ConfigError as exc:
         print(exc, file=sys.stderr)
         return EXIT_CONFIG_ERROR
@@ -569,27 +605,41 @@ def _emit_run(run: TaskRun, as_json: bool, trace_id: str | None) -> None:
         print(f"trace: {trace_id}")
 
 
-def _registry_for(validated: ValidatedPlan) -> AgentRegistry:
-    """Config is read only when the plan has a model step; no provider set means no client."""
+def _registry_for(
+    validated: ValidatedPlan, overrides: dict[str, Any], calls: CallLog
+) -> AgentRegistry:
+    """Config is read only when the plan has a model step; no provider set means no client.
+
+    The client is wrapped so every model call lands in `calls` (ADR-0038).
+    """
     registry = default_registry()
     model_caps = {c.name for spec in registry.specs() for c in spec.capabilities if c.uses_model}
     if not any(step.capability in model_caps for step in validated.order):
         return registry
-    settings = load_settings_if_configured()
+    settings = load_settings_if_configured(**overrides)
     if settings is None:
         return registry
-    return default_registry(build_model_client(settings), model_timeout_s=settings.model_timeout_s)
+    roles = {
+        agent.id
+        for step in validated.order
+        if step.capability in model_caps
+        for agent in registry.find(step.capability)
+    }
+    client = RecordingClient(
+        build_model_client(settings, sorted(roles)), calls, catalog_entry_id(settings)
+    )
+    return default_registry(client, model_timeout_s=settings.model_timeout_s)
 
 
 def _load_run_inputs(
-    plan_path: Path, root: Path
+    plan_path: Path, root: Path, overrides: dict[str, Any], calls: CallLog
 ) -> tuple[ValidatedPlan, IngestionResult, AgentRegistry] | int:
     """Validate the plan, ingest the application and build the registry, or return an exit code."""
     registry = default_registry()
     try:
         validated = plan_task(_load_plan(plan_path), registry)
         ingestion = ingest_application(root)
-        registry = _registry_for(validated)
+        registry = _registry_for(validated, overrides, calls)
     except PlanError as exc:
         print(_printable(str(exc)), file=sys.stderr)
         return EXIT_PLAN_ERROR
@@ -612,9 +662,15 @@ def _identity_for(root: str, declared: str | None) -> AppIdentity | None | int:
 
 
 def _run_plan(
-    plan_path: Path, root: Path, as_json: bool, trace_db: Path | None, app_id: str | None
+    plan_path: Path,
+    root: Path,
+    as_json: bool,
+    trace_db: Path | None,
+    app_id: str | None,
+    overrides: dict[str, Any],
 ) -> int:
-    loaded = _load_run_inputs(plan_path, root)
+    calls = CallLog()
+    loaded = _load_run_inputs(plan_path, root, overrides, calls)
     if isinstance(loaded, int):
         return loaded
     validated, ingestion, registry = loaded
@@ -623,7 +679,7 @@ def _run_plan(
         return identity
     context = AgentContext(ingestion=ingestion, graph=build_dependency_graph(ingestion))
     if trace_db is None:
-        run = Orchestrator(registry).run(validated, context)
+        run = Orchestrator(registry, on_attempt=calls.begin_attempt).run(validated, context)
         _emit_run(run, as_json, None)
         return EXIT_OK if run.status is TaskStatus.SUCCEEDED else EXIT_TASK_NOT_SUCCEEDED
     try:
@@ -638,9 +694,11 @@ def _run_plan(
         except TraceStoreError as exc:  # nothing ran: the user asked for a trace we cannot keep
             print(_printable(str(exc)), file=sys.stderr)
             return EXIT_TRACE_STORE_ERROR
-        run = Orchestrator(registry, now=utc_now).run(validated, context)
+        run = Orchestrator(registry, now=utc_now, on_attempt=calls.begin_attempt).run(
+            validated, context
+        )
         try:
-            recorder.finish(run_id, run)
+            recorder.finish(run_id, run, calls.records)
         except TraceStoreError as exc:
             _emit_run(run, as_json, None)
             print(f"warning: the trace was not saved: {_printable(str(exc))}", file=sys.stderr)
@@ -961,7 +1019,8 @@ def _run_task(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(exc, file=sys.stderr)
         return EXIT_CONFIG_ERROR
-    loaded = _load_run_inputs(args.plan, args.root)
+    calls = CallLog()
+    loaded = _load_run_inputs(args.plan, args.root, _model_overrides(args), calls)
     if isinstance(loaded, int):
         return loaded
     validated, ingestion, registry = loaded
@@ -976,7 +1035,9 @@ def _run_task(args: argparse.Namespace) -> int:
         return EXIT_TRACE_STORE_ERROR
     with store:
         return _guarded(
-            lambda: _task_with_store(args, store, validated, ingestion, graph, registry, identity)
+            lambda: _task_with_store(
+                args, store, validated, ingestion, graph, registry, identity, calls
+            )
         )
 
 
@@ -988,6 +1049,7 @@ def _task_with_store(
     graph: DependencyGraph,
     registry: AgentRegistry,
     identity: AppIdentity | None,
+    calls: CallLog,
 ) -> int:
     from cognitive_mesh import workflow
 
@@ -1022,10 +1084,12 @@ def _task_with_store(
         print(_printable(str(exc)), file=sys.stderr)
         return EXIT_TRACE_STORE_ERROR
     context = AgentContext(ingestion=ingestion, graph=graph, recalled=pack)
-    run = Orchestrator(registry, now=utc_now).run(validated, context)
+    run = Orchestrator(registry, now=utc_now, on_attempt=calls.begin_attempt).run(
+        validated, context
+    )
     saved = True
     try:
-        recorder.finish(run_id, run)
+        recorder.finish(run_id, run, calls.records)
     except TraceStoreError as exc:
         saved = False
         print(f"warning: the trace was not saved: {_printable(str(exc))}", file=sys.stderr)
@@ -1543,9 +1607,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "ingest":
         return _run_ingest(args.path, args.as_json, args.include_content)
     if args.command == "run":
-        return _run_plan(args.plan, args.root, args.as_json, args.trace_db, args.app_id)
+        return _run_plan(
+            args.plan, args.root, args.as_json, args.trace_db, args.app_id, _model_overrides(args)
+        )
     if args.command == "plan":
-        return _run_plan_request(args.request, args.task_id, args.output, args.root)
+        return _run_plan_request(
+            args.request, args.task_id, args.output, args.root, _model_overrides(args)
+        )
     if args.command == "traces":
         if args.traces_command == "list":
             return _run_traces_list(args.db, args.as_json)
@@ -1560,6 +1628,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_task(args)
     if args.command == "workspace":
         return workspace_cli.run(args)
+    if args.command == "models":
+        return models_cli.run(args)
     if args.command == "ui":
         return _run_ui(args)
     if args.command == "agents":
