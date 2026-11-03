@@ -26,7 +26,7 @@ let generation = 0;
 let revealed = false;
 
 // ---- pins: ids kept in this browser only (ADR-0032 point 5) ---------------------------------
-const PIN_KEY = "cogmesh.pins.v1";
+const PINS_STORAGE_NAME = "cogmesh.pins.v1";
 const FOLDER_KEY = "cogmesh.folder.v1";
 const MAX_PINS = 200;
 
@@ -49,7 +49,7 @@ function writeStore(key, value) {
 const validPin = (p) => p && typeof p.id === "string" && p.id.length > 0 && p.id.length <= 2000 && (p.space === "deps" || p.space === "exp");
 
 function loadPins() {
-  const raw = readStore(PIN_KEY);
+  const raw = readStore(PINS_STORAGE_NAME);
   if (!raw) return [];
   try {
     const v = JSON.parse(raw);
@@ -66,7 +66,7 @@ const pins = {
   find: (id) => pinned.find((p) => p.id === id) || null,
   remove(space, id) {
     pinned = pinned.filter((p) => !(p.space === space && p.id === id));
-    writeStore(PIN_KEY, JSON.stringify(pinned));
+    writeStore(PINS_STORAGE_NAME, JSON.stringify(pinned));
   },
   toggle(entry) {
     if (pins.has(entry.space, entry.id)) {
@@ -75,7 +75,7 @@ const pins = {
     }
     pinned.push({ space: entry.space, id: entry.id, label: entry.label || entry.id, folder: entry.folder || null, pinned_at: new Date().toISOString() });
     if (pinned.length > MAX_PINS) pinned = pinned.slice(-MAX_PINS);
-    writeStore(PIN_KEY, JSON.stringify(pinned));
+    writeStore(PINS_STORAGE_NAME, JSON.stringify(pinned));
   },
 };
 const folderMemory = { get: () => readStore(FOLDER_KEY) || "", set: (v) => writeStore(FOLDER_KEY, v) };
