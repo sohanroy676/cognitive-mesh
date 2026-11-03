@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.7.0] - 2026-11-03
 
 ### Added
 - **workspace:** API, schema and config edges across projects
@@ -12,6 +12,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record CI runs for v1.6.0
 - **adr:** Propose ADR-0037 API, schema and config edges
 - Record v1.7.0 implementation (ADR-0037 accepted)
+- Hand off v1.7.0 and fix the extended-roadmap branch policy
 
 ## [1.6.0] - 2026-11-03
 
