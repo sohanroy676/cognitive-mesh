@@ -1,6 +1,7 @@
 """Configuration loading. All settings come from the environment or an ignored `.env` file."""
 
 import re
+from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
@@ -23,7 +24,7 @@ class Settings(BaseSettings):
         populate_by_name=True,
     )
 
-    provider: Literal["groq", "ollama"]
+    provider: Literal["groq", "ollama", "catalog"]
     groq_api_key: SecretStr | None = Field(default=None, validation_alias="GROQ_API_KEY")
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2"
@@ -32,6 +33,10 @@ class Settings(BaseSettings):
     model_timeout_s: float = Field(default=30.0, gt=0, le=600)
     allow_remote_content: bool = False  # must be true before file content goes to a remote provider
     log_level: str = "INFO"
+    # Model catalog (ADR-0038): used when provider is "catalog".
+    model: str | None = None  # a catalog entry id
+    model_catalog: Path | None = None
+    allow_training_use: bool = False  # must be true for catalog entries that may train on prompts
 
     @field_validator("groq_api_key")
     @classmethod
@@ -69,6 +74,22 @@ class Settings(BaseSettings):
         if len(value) > 200 or not _MODEL_NAME.fullmatch(value):
             raise ValueError("must be a model name of letters, digits and . _ : / - (max 200)")
         return value
+
+    @field_validator("model")
+    @classmethod
+    def _check_entry_id(cls, value: str | None) -> str | None:
+        if value is not None and not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,63}", value):
+            raise ValueError("must be a catalog entry id of lowercase letters, digits and . _ -")
+        return value
+
+    @model_validator(mode="after")
+    def _require_catalog_fields(self) -> "Settings":
+        if self.provider == "catalog":
+            if self.model is None:
+                raise ValueError("COGMESH_MODEL (a catalog entry id) is required with catalog")
+            if self.model_catalog is None:
+                raise ValueError("COGMESH_MODEL_CATALOG (a catalog file) is required with catalog")
+        return self
 
     @model_validator(mode="after")
     def _require_key_for_groq(self) -> "Settings":

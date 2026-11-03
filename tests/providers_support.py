@@ -13,7 +13,7 @@ CANARY_REPLY = "CANARY-REPLY-9042"
 
 def fake_key(prefix: str = "ak_") -> str:
     """A key-shaped string built at run time so no scanner sees a literal."""
-    return prefix + "CANARY" + "KEY0123456789"
+    return prefix + "CANARY" + "KEY0123456789" + "WXYZ"
 
 
 class FakeTransport:
