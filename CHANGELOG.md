@@ -14,6 +14,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record v1.7.0 implementation (ADR-0037 accepted)
 - Hand off v1.7.0 and fix the extended-roadmap branch policy
 
+### Maintenance
+- Remove strings that trip the secret scanner
+
 ## [1.6.0] - 2026-11-03
 
 ### Added
