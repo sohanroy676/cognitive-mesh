@@ -7,6 +7,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - Record CI runs for v1.6.0
+- **adr:** Propose ADR-0037 API, schema and config edges
 
 ## [1.6.0] - 2026-11-03
 
