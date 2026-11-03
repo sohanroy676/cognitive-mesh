@@ -3,14 +3,14 @@
 Update this file at the end of every session and whenever the user asks for a new-session prompt.
 
 ## Short prompt to paste into a new session
-Continue Cognitive Mesh (extended roadmap, next v1.7.0; branch from main as session_prompt.md says). Read `session_prompt.md` at the repo root first and follow it. Update it at the end of the session or when I ask for a new prompt.
+Continue Cognitive Mesh (extended roadmap, v1.7.0 awaits review, then v1.8.0; branch from main as session_prompt.md says). Read `session_prompt.md` at the repo root first and follow it. Update it at the end of the session or when I ask for a new prompt.
 
-## Where we are (end of session 6, 2026-11-03)
-- v1.6.0 (workspace and cross-project package edges, ADR-0036) is merged to main, pushed and tagged `v1.6.0` (CI runs 41674254292 and, for the tag, 41674929331 passed). Suite 1575 passed, 6 skipped.
-- The extended roadmap `docs/extended_roadmap.md` continues from v1.7.0. Work on a NEW branch `feature/extended-roadmap-v1.7` off main (the old `feature/extended-roadmap` is kept, contained in main). Merge/push/tag only when the user asks.
-- Open from v1.6.0: no HTML view of the workspace graph (ADR-0036 amendment; ask the user), no command moves a github pin (`WorkspaceStore.set_commit` exists), clone cache has no size limit, private repos only checked with a nonexistent repo.
-- Next: draft ADR-0037 for v1.7.0 (API contracts, schemas, config across projects; see the roadmap) as Proposed, no code until the user accepts it. Then implement, tests, docs, changelog last.
-- Decided earlier: GitHub fetch uses the `git` CLI; public repos only until the v1.12.0 ADR decides token vs `gh` login; other projects in a workspace are read-only.
+## Where we are (session 7, 2026-11-03)
+- v1.6.0 is released (tag `v1.6.0`). v1.7.0 (ADR-0037, accepted) is implemented on `feature/extended-roadmap-v1.7` off main: API contract, shared schema and config edges, `workspace deps`. Suite 1604 passed, 6 skipped. NOT merged, pushed or tagged; wait for the user.
+- Open from v1.7.0: no HTML workspace view; Express routers mounted from another file stay `prefix_unknown`; destructured `process.env` and `from os import environ` are not seen; not run on Linux/CI or on real GitHub repositories.
+- Open from v1.6.0: no command moves a github pin, clone cache has no size limit, private repos only checked with a nonexistent repo.
+- Next after review/merge: v1.8.0 (any model with an API key, model performance records; see `docs/extended_roadmap.md`): new branch off main, draft ADR-0038 as Proposed, no code until accepted.
+- Decided earlier: GitHub fetch uses the `git` CLI; public repos only until the v1.12.0 ADR; other projects in a workspace are read-only.
 
 ## Start of session
 1. `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3` (expect v1.5.0), `gh auth status` (must be sohanroy676), `gh run list --limit 6`.

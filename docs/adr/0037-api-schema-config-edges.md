@@ -1,7 +1,7 @@
 # ADR-0037: API contract, shared schema and config edges across projects (v1.7.0)
 
 ## Status
-Proposed 2026-11-03. Waits for the user's acceptance; no code until then. Extends ADR-0036 (workspace); the matching rule follows ADR-0006 (nothing is linked by guesswork). Needs ADR-0005 (never execute, sensitive files never opened) and ADR-0007 (tree-sitter private to `graph/js_parse.py`) to stay in force.
+Accepted by the user 2026-11-03. Implementation in progress on `feature/extended-roadmap-v1.7`. Extends ADR-0036 (workspace); the matching rule follows ADR-0006 (nothing is linked by guesswork). Needs ADR-0005 (never execute, sensitive files never opened) and ADR-0007 (tree-sitter private to `graph/js_parse.py`) to stay in force.
 
 ## Date
 2026-11-03
@@ -70,3 +70,11 @@ Every consumer call, env read or schema use without a match is listed under its 
 - A secret value in a config file is never stored; a secret-looking name is dropped.
 - Not covered: GraphQL / gRPC / event contracts, version-aware spec comparison, runtime or traffic evidence, an HTML workspace view.
 - Tests required (from the roadmap): matching route, near miss (method, parameter style), computed URL, shared table, renamed column, env var set but never read, large OpenAPI file, malformed spec, secret value never stored.
+
+## Implementation notes (2026-11-03)
+- Built as written. Extractors are `workspace/contracts.py`, `schemas.py`, `config_names.py`; `extract.py` reads one ingested project once into plain records (`facts.py`); `yaml_read.py` is the only PyYAML user (depth 50, 100 aliases, checked on the token stream before loading). JS/TS call, binding and `process.env` matchers are in `graph/js_parse.py` (`parse_js_calls`).
+- Routers: a FastAPI/Flask/Express router counts only when the same file mounts it on a known app with a literal prefix (FastAPI adds the mount prefix before the router's own, Flask's `register_blueprint(url_prefix=)` replaces the blueprint's). Otherwise its routes are kept as `prefix_unknown` and never matched. A route object imported from another file is treated the same way.
+- A consumer parameter against a literal provider segment does not match (a caller cannot be assumed to mean that route).
+- `.prisma` is now classified as source (language `prisma`). Malformed JSON is reported by ingestion (parse error) and not read again; malformed or over-limit YAML gives an `unreadable_document` diagnostic.
+- `env_file` entries are not read; a project that names one gets an `env_file_not_read` diagnostic.
+- Not done: an HTML workspace view (as in ADR-0036), `Router`-style mounting through `app.use(router)` in another file, destructured `process.env`, Python `from os import environ`.
