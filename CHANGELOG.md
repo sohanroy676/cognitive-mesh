@@ -5,9 +5,13 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **workspace:** API, schema and config edges across projects
+
 ### Documentation
 - Record CI runs for v1.6.0
 - **adr:** Propose ADR-0037 API, schema and config edges
+- Record v1.7.0 implementation (ADR-0037 accepted)
 
 ## [1.6.0] - 2026-11-03
 
