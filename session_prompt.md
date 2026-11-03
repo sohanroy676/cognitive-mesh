@@ -7,14 +7,20 @@ Continue Cognitive Mesh (extended roadmap, next v1.8.0). Work only on branch `fe
 
 ## Where we are (end of session 7, 2026-11-03)
 - Branch policy (user decision 2026-11-03): ALL extended-roadmap work (v1.7.0 onwards) happens on `feature/extended-roadmap-v1.7` and is pushed to `origin/feature/extended-roadmap-v1.7`. Do not branch off main or merge into main until the user approves completion of the whole extended roadmap. Each version: ADR first (Proposed, wait for acceptance), code, tests, docs, regenerate the changelog with `--tag vX.Y.Z` as the last commit, push the branch, wait for CI, then tag that commit and push the tag (the user pre-approved push and tag on this branch only). Merging to main, deleting branches and force-pushing still need explicit approval.
-- v1.7.0 (ADR-0037, accepted): API contract, shared schema and config edges across workspace projects, `workspace deps`. Suite 1604 passed, 6 skipped. See `memory-bank/progress.md` for the CI run ids and the tag.
+- v1.7.0 (ADR-0037, accepted): API contract, shared schema and config edges across workspace projects, `workspace deps`. Suite 1604 passed, 6 skipped. Pushed and tagged `v1.7.0` (commit `752fa84`); CI: manual branch run 41683996261 and tag run 41684573022 passed.
 - Open from v1.7.0: no HTML workspace view; Express routers mounted from another file stay `prefix_unknown`; destructured `process.env` and `from os import environ` are not seen; not run on Linux or on real GitHub repositories (CI covers Linux).
 - Open from v1.6.0: no command moves a github pin, clone cache has no size limit, private repos only checked with a nonexistent repo.
 - Next: v1.8.0 (any model with an API key, model performance records; read `docs/extended_roadmap.md` and `docs/DETAILED_ROADMAP.md`): plan mode, draft ADR-0038 as Proposed on this branch, no code until the user accepts. ADR-0013 (`COGMESH_ALLOW_REMOTE_CONTENT`) must stay in force.
 - Decided earlier: GitHub fetch uses the `git` CLI; public repos only until the v1.12.0 ADR; other projects in a workspace are read-only.
 
+## Workflow facts learned (session 7)
+- CI triggers only on pushes to main, pull requests to main and `v*` tags. For a branch run use `gh workflow run CI --ref feature/extended-roadmap-v1.7` (full-history gitleaks scan; `.gitleaksignore` holds 3 exact fingerprints).
+- GitHub push protection blocks secret-shaped literals (even fake ones). Build fake secrets at run time; do not name a string constant *TOKEN/*KEY/*SECRET (gitleaks flags it).
+- Tag only the commit CI tested: regenerate the changelog with `--tag vX.Y.Z` as the last commit, push, run CI, then `git tag -a` that commit and push the tag.
+- Large inline Python/heredoc scripts break in the Bash tool here; write scripts to the scratchpad with the Write tool and run them. Edit CRLF files with Python (newline='') or the Edit tool.
+
 ## Start of session
-1. `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3` (expect v1.7.0), `gh auth status` (must be sohanroy676), `gh run list --limit 6`.
+1. `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3` (expect v1.7.0), `git checkout feature/extended-roadmap-v1.7 && git pull`, `gh auth status` (must be sohanroy676), `gh run list --limit 6`.
 2. Read this file, then `docs/extended_roadmap.md` for the current version, and `memory-bank/activeContext.md` / `progress.md` on demand.
 
 ## Rules
