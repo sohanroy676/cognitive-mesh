@@ -3,21 +3,21 @@
 Update this file at the end of every session and whenever the user asks for a new-session prompt.
 
 ## Short prompt to paste into a new session
-Continue Cognitive Mesh on branch `feature/extended-roadmap`. Read `session_prompt.md` at the repo root first and follow it. Update it at the end of the session or when I ask for a new prompt.
+Continue Cognitive Mesh (extended roadmap, next v1.7.0; branch from main as session_prompt.md says). Read `session_prompt.md` at the repo root first and follow it. Update it at the end of the session or when I ask for a new prompt.
 
-## Where we are (2026-11-03, session 6)
-- Work: `docs/extended_roadmap.md` (v1.6.0 to v2.1.0, draft, nothing implemented). All changes go on `feature/extended-roadmap` (off main `3a4e4c8`, tag v1.5.0). Main is not touched. Merge to main only after the user approves the finished roadmap.
-- Decided with the user: one long-lived branch; GitHub repos fetched with the `git` CLI as a subprocess; v1.6.0 supports public repos only (token vs `gh` login is decided in the v1.12.0 ADR).
-- v1.6.0 is IMPLEMENTED on this branch (workspace package, CLI, tests; suite 1575 passed). Not done: HTML view of the workspace graph (ADR-0036 amendment); ask the user whether to add it or move on.
-- Next: draft ADR-0037 (v1.7.0) after the user decides on the HTML view. Old note: user reviews ADR-0036 (`docs/adr/0036-workspace-and-cross-project-packages.md`); after acceptance implement v1.6.0 (plan: new `workspace/` package, tests, CLI, docs). Each later version gets its own ADR first.
-- ADR status: ADR-0036 accepted. Next ADR: 0037 for v1.7.0 (API contracts, schemas, config), Proposed first, no code until accepted.
+## Where we are (end of session 6, 2026-11-03)
+- v1.6.0 (workspace and cross-project package edges, ADR-0036) is merged to main, pushed and tagged `v1.6.0` (CI run ids: see `memory-bank/progress.md`). Suite 1575 passed, 6 skipped.
+- The extended roadmap `docs/extended_roadmap.md` continues from v1.7.0. Work on a NEW branch `feature/extended-roadmap-v1.7` off main (the old `feature/extended-roadmap` is kept, contained in main). Merge/push/tag only when the user asks.
+- Open from v1.6.0: no HTML view of the workspace graph (ADR-0036 amendment; ask the user), no command moves a github pin (`WorkspaceStore.set_commit` exists), clone cache has no size limit, private repos only checked with a nonexistent repo.
+- Next: draft ADR-0037 for v1.7.0 (API contracts, schemas, config across projects; see the roadmap) as Proposed, no code until the user accepts it. Then implement, tests, docs, changelog last.
+- Decided earlier: GitHub fetch uses the `git` CLI; public repos only until the v1.12.0 ADR decides token vs `gh` login; other projects in a workspace are read-only.
 
 ## Start of session
 1. `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3` (expect v1.5.0), `gh auth status` (must be sohanroy676), `gh run list --limit 6`.
 2. Read this file, then `docs/extended_roadmap.md` for the current version, and `memory-bank/activeContext.md` / `progress.md` on demand.
 
 ## Rules
-- Never commit to main. Work on `feature/extended-roadmap`. Never push, merge, tag or delete branches (local or remote) without approval. Local branches are all kept.
+- Never commit to main. Work on a feature branch. Never push, merge, tag or delete branches (local or remote) without approval. Local branches are all kept.
 - Draft an ADR and get acceptance before any code that needs a design decision.
 - Regenerate `CHANGELOG.md` as the last commit with plain `uv run git-cliff -o CHANGELOG.md` (`--tag vX.Y.Z` only on a `chore/release-vX.Y.Z` branch; compare the section date with `date -u +%F`). Only after the branch contains every commit. After any merge into main, run git-cliff to a temp file and diff against `CHANGELOG.md` (ignoring CR) BEFORE pushing.
 - Never `git checkout` a file to undo an experiment while it has uncommitted work (use cp backups).
