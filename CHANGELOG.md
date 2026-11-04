@@ -5,9 +5,13 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **evaluate:** Compare memory off and on for small changes (v1.13.0)
+
 ### Documentation
 - Record v1.12.0 CI runs and session 12 handoff
 - **adr:** Propose ADR-0043 showing improvement (v1.13.0)
+- Record v1.13.0 eval, ADR-0043 notes and session 13 handoff
 
 ## [1.12.0] - 2026-11-04
 
