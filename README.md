@@ -40,6 +40,11 @@ and what it does not do is in [docs/STATUS.md](docs/STATUS.md).
   when you look at it, from the evidence for it, the evidence against it, people's reviews and recorded outcomes.
 - **Recalls past experience for a new task** (`recall`, `task`), with the supporting and contradicting records
   listed next to each claim.
+- **Runs a local web app (v2.0.0)**: a chat that takes the projects that belong together, shows the
+  dependencies found between them, plans each prompt with a conductor model that picks a catalog model per step, reads
+  the other projects, makes a small change only if it breaks nothing they use, and waits for your approval. A
+  separate dependency-graph page and a separate data browser (the whole vector index and every SQLite store) sit on
+  their own ports. See [Run the web app](#run-the-web-app-v200).
 - **Shows all of it in a local, read-only web UI**: every recorded step and what it stored, claims explained in
   plain sentences, run history for any module or claim, and an interactive dependency graph you can zoom, pin
   and load from a saved file.
@@ -92,6 +97,38 @@ uv run cognitive-mesh ui --db data/agent-experiences/traces.sqlite3 --graph data
 Open **Experiences**, then **Read it** on any row. In the **Dependency graph** tab, type
 `data/reference-graphs/projects-graph.json` to open a saved graph of the five projects in a fraction of a second.
 See [data/README.md](data/README.md).
+
+## Run the web app (v2.0.0)
+
+One command starts three local servers (127.0.0.1 only, one access token per start, printed as three URLs):
+
+```bash
+uv run cognitive-mesh serve --home my-mesh --catalog catalog.toml --conductor ENTRY
+```
+
+| Port | Page | Can it write? |
+|------|------|---------------|
+| 8770 | **Chat**: add projects, confirm the dependencies, ask for a small change or a question, review the plan, the impact check and the diff, then approve, revise or reject | Yes, but only the listed actions, each behind an approval request tied to the diff you were shown (used once, expires, dead after a restart) |
+| 8771 | **Dependency graph**: the workspace graph with evidence for every line; detected edges are solid, ones you declared are dashed; "who depends on this?" for a target | No |
+| 8772 | **Data**: the whole vector index (paged, search by meaning, nearest records, a 2-D map) and every table of the trace, workspace, chat, outcomes and graph files, with filter, sort and a full-row view | No (read-only on purpose: these are evidence records) |
+
+How a prompt is handled: the conductor (a model from your catalog) plans read-only steps and chooses a model for
+each, with its reason shown; other projects in the workspace are only ever read. In **Make a small change** mode the
+coder then drafts a diff of at most 3 files and 100 lines in a separate git worktree and branch, the contract check
+refuses it if it breaks something another project uses, and the declared check runs only if you started the server
+with `--allow-unisolated-checks` (it runs with your rights, not isolated). Nothing is pushed unless you approve and
+then confirm "open a pull request", which also needs `GITHUB_TOKEN` and `COGMESH_ALLOW_REMOTE_CONTENT=true`. Every
+turn records its plan, decisions with their reasoning, model calls and your verdict; the **Trace** box under a turn
+and the Data page lead to them. Model-written text is always labelled unverified and shown as plain text.
+
+Without `--catalog` and `--conductor` the servers still start and you can add projects and browse the graph and the
+data; the chat just cannot start a turn. The `--home` folder holds every file (workspace, traces, index, graph, chat,
+worktrees). Only a **local folder** can be changed; a GitHub project is read-only.
+
+What has been run: the three pages in headless Edge and the HTTP flow (plan, draft, impact, approve, replay refused,
+reject, revise, restart) with scripted models and a fake embedder, and `serve` itself with no model. **Not yet run:**
+a real model (local or free-tier), a real GitHub push or pull request, clicking the approval buttons in a browser,
+and browsers other than Edge. See [ADR-0044](docs/adr/0044-local-api-server-and-chat.md).
 
 ## Use a model (optional)
 
@@ -204,7 +241,8 @@ Instructions for contributors and coding agents are in [AGENTS.md](AGENTS.md) an
   reported as unresolved.
 - Text a model wrote is stored as unverified. The recorded steps of the agents in `data/agent-experiences/` are
   their own account of their work.
-- The web UI is local only (it listens on `127.0.0.1`, needs a per-start token and never writes to a store).
+- The web UI (`ui`) and the graph and data servers of `serve` are local only and never write; the chat server of
+  `serve` writes only through approved actions. All listen on `127.0.0.1` and need a per-start token.
 - Only local folders can be analysed; there is no hosted service.
 
 The full list, version by version, is in [docs/STATUS.md](docs/STATUS.md).

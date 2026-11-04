@@ -320,35 +320,46 @@ def _head(record: ChangeRecord, events: list[ChangeEvent], root: Path) -> Change
     return head
 
 
+def approve_change(
+    store: TraceStore, root: Path, change_id: str, by: str, note: str | None
+) -> tuple[ChangeRecord, ChangeEvent, Any]:
+    """Record a person's approval of the applied draft. Returns (record, head, decision)."""
+    record, events = _find(store.read_changes(), change_id)
+    head = _head(record, events, root)
+    assert head.commit is not None and head.diff_sha256 is not None  # noqa: S101 - _head
+    reasoning = note or "approved after reading the diff"
+    decision = prepare_decision(
+        summary=f"Approve change {record.change_id} at commit {head.commit[:12]}",
+        options=["approve this commit", "do not approve"],
+        chosen="approve this commit",
+        reasoning=f"{reasoning} (diff sha256 {head.diff_sha256})",
+        made_by=MadeBy.PERSON,
+        recorder=by,
+        cite_decisions=[head.ref] if head.ref else [],
+        app_id=record.app_id,
+        now=utc_now(),
+    )
+    store.add_decision(decision)
+    store.add_change_event(
+        ChangeEvent(
+            change_id=record.change_id,
+            kind=EventKind.APPROVED,
+            commit=head.commit,
+            diff_sha256=head.diff_sha256,
+            ref=decision.decision_id,
+            detail="approved by a person",
+            created_at=utc_now(),
+        )
+    )
+    return record, head, decision
+
+
 def _approve(args: argparse.Namespace) -> int:
     with TraceStore.create(args.db) as store:
-        record, events = _find(store.read_changes(), args.change_id)
-        head = _head(record, events, args.root)
-        assert head.commit is not None and head.diff_sha256 is not None  # noqa: S101 - _head
-        reasoning = args.note or "approved after reading the diff"
-        decision = prepare_decision(
-            summary=f"Approve change {record.change_id} at commit {head.commit[:12]}",
-            options=["approve this commit", "do not approve"],
-            chosen="approve this commit",
-            reasoning=f"{reasoning} (diff sha256 {head.diff_sha256})",
-            made_by=MadeBy.PERSON,
-            recorder=args.by,
-            cite_decisions=[head.ref] if head.ref else [],
-            app_id=record.app_id,
-            now=utc_now(),
+        record, head, decision = approve_change(
+            store, args.root, args.change_id, args.by, args.note
         )
-        store.add_decision(decision)
-        store.add_change_event(
-            ChangeEvent(
-                change_id=record.change_id,
-                kind=EventKind.APPROVED,
-                commit=head.commit,
-                diff_sha256=head.diff_sha256,
-                ref=decision.decision_id,
-                detail="approved by a person",
-                created_at=utc_now(),
-            )
-        )
+        assert head.commit is not None  # noqa: S101 - _head
     print(
         f"approved change {record.change_id} at {head.commit[:12]} "
         f"(decision {decision.decision_id})"
@@ -388,74 +399,90 @@ def _pr_body(
 
 def _pr(args: argparse.Namespace) -> int:
     with TraceStore.create(args.db) as store:
-        record, events = _find(store.read_changes(), args.change_id)
-        head = _head(record, events, args.root)
-        assert head.commit is not None and head.diff_sha256 is not None  # noqa: S101 - _head
-        opened = [e for e in events if e.kind is EventKind.PR_OPENED and e.commit == head.commit]
-        if opened:
-            print(f"a pull request is already open for this commit: {opened[-1].ref}")
-            return EXIT_OK
-        if approval_for(events, head.commit, head.diff_sha256) is None:
-            raise ChangeError("no approval names the current commit and diff; run `change approve`")
-        check = latest_check(events, head.commit)
-        passed = check is not None and check.detail.startswith("succeeded")
-        if not passed and not args.without_passing_check:
-            raise ChangeError(
-                "the latest check did not pass (or none ran); fix it, or pass "
-                "--without-passing-check"
-            )
-        github = load_github_settings()
-        if not github.allow_remote_content:
-            raise ChangeError(
-                "COGMESH_ALLOW_REMOTE_CONTENT=true is required: the diff and its description "
-                "go to GitHub"
-            )
-        top, _ = repo_layout(args.root)
-        owner, repo = origin_of(top)
-        base = args.base or record.base_branch
-        if base is None:
-            raise ChangeError("the change started from a detached HEAD; give --base BRANCH")
-        summary = _draft_summary(store, head.ref)
-
-        def note(kind: EventKind, detail: str, ref: str | None = None) -> None:
-            store.add_change_event(
-                ChangeEvent(
-                    change_id=record.change_id,
-                    kind=kind,
-                    commit=head.commit,
-                    diff_sha256=head.diff_sha256,
-                    ref=ref,
-                    detail=detail,
-                    created_at=utc_now(),
-                )
-            )
-
-        already = any(e.kind is EventKind.PUSHED and e.commit == head.commit for e in events)
-        if not already:
-            try:
-                push_branch(top, owner, repo, record.branch, github.github_token)
-            except PublishError as exc:
-                note(EventKind.PUSH_FAILED, exc.failure.value)
-                raise
-            note(EventKind.PUSHED, f"pushed {record.branch} to {owner}/{repo}")
         try:
-            request = create_pull_request(
-                owner,
-                repo,
-                record.branch,
-                base,
-                pr_title(summary),
-                _pr_body(record, events, head, summary, passed),
-                github.github_token,
+            url, already = open_pull_request(
+                store, args.root, args.change_id, args.base, args.without_passing_check
             )
-        except PublishError as exc:
-            note(EventKind.PR_FAILED, exc.failure.value)
-            print(f"the branch is pushed to {owner}/{repo}; `change pr` can be run again")
+        except PublishError:
+            _, events = _find(store.read_changes(), args.change_id)
+            if events and events[-1].kind is EventKind.PR_FAILED:  # the push had succeeded
+                print("the branch is pushed; `change pr` can be run again")
             raise
-        note(EventKind.PR_OPENED, f"pull request #{request.number}", request.url)
-    print(f"pull request opened: {request.url}")
+    if already:
+        print(f"a pull request is already open for this commit: {url}")
+        return EXIT_OK
+    print(f"pull request opened: {url}")
     print("nothing was merged; review it on GitHub")
     return EXIT_OK
+
+
+def open_pull_request(
+    store: TraceStore, root: Path, change_id: str, base_arg: str | None, without_passing: bool
+) -> tuple[str, bool]:
+    """Push the approved commit and open a pull request. Returns (url, already_open)."""
+    record, events = _find(store.read_changes(), change_id)
+    head = _head(record, events, root)
+    assert head.commit is not None and head.diff_sha256 is not None  # noqa: S101 - _head
+    opened = [e for e in events if e.kind is EventKind.PR_OPENED and e.commit == head.commit]
+    if opened:
+        return opened[-1].ref or "", True
+    if approval_for(events, head.commit, head.diff_sha256) is None:
+        raise ChangeError("no approval names the current commit and diff; run `change approve`")
+    check = latest_check(events, head.commit)
+    passed = check is not None and check.detail.startswith("succeeded")
+    if not passed and not without_passing:
+        raise ChangeError(
+            "the latest check did not pass (or none ran); fix it, or pass --without-passing-check"
+        )
+    github = load_github_settings()
+    if not github.allow_remote_content:
+        raise ChangeError(
+            "COGMESH_ALLOW_REMOTE_CONTENT=true is required: the diff and its description "
+            "go to GitHub"
+        )
+    top, _ = repo_layout(root)
+    owner, repo = origin_of(top)
+    base = base_arg or record.base_branch
+    if base is None:
+        raise ChangeError("the change started from a detached HEAD; give --base BRANCH")
+    summary = _draft_summary(store, head.ref)
+
+    def note(kind: EventKind, detail: str, ref: str | None = None) -> None:
+        store.add_change_event(
+            ChangeEvent(
+                change_id=record.change_id,
+                kind=kind,
+                commit=head.commit,
+                diff_sha256=head.diff_sha256,
+                ref=ref,
+                detail=detail,
+                created_at=utc_now(),
+            )
+        )
+
+    already = any(e.kind is EventKind.PUSHED and e.commit == head.commit for e in events)
+    if not already:
+        try:
+            push_branch(top, owner, repo, record.branch, github.github_token)
+        except PublishError as exc:
+            note(EventKind.PUSH_FAILED, exc.failure.value)
+            raise
+        note(EventKind.PUSHED, f"pushed {record.branch} to {owner}/{repo}")
+    try:
+        request = create_pull_request(
+            owner,
+            repo,
+            record.branch,
+            base,
+            pr_title(summary),
+            _pr_body(record, events, head, summary, passed),
+            github.github_token,
+        )
+    except PublishError as exc:
+        note(EventKind.PR_FAILED, exc.failure.value)
+        raise
+    note(EventKind.PR_OPENED, f"pull request #{request.number}", request.url)
+    return request.url, False
 
 
 def _draft_summary(store: TraceStore, decision_id: str | None) -> str:

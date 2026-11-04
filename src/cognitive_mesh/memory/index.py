@@ -173,6 +173,100 @@ class MemoryIndex:
             _check_compatible(decisions, _decision_key(embedder.key))
         return cls(collection, embedder, decisions)
 
+    @classmethod
+    def open_for_browse(cls, path: Path) -> "MemoryIndex":
+        """Open to list items and vectors, without an embedder (ADR-0044). Never creates anything.
+
+        `search` and `search_decisions` need an embedder and fail on an index opened this way.
+        """
+        if not path.is_dir() or not (path / _DB_FILE).is_file():
+            raise MemoryIndexError("the memory index does not exist")
+        client = _client(path)
+        try:
+            collection = client.get_collection(COLLECTION, embedding_function=None)
+        except Exception:
+            raise MemoryIndexError("the directory is not a memory index") from None
+        try:
+            decisions: Any | None = client.get_collection(
+                DECISIONS_COLLECTION, embedding_function=None
+            )
+        except Exception:
+            decisions = None
+        return cls(collection, None, decisions)  # type: ignore[arg-type]
+
+    # -- browsing (ADR-0044; read-only) ------------------------------------------------------
+
+    def _named(self, name: str) -> Any:
+        if name == COLLECTION:
+            return self._col
+        if name == DECISIONS_COLLECTION and self._decisions is not None:
+            return self._decisions
+        raise MemoryIndexError("no such collection")
+
+    def collections(self) -> list[dict[str, Any]]:
+        """Name, item count and the embedding model the collection was built with."""
+        found: list[dict[str, Any]] = []
+        for name, col in ((COLLECTION, self._col), (DECISIONS_COLLECTION, self._decisions)):
+            if col is None:
+                continue
+            try:
+                meta = dict(col.metadata or {})
+                found.append({"name": name, "count": int(col.count()), "model": meta})
+            except Exception:
+                raise MemoryIndexError("cannot read the memory index") from None
+        return found
+
+    def page(self, name: str, offset: int, limit: int) -> list[tuple[str, dict[str, Any]]]:
+        """One page of (id, metadata) in the collection's own order."""
+        col = self._named(name)
+        try:
+            got = col.get(limit=limit, offset=offset, include=["metadatas"])
+        except Exception:
+            raise MemoryIndexError("cannot read the memory index") from None
+        return [(str(i), dict(m or {})) for i, m in zip(got["ids"], got["metadatas"], strict=True)]
+
+    def item(self, name: str, item_id: str) -> tuple[dict[str, Any], list[float]] | None:
+        """(metadata, vector) of one item, or None when the id is not in the collection."""
+        col = self._named(name)
+        try:
+            got = col.get(ids=[item_id], include=["metadatas", "embeddings"])
+        except Exception:
+            raise MemoryIndexError("cannot read the memory index") from None
+        if not got["ids"]:
+            return None
+        return dict(got["metadatas"][0] or {}), [float(x) for x in got["embeddings"][0]]
+
+    def neighbours(
+        self, name: str, vector: Sequence[float], k: int
+    ) -> list[tuple[str, dict[str, Any], float]]:
+        """The `k` items nearest a vector as (id, metadata, cosine similarity)."""
+        col = self._named(name)
+        try:
+            got = col.query(
+                query_embeddings=[list(vector)], n_results=k, include=["metadatas", "distances"]
+            )
+        except Exception:
+            raise MemoryIndexError("cannot read the memory index") from None
+        return [
+            (str(i), dict(m or {}), round(1.0 - float(d), 4))
+            for i, m, d in zip(got["ids"][0], got["metadatas"][0], got["distances"][0], strict=True)
+        ]
+
+    def vectors(
+        self, name: str, limit: int
+    ) -> tuple[list[str], list[dict[str, Any]], list[list[float]]]:
+        """Ids, metadata and vectors of the first `limit` items (for a projection)."""
+        col = self._named(name)
+        try:
+            got = col.get(limit=limit, include=["metadatas", "embeddings"])
+        except Exception:
+            raise MemoryIndexError("cannot read the memory index") from None
+        return (
+            [str(i) for i in got["ids"]],
+            [dict(m or {}) for m in got["metadatas"]],
+            [[float(x) for x in v] for v in got["embeddings"]],
+        )
+
     @property
     def has_decisions(self) -> bool:
         """True when this index has a decisions collection (it may still be empty)."""

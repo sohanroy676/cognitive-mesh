@@ -40,6 +40,7 @@ from cognitive_mesh.orchestrator import (
 )
 from cognitive_mesh.providers import build_model_client, catalog_entry_id
 from cognitive_mesh.providers.recording import CallLog, RecordingClient
+from cognitive_mesh.serve import cli as serve_cli
 from cognitive_mesh.traces import (
     RunTrace,
     TraceNotFoundError,
@@ -96,6 +97,7 @@ EXIT_DECISION_ERROR = decisions_cli.EXIT_DECISION_ERROR  # 21 (ADR-0039)
 EXIT_CONDUCTOR_ERROR = 22  # the conductor produced no usable plan (ADR-0040)
 EXIT_CHANGE_ERROR = change_cli.EXIT_CHANGE_ERROR  # 24 (ADR-0042); 23 is the impact exit
 EXIT_EVAL_ERROR = eval_cli.EXIT_EVAL_ERROR  # 25 (ADR-0043)
+EXIT_SERVE_ERROR = serve_cli.EXIT_SERVE_ERROR  # 26 (ADR-0044)
 MAX_PLAN_BYTES = 256 * 1024
 DEFAULT_MIN_SIMILARITY = 0.2  # from one live run on 3 documents (ADR-0014); a rough starting point
 
@@ -304,6 +306,7 @@ def _build_parser() -> argparse.ArgumentParser:
     workspace_cli.add_parser(sub)
     change_cli.add_parser(sub)
     eval_cli.add_parser(sub)
+    serve_cli.add_parser(sub)
     models_cli.add_parser(sub)
     decisions_cli.add_parser(sub)
     experience = sub.add_parser("experience", help="build and query the experience graph")
@@ -2158,6 +2161,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return change_cli.run(args)
     if args.command == "eval":
         return eval_cli.run(args)
+    if args.command == "serve":
+        return serve_cli.run(args)
     if args.command == "models":
         return models_cli.run(args)
     if args.command == "decisions":

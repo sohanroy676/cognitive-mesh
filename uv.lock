@@ -329,6 +329,7 @@ source = { editable = "." }
 dependencies = [
     { name = "chromadb" },
     { name = "networkx" },
+    { name = "numpy" },
     { name = "packaging" },
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
@@ -355,6 +356,7 @@ dev = [
 requires-dist = [
     { name = "chromadb", specifier = ">=1.5.9" },
     { name = "networkx", specifier = ">=3.7" },
+    { name = "numpy", specifier = ">=2.5.4" },
     { name = "packaging", specifier = ">=26.3" },
     { name = "pydantic-settings", specifier = ">=2.16.0" },
     { name = "python-dotenv", specifier = ">=1.2.4" },
