@@ -5,6 +5,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **change:** Add small-change agent (v1.12.0)
+
 ### Documentation
 - Record v1.11.0 CI runs and session 11 handoff
 - **adr:** Propose ADR-0042 small-change agent
