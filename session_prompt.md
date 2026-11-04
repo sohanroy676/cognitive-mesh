@@ -3,9 +3,14 @@
 Update this file at the end of every session and whenever the user asks for a new-session prompt.
 
 ## Short prompt to paste into a new session
-Continue Cognitive Mesh (extended roadmap, next v1.9.0). Work only on branch `feature/extended-roadmap-v1.7` (do not branch off main); check it out and pull first. Read `session_prompt.md` at the repo root first and follow it. Update it at the end of the session or when I ask for a new prompt.
+Continue Cognitive Mesh (extended roadmap, next v1.10.0). Work only on branch `feature/extended-roadmap-v1.7` (do not branch off main); check it out and pull first. Read `session_prompt.md` at the repo root first and follow it. Update it at the end of the session or when I ask for a new prompt.
 
-## Where we are (end of session 8, 2026-11-04)
+## Where we are (end of session 9, 2026-11-04)
+- v1.9.0 (ADR-0039, accepted): decision records. Trace schema 6 (`decisions`, `decision_citations`, `decision_links`), graph format 7, `decisions record|link|list|show|trace` (exit 21), outcomes schema 3 (a decision id may be the subject), a `decisions` Chroma collection, `recall` returns decisions (`recall_decisions_for`, shared with the UI endpoint). Suite 1805 passed, 7 skipped. Committed on the branch; check `git log` and `gh run list` for whether it was pushed, CI-run and tagged `v1.9.0` (if not: changelog with `--tag v1.9.0` last, push, CI, tag).
+- Open from v1.9.0: no UI view of decisions; not in the `task` context pack; plan drafts not recorded; PR/branch links are never checked against GitHub; no model has written a decision yet (the v1.10.0 conductor will call `decisions.record.record_decision(..., made_by=MadeBy.MODEL)`, which needs a recorded `model_calls` row for `agent_task_id`).
+- Next: v1.10.0 Orchestrator model (read `docs/extended_roadmap.md` v1.10.0): plan mode, draft ADR-0040 as Proposed on this branch, no code until the user accepts it. Every conductor plan is a decision record; routing may use `models stats` records only above a stated sample minimum.
+
+## Where we were (end of session 8, 2026-11-04)
 - Branch policy (user decision 2026-11-03): ALL extended-roadmap work (v1.7.0 onwards) happens on `feature/extended-roadmap-v1.7` and is pushed to `origin/feature/extended-roadmap-v1.7`. Do not branch off main or merge into main until the user approves completion of the whole extended roadmap. Each version: ADR first (Proposed, wait for acceptance), code, tests, docs, regenerate the changelog with `--tag vX.Y.Z` as the last commit, push the branch, wait for CI, then tag that commit and push the tag (the user pre-approved push and tag on this branch only). Merging to main, deleting branches and force-pushing still need explicit approval.
 - v1.8.0 (ADR-0038, accepted): OpenAI-compatible client, TOML model catalog (no keys; https, key variable, `COGMESH_ALLOW_REMOTE_CONTENT`, and `COGMESH_ALLOW_TRAINING_USE` unless `data_use=no_training`), `--model/--catalog` on run/task/plan, token counts (unknown = None), call records in trace schema 5 (`model_calls`), `models list|stats`, exit 20. Suite 1704 passed, 7 skipped. Pushed and tagged `v1.8.0` (`f295b59`); CI: branch run 41770415795 and tag run 41770857133 passed (first branch run 41770047045 failed only the changelog date step after UTC midnight).
 - Open from v1.8.0: no real remote service was ever called (Gemini/OpenRouter/Mistral request shapes unverified; `tests/test_live_openai_compat.py` not run, needs RUN_LIVE_OPENAI_COMPAT=1 plus URL, model and key); plan drafting is not recorded; 429 covers quota and rate limit alike; `data_use` is declared, not checked; catalog roles are agent ids (+ `planner`); no routing yet (v1.10.0).
@@ -14,6 +19,12 @@ Continue Cognitive Mesh (extended roadmap, next v1.9.0). Work only on branch `fe
 - Open from v1.6.0: no command moves a github pin, clone cache has no size limit, private repos only checked with a nonexistent repo.
 - Next: v1.9.0 Decision records (read `docs/extended_roadmap.md` v1.9.0): plan mode, draft ADR-0039 as Proposed on this branch, no code until the user accepts. Decisions join the experience graph and the vector index (graph and index format bumps need care: ADR-0027 hash rules, ADR-0014 index key); model-written reasoning is `model_unverified`. Reuse `providers/recording.py` call records to link a decision to its model call.
 - Decided earlier: GitHub fetch uses the `git` CLI; public repos only until the v1.12.0 ADR; other projects in a workspace are read-only.
+
+## Workflow facts learned (session 9)
+- Long `python - <<'EOF'` or `cat <<'EOF'` blocks in one Bash call fail here ("unexpected EOF"); write patch scripts and file bodies with the Write tool into the scratchpad and run them. A small helper `edit(path, [(old, new)])` (read with newline='', normalise CRLF, assert the old text is present) lives in `%TEMP%/edit_helper.py`; recreate it if it is gone. Never put a real newline inside a Python string literal in a generated test (use `\n`); when a file looks unchanged after a script, check with `grep -n` before retrying.
+- `uv run pytest` in a background command: if lint steps run first, the output file is not truncated yet, so a wait loop sees the previous run's `exit=` line; remove the file first or start pytest first.
+- Windows clocks can repeat a microsecond; anything whose id hashes a timestamp must retry.
+- Test pins that change on purpose with a format or schema bump: `tests/test_application_identity.py` (graph FORMAT_VERSION), `tests/test_graph_load_cost.py` (GOLDEN_HASH), `tests/test_trace_migrations.py` (key = SCHEMA_VERSION), `tests/test_valid_until_stores.py` (outcomes version).
 
 ## Workflow facts learned (session 8)
 - The changelog section date is today's UTC date when generated with `--tag`; a CI run after UTC midnight fails the changelog step. Check `date -u` before regenerating and before CI; if CI crosses midnight, regenerate with `--tag vX.Y.Z`, commit, push, rerun CI, tag that commit.
@@ -30,7 +41,7 @@ Continue Cognitive Mesh (extended roadmap, next v1.9.0). Work only on branch `fe
 - Large inline Python/heredoc scripts break in the Bash tool here; write scripts to the scratchpad with the Write tool and run them. Edit CRLF files with Python (newline='') or the Edit tool.
 
 ## Start of session
-1. `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3` (expect v1.8.0), `git checkout feature/extended-roadmap-v1.7 && git pull`, `gh auth status` (must be sohanroy676), `gh run list --limit 6`.
+1. `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3` (expect v1.9.0 once tagged, else v1.8.0), `git checkout feature/extended-roadmap-v1.7 && git pull`, `gh auth status` (must be sohanroy676), `gh run list --limit 6`.
 2. Read this file, then `docs/extended_roadmap.md` for the current version, and `memory-bank/activeContext.md` / `progress.md` on demand.
 
 ## Rules

@@ -84,6 +84,15 @@ Run 2026-10-17 in a scratch directory (nothing added to the repo): `npm install 
 
 ### Verified commands
 ```
+# v1.9.0 decision records (ADR-0039), run 2026-11-04 on branch `feature/extended-roadmap-v1.7`, scratch directory via uv run --project, dep_app copy, real MiniLM, no git repository (script in the session scratchpad, not in the repo)
+uv run cognitive-mesh decisions record --db T --by sohan --root app --summary S --option A --option B --chosen A --reasoning R --cite-file src/dep_app/a.py   # exit 0, application dep-app@app, no git ref observed
+uv run cognitive-mesh decisions list --db T --root app   # exit 0, [supported]
+uv run cognitive-mesh experience build --db T --graph G; uv run cognitive-mesh memory index --db T --index IDX   # exit 0, 'decisions: 1 added'
+uv run cognitive-mesh recall QUERY --db T --index IDX --graph G --root app   # exit 0, the decision found by meaning (0.512)
+uv run cognitive-mesh decisions link ID --db T --pr org/repo#12 --by sohan; uv run cognitive-mesh decisions trace --db T --graph G --root app --pr org/repo#12   # exit 0, evidence [ok] file
+uv run cognitive-mesh experience outcome DECISION_ID --source person --result succeeded --detail D --by sohan --root app --graph G --outcomes O; uv run cognitive-mesh decisions show ID --db T --graph G --root app --outcomes O   # exit 0, [validated]
+# after appending a line to a.py: decisions list ... -> [stale]; a second decision with --supersedes made the first [superseded]
+uv run cognitive-mesh decisions show decision:000...001 --db T   # exit 13; decisions list --db missing: exit 8; record with a missing cited file: exit 21
 # v1.8.0 model catalog (ADR-0038), run 2026-11-04 on branch `feature/extended-roadmap-v1.7`, scratch directory via uv run --project, scratch stub OpenAI-compatible server on 127.0.0.1:18765 (script in the session scratchpad, not in the repo; no real remote service was called)
 uv run cognitive-mesh models list --catalog catalog.toml   # exit 0; remote and local entries, key variable and whether it is set
 uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app --model stub --catalog catalog.toml --trace-db t.sqlite3   # exit 0, explain_file succeeded

@@ -1,7 +1,7 @@
 # ADR-0039: Decision records
 
 ## Status
-Proposed (drafted in plan mode 2026-11-04; the four marked user decisions were taken before drafting; waiting for the user's acceptance, no code until then)
+Accepted by the user 2026-11-04 (drafted in plan mode; the four marked user decisions were taken before drafting)
 
 ## Date
 2026-11-04
@@ -158,3 +158,54 @@ triggers; migration 5 to 6 on an old database; graph format 6 refused; rebuild k
 without the decisions collection still searches; persistence and recall across processes; `decisions trace
 --commit` against a fixture git repository and a non-git folder; exit 21 paths; a model decision joins its
 `model_calls` row; opt-in live check with the real embedding model (`RUN_LIVE_EMBEDDINGS=1`).
+
+## Amendments made during implementation (2026-11-04)
+- **The id is checked on every read.** `decision_digest(decision)` hashes the record without its id; the
+  store recomputes it for each row and treats a mismatch as a malformed row (reported by id, never shown).
+  So a row edited behind the program's back cannot pass as the decision that was recorded, and
+  `check_sources` reports it as `source_unreadable`. A decision therefore never reads as `changed`.
+- **Same clock reading.** The id covers `created_at`, so two identical records differ only by time; a
+  coarse clock can repeat. `record_decision` retries a duplicate id up to 20 times with the time moved by one
+  microsecond (`DuplicateDecisionError`).
+- **Graph details.** `TraceRef.run_id` may be empty when `decision_id` is set (a decision made outside a run);
+  `TraceRef` gains `decision_id` and `file_sha256`, `ExpNode` gains `basis`. A `cites` edge to a node exists
+  only if that node is in the graph; a `decided_in` edge only if the run has a run node. A citation to a node
+  that is not in the graph is kept in the trace row and reads `absent` in the status. File nodes are
+  `file:APP_ID:PATH` (per application).
+- **Source checks.** A decision node is `ok` while its row is present and matches its id; a file node takes
+  the aggregate of the decisions citing it. Decision nodes appear in `experience check` diagnostics.
+- **Citations of files** use the sha256 that ingestion computed, so a file ingestion never opens (a sensitive
+  name such as `.env`) cannot be cited.
+- **Outcomes.** Schema 3 changes no table; it marks a file that may hold decision ids, which an older program
+  refuses. `experience outcome` takes a claim or a decision id (the decision must be in the `--graph`, so
+  rebuild it after recording). `experience review` and `experience promote` stay claim-only.
+- **Index.** `open_for_write` creates the `decisions` collection beside `experiences`; `open_existing`
+  tolerates its absence (`has_decisions` is false). `memory index` also indexes decisions, prints a
+  `decisions:` line, and its `--json` gains a `decisions` object; malformed decision rows make it exit 8,
+  like malformed runs.
+- **Recall.** `RecallResult.decisions` is a `DecisionRecall` (`null` only for callers that do not ask). The
+  CLI and the web UI's `/api/recall` both call `retrieval.recall_decisions_for`, so their JSON stays equal;
+  the UI has no decisions view. A decision is returned when the query matches it by meaning or when it cites a
+  recalled claim or attempt (`cites_recalled`); an index without the collection says so and still serves
+  graph-linked decisions.
+- **CLI.** `--root` that is not a directory exits 3 (as elsewhere); `trace` lists the requested decisions
+  first, then those connected by supersession; a commit matches by prefix (7 or more characters).
+- **Tests changed on purpose.** The pinned graph format (7), the golden content hash of
+  `tests/test_graph_load_cost.py` (the format number and the new reference fields are hashed), the trace
+  schema (6), the outcomes schema (3), and two migration tests that stacked a fake migration on a hard-coded
+  key now stack it on `SCHEMA_VERSION`.
+
+## Outcome
+Implemented on `feature/extended-roadmap-v1.7` (v1.9.0). Suite 1805 passed, 7 skipped (was 1704, 7); ruff, format and mypy clean.
+Run by hand 2026-11-04 in a scratch directory via `uv run --project` with the real MiniLM model (script in the
+session scratchpad, not in the repo; `tests/fixtures/dep_app` copied to `app`, no git repository): two `run`
+calls; `decisions record --root app --cite-file src/dep_app/a.py` (exit 0, application `dep-app@app`, no
+git ref observed); `decisions list` (supported, "no --graph given"); `experience build`; `memory index`
+(`decisions: 1 added`); `recall` (the decision found by meaning, similarity 0.512); `decisions link --pr
+org/repo#12` (declared) and `decisions trace --pr` (exit 0, evidence `[ok] file`); `experience outcome
+DECISION --source person --result succeeded` then `decisions show --graph --root --outcomes` (validated);
+after appending a line to `a.py` the decision read `stale`; a second decision with `--supersedes` made the
+first `superseded`; unknown id exit 13, missing database exit 8, a missing cited file exit 21. Covered by
+tests with a fixture git repository (not by hand): observed commit and branch, a detached HEAD, a commit
+prefix. Not run: a real model writing a decision (none exists until v1.10.0), decisions in the web UI (there is
+no view), concurrent writers of decisions, a graph or index with thousands of decisions, Linux or macOS.
