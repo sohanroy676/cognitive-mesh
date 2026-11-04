@@ -3,6 +3,8 @@
 <!-- Update this at the end of every session. This is the first thing to read when resuming. -->
 
 ## Current focus
+Session 8 end (2026-11-04): v1.8.0 (ADR-0038: model catalog, OpenAI-compatible client, model call records, `models list|stats`) is on `feature/extended-roadmap-v1.7`, pushed and tagged `v1.8.0` (`f295b59`; CI ids in `progress.md`). Still no merge to main (user decision: wait until the whole extended roadmap is approved). Next: v1.9.0 Decision records, ADR-0039 first. See `session_prompt.md`.
+
 Session 7 end (2026-11-03): v1.7.0 (ADR-0037) is implemented on `feature/extended-roadmap-v1.7`, pushed to origin and tagged after CI (ids in `progress.md`). User decision: all extended-roadmap work stays on this branch until the user approves completion of the roadmap; no merge to main before that. Next: v1.8.0, ADR-0038 first. See `session_prompt.md`.
 
 Session 6 end (2026-11-03): v1.6.0 (ADR-0036, workspace) is on main, pushed and tagged `v1.6.0` (CI 41674254292, tag run 41674929331 passed). Next: ADR-0037 for v1.7.0 on a new branch off main; see `session_prompt.md`.
