@@ -4,6 +4,7 @@ from cognitive_mesh.agents.base import Agent
 from cognitive_mesh.agents.code_explainer import CodeExplainer
 from cognitive_mesh.agents.dependency_analyst import DependencyAnalyst
 from cognitive_mesh.agents.models import AgentRegistryError, AgentSpec
+from cognitive_mesh.agents.reader import Reader
 from cognitive_mesh.providers import ModelClient
 
 
@@ -35,4 +36,5 @@ def default_registry(
     registry = AgentRegistry()
     registry.register(DependencyAnalyst())
     registry.register(CodeExplainer(model_client, timeout_s=model_timeout_s))
+    registry.register(Reader(model_client, timeout_s=model_timeout_s))
     return registry

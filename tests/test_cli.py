@@ -293,7 +293,11 @@ def test_agents_lists_roles_without_config(capsys: pytest.CaptureFixture[str]) -
 def test_agents_json_has_schemas(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["agents", "--json"]) == EXIT_OK
     payload = json.loads(capsys.readouterr().out)
-    assert [a["id"] for a in payload["agents"]] == ["code_explainer", "dependency_analyst"]
+    assert [a["id"] for a in payload["agents"]] == [
+        "code_explainer",
+        "dependency_analyst",
+        "reader",
+    ]
     for agent in payload["agents"]:
         for cap in agent["capabilities"]:
             assert cap["input_schema"]["type"] == "object"

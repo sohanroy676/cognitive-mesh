@@ -257,9 +257,9 @@ def test_conduct_needs_a_conductor_and_conductor_flags_need_conduct(
     assert "--conduct needs --conductor" in capsys.readouterr().err
     without_conduct = [a for a in args if a != "--conduct"]
     assert main([*without_conduct, "--plan", "p.json"]) == EXIT_CONFIG_ERROR
-    assert "--conductor, --workspace, --project and --explore-rate need --conduct" in (
-        capsys.readouterr().err
-    )
+    # --workspace and --project are no longer conduct-only (ADR-0041): they fill the context of a
+    # `--plan` run too, so only the conductor flags are refused here
+    assert "--conductor and --explore-rate need --conduct" in capsys.readouterr().err
     neither = [a for a in without_conduct if a not in ("--conductor", "alpha")]
     assert main(neither) == EXIT_CONFIG_ERROR
     assert "give --plan FILE, or --conduct" in capsys.readouterr().err

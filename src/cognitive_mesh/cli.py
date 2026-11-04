@@ -68,6 +68,7 @@ if TYPE_CHECKING:
     from cognitive_mesh.retrieval import DecisionRecall, RecallResult
     from cognitive_mesh.traces import CallRow
     from cognitive_mesh.workflow import PreparedContext
+    from cognitive_mesh.workspace.access import WorkspaceAccess
 
 EXIT_OK = 0
 EXIT_CONFIG_ERROR = 2
@@ -167,6 +168,10 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--root", type=Path, required=True, help="application directory to analyze")
     run.add_argument("--json", action="store_true", dest="as_json", help="emit JSON")
     run.add_argument("--app-id", metavar="NAME", help=_APP_ID_HELP)
+    run.add_argument(
+        "--workspace", type=Path, metavar="FILE", help="workspace file: other projects, read-only"
+    )
+    run.add_argument("--project", metavar="NAME", help="the current project in the workspace")
     run.add_argument(
         "--trace-db", type=Path, metavar="FILE", help="record the run in this SQLite trace database"
     )
@@ -703,6 +708,7 @@ def _run_plan(
     trace_db: Path | None,
     app_id: str | None,
     overrides: dict[str, Any],
+    access: "WorkspaceAccess | None" = None,
 ) -> int:
     calls = CallLog()
     loaded = _load_run_inputs(plan_path, root, overrides, calls)
@@ -712,7 +718,9 @@ def _run_plan(
     identity = _identity_for(ingestion.root, app_id)
     if isinstance(identity, int):
         return identity
-    context = AgentContext(ingestion=ingestion, graph=build_dependency_graph(ingestion))
+    context = AgentContext(
+        ingestion=ingestion, graph=build_dependency_graph(ingestion), workspace=access
+    )
     if trace_db is None:
         run = Orchestrator(registry, on_attempt=calls.begin_attempt).run(validated, context)
         _emit_run(run, as_json, None)
@@ -1139,6 +1147,10 @@ def _run_task(args: argparse.Namespace) -> int:
     if (problem := _task_args_problem(args)) is not None:
         print(problem, file=sys.stderr)
         return EXIT_CONFIG_ERROR
+    access = _access_from_args(args)
+    if isinstance(access, int):
+        return access
+    args.workspace_access = access  # read by the context built in _task_with_store / conducted
     if args.conduct:
         return _run_conducted(args)
     calls = CallLog()
@@ -1187,7 +1199,12 @@ def _task_with_store(
     except TraceStoreError as exc:  # nothing ran: the offered context could not be recorded
         print(_printable(str(exc)), file=sys.stderr)
         return EXIT_TRACE_STORE_ERROR
-    context = AgentContext(ingestion=ingestion, graph=graph, recalled=pack)
+    context = AgentContext(
+        ingestion=ingestion,
+        graph=graph,
+        recalled=pack,
+        workspace=getattr(args, "workspace_access", None),
+    )
     run = Orchestrator(registry, now=utc_now, on_attempt=calls.begin_attempt).run(
         validated, context
     )
@@ -1252,26 +1269,63 @@ def _task_args_problem(args: argparse.Namespace) -> str | None:
             )
         if args.model is not None:
             return "--model cannot be used with --conduct; the conductor assigns the models"
-        if (args.workspace is None) != (args.project is None):
-            return "--workspace and --project go together"
-        return None
+        return _workspace_args_problem(args)
     if args.plan is None:
         return "give --plan FILE, or --conduct"
-    if (
-        args.conductor is not None
-        or args.workspace is not None
-        or args.project is not None
-        or args.explore_rate
-    ):
-        return "--conductor, --workspace, --project and --explore-rate need --conduct"
+    if args.conductor is not None or args.explore_rate:
+        return "--conductor and --explore-rate need --conduct"
+    return _workspace_args_problem(args)
+
+
+def _workspace_args_problem(args: argparse.Namespace) -> str | None:
+    if (args.workspace is None) != (args.project is None):
+        return "--workspace and --project go together"
     return None
+
+
+def _workspace_access(workspace: Path, project: str, root: Path) -> "WorkspaceAccess":
+    """The workspace as agents may read it: other projects read-only, `project` the current one.
+    `root` (the folder the run analyses) must be that project's folder."""
+    from cognitive_mesh.workspace.access import WorkspaceAccess
+    from cognitive_mesh.workspace.models import WorkspaceError
+
+    graph, reads = workspace_cli.load_workspace(workspace)
+    if project not in {p.name for p in graph.projects}:
+        raise WorkspaceError("no project has that name")
+    read = reads.get(project)
+    if read is None:
+        raise WorkspaceError("the project is not on disk; run `workspace refresh`")
+    try:
+        same = read.root.samefile(root)
+    except OSError:
+        same = False
+    if not same:
+        raise WorkspaceError("the project is not the --root folder")
+    return WorkspaceAccess(project, graph, reads)
+
+
+def _access_from_args(args: argparse.Namespace) -> "WorkspaceAccess | int | None":
+    """The workspace access for `--workspace/--project`, None without them, or an exit code."""
+    from cognitive_mesh.workspace.models import WorkspaceError
+
+    if args.workspace is None and args.project is None:
+        return None
+    if (args.workspace is None) != (args.project is None):
+        print("--workspace and --project go together", file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+    try:
+        return _workspace_access(args.workspace, args.project, args.root)
+    except WorkspaceError as exc:
+        print(f"workspace: {_printable(str(exc))}", file=sys.stderr)
+        return EXIT_WORKSPACE_ERROR
 
 
 def _run_conducted(args: argparse.Namespace) -> int:
     """`task --conduct` (ADR-0040): a conductor model drafts and routes the plan, then it runs."""
     from cognitive_mesh import workflow
+    from cognitive_mesh.orchestrator.conduct import workspace_summary
     from cognitive_mesh.providers import CatalogError, load_catalog
-    from cognitive_mesh.workspace.models import WorkspaceError
+    from cognitive_mesh.workspace.render import to_json
 
     try:
         workflow.validate_request(args.request)
@@ -1300,12 +1354,9 @@ def _run_conducted(args: argparse.Namespace) -> int:
     if isinstance(identity, int):
         return identity
     workspace: dict[str, object] | None = None
-    if args.workspace is not None:
-        try:
-            workspace = _workspace_summary(args.workspace, args.project)
-        except WorkspaceError as exc:
-            print(f"workspace: {_printable(str(exc))}", file=sys.stderr)
-            return EXIT_WORKSPACE_ERROR
+    held = getattr(args, "workspace_access", None)
+    if held is not None:
+        workspace = workspace_summary(to_json(held.graph))
     graph = build_dependency_graph(ingestion)
     try:
         store = TraceStore.create(args.db)
@@ -1318,17 +1369,6 @@ def _run_conducted(args: argparse.Namespace) -> int:
                 args, store, settings, catalog, ingestion, graph, identity, workspace
             )
         )
-
-
-def _workspace_summary(path: Path, project: str) -> dict[str, object]:
-    from cognitive_mesh.orchestrator.conduct import workspace_summary
-    from cognitive_mesh.workspace.models import WorkspaceError
-    from cognitive_mesh.workspace.render import to_json
-
-    wg = workspace_cli.load_workspace_graph(path)
-    if project not in {p.name for p in wg.projects}:
-        raise WorkspaceError("no project has that name")
-    return workspace_summary(to_json(wg))
 
 
 def _conducted_with_store(
@@ -1462,7 +1502,12 @@ def _conducted_with_store(
             f"conductor: the decisions cannot be recorded: {_printable(str(exc))}", file=sys.stderr
         )
         return EXIT_CONDUCTOR_ERROR
-    context = AgentContext(ingestion=ingestion, graph=graph, recalled=pack)
+    context = AgentContext(
+        ingestion=ingestion,
+        graph=graph,
+        recalled=pack,
+        workspace=getattr(args, "workspace_access", None),
+    )
     run = Orchestrator(run_registry, now=utc_now, on_attempt=router.begin_attempt).run(
         validated, context
     )
@@ -2088,8 +2133,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "ingest":
         return _run_ingest(args.path, args.as_json, args.include_content)
     if args.command == "run":
+        access = _access_from_args(args)
+        if isinstance(access, int):
+            return access
         return _run_plan(
-            args.plan, args.root, args.as_json, args.trace_db, args.app_id, _model_overrides(args)
+            args.plan,
+            args.root,
+            args.as_json,
+            args.trace_db,
+            args.app_id,
+            _model_overrides(args),
+            access,
         )
     if args.command == "plan":
         return _run_plan_request(

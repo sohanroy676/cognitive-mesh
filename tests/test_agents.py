@@ -25,6 +25,8 @@ from cognitive_mesh.agents import (
 from cognitive_mesh.graph import build_dependency_graph
 from cognitive_mesh.ingestion import ingest_application
 from cognitive_mesh.providers import ModelRequest, ModelResponse
+from cognitive_mesh.workspace.access import WorkspaceAccess
+from impact_support import make_workspace
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HOSTILE = "SECRET-MARKER-<script>\x1b[31m"
@@ -39,6 +41,8 @@ VALID_INPUTS: dict[str, dict[str, object]] = {
         "second": {"node_id": "b", "dependencies": []},
     },
     "explain_file": {"path": "pyproject.toml"},
+    "dependents_of": {"target": "route:GET /users"},
+    "summarise_dependents": {"target": "route:GET /users"},
 }
 
 
@@ -48,6 +52,10 @@ class _GoodClient:
 
     def complete(self, request: ModelRequest) -> ModelResponse:
         text = json.dumps({"summary": "ok", "symbols": []})
+        if "other projects" in request.system:  # the reader (ADR-0041)
+            first = json.loads(request.prompt)["files"][0]
+            cited = {"project": first["project"], "summary": "uses it", "paths": [first["path"]]}
+            text = json.dumps({"summaries": [cited]})
         return ModelResponse(provider=self.provider, model=self.model, text=text)
 
 
@@ -55,11 +63,12 @@ class _Echo(BaseModel):
     value: str = ""
 
 
-def _context() -> AgentContext:
+def _context(workspace: WorkspaceAccess | None = None) -> AgentContext:
     graph_result = ingest_application(FIXTURES / "dep_app")
     return AgentContext(
         ingestion=ingest_application(FIXTURES / "sample_app"),
         graph=build_dependency_graph(graph_result),
+        workspace=workspace,
     )
 
 
@@ -80,10 +89,11 @@ class _Fake(Agent):
         )
 
 
-def test_every_declared_capability_runs_with_controlled_inputs() -> None:
+def test_every_declared_capability_runs_with_controlled_inputs(tmp_path: Path) -> None:
     """No capability is declared without a working handler (Fix-if: claims it can't do)."""
     registry = default_registry(_GoodClient())
-    context = _context()
+    graph, reads = make_workspace(tmp_path).load()
+    context = _context(WorkspaceAccess("api", graph, reads))
     seen = set()
     for spec in registry.specs():
         for cap in spec.capabilities:
@@ -98,7 +108,7 @@ def test_every_declared_capability_runs_with_controlled_inputs() -> None:
 
 def test_specs_are_discoverable_and_sorted() -> None:
     specs = default_registry().specs()
-    assert [s.id for s in specs] == ["code_explainer", "dependency_analyst"]
+    assert [s.id for s in specs] == ["code_explainer", "dependency_analyst", "reader"]
     for spec in specs:
         assert spec.role and spec.description
         for cap in spec.capabilities:

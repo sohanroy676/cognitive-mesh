@@ -3,9 +3,14 @@
 Update this file at the end of every session and whenever the user asks for a new-session prompt.
 
 ## Short prompt to paste into a new session
-Continue Cognitive Mesh (extended roadmap, next v1.11.0). Work only on branch `feature/extended-roadmap-v1.7` (do not branch off main); check it out and pull first. Read `session_prompt.md` at the repo root first and follow it. Update it at the end of the session or when I ask for a new prompt.
+Continue Cognitive Mesh (extended roadmap, next v1.12.0). Work only on branch `feature/extended-roadmap-v1.7` (do not branch off main); check it out and pull first. Read `session_prompt.md` at the repo root first and follow it. Update it at the end of the session or when I ask for a new prompt.
 
-## Where we are (end of session 10, 2026-11-04)
+## Where we are (end of session 11, 2026-11-04)
+- v1.11.0 (ADR-0041, accepted): `workspace impact PROJECT --target T`, `workspace contract-diff PROJECT [--base REF]`, `dependency_analyst.dependents_of`, the `reader` role (`summarise_dependents`), read-only `WorkspaceAccess` on `AgentContext.workspace`, `--workspace FILE --project NAME` on `run`, `task --plan` and `task --conduct` (the `--root` folder must be that project's folder), exit 23. Verdicts `breaking|compatible|unknown|unused`; `unknown` is its own group and never a pass. `packaging` is a direct dependency. Suite 1984 passed, 8 skipped.
+- Open from v1.11.0: the reader has not run with a real model; no GitHub-cloned project used as a dependent by hand; submodule imports (`from pkg.sub import x`) are not followed; other local projects are read-only only through the accessor, not on disk; migration order is lexical file order; no UI view; no stored impact reports.
+- Next: v1.12.0 Small-change agent (read `docs/extended_roadmap.md` v1.12.0): plan mode, draft ADR-0042 as Proposed, no code until the user accepts. It amends ADR-0005 (running the project's tests: which command, where, isolation, limits), needs the worktree flow, the size limit (proposal: 3 files, 100 changed lines), PR permissions and GitHub access (token in `.env` or the `gh` login). Reuse `impact.contract_diff`, `WorkspaceAccess.require_writable`, `CapabilitySpec.writes` and the conductor's `current_project`.
+
+## Where we were (end of session 10, 2026-11-04)
 - v1.10.0 (ADR-0040, accepted): `task --conduct --conductor ENTRY --catalog FILE [--explore-rate R] [--workspace FILE --project NAME]`. Conductor plan validated (plan_from_steps + assignment checks + `writes`), two drafts, exit 22 and nothing stored on failure; `RoutedClient` per-step models with catalog-order fallback (max 2); evidence label `recorded` at 20 known-outcome calls; trace schema 7 (run-level conductor calls, decisions written in `finish_run`); decisions may name a run without a step. Suite 1878 passed, 8 skipped. pushed and tagged `v1.10.0` on `2a47e97`; CI: branch run 41790077755 (passed), tag run 41790585121 (passed).
 - Open from v1.10.0: no real model has conducted a task (`tests/test_live_conductor.py` unrun); conductor calls of a refused plan are lost; `models stats` credits the attempt outcome to every call in an attempt; decisions of conducted runs carry no observed git link; static reachability only; no UI view of assignments.
 - Next: v1.11.0 Cross-project impact analysis (read `docs/extended_roadmap.md`): plan mode, draft ADR-0041 as Proposed, no code until the user accepts. Reuse `workspace` graph, read-only accessor, `CapabilitySpec.writes`, the conductor's `current_project`.
@@ -46,7 +51,7 @@ Continue Cognitive Mesh (extended roadmap, next v1.11.0). Work only on branch `f
 - Large inline Python/heredoc scripts break in the Bash tool here; write scripts to the scratchpad with the Write tool and run them. Edit CRLF files with Python (newline='') or the Edit tool.
 
 ## Start of session
-1. `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3` (expect v1.10.0), `git checkout feature/extended-roadmap-v1.7 && git pull`, `gh auth status` (must be sohanroy676), `gh run list --limit 6`.
+1. `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3` (expect v1.11.0), `git checkout feature/extended-roadmap-v1.7 && git pull`, `gh auth status` (must be sohanroy676), `gh run list --limit 6`.
 2. Read this file, then `docs/extended_roadmap.md` for the current version, and `memory-bank/activeContext.md` / `progress.md` on demand.
 
 ## Rules

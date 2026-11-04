@@ -8,11 +8,12 @@ compared as unquoted identifiers (lower case).
 import ast
 import re
 from collections import defaultdict
+from dataclasses import replace
 from itertools import combinations
 from typing import Any
 
 from cognitive_mesh.workspace.contracts import site_of
-from cognitive_mesh.workspace.facts import ProjectFacts, TableDef
+from cognitive_mesh.workspace.facts import Column, ProjectFacts, TableDef
 from cognitive_mesh.workspace.models import SchemaEdge, Site, Unresolved
 
 _IDENT = r'(?:"[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][\w$]*)'
@@ -32,6 +33,20 @@ _DROP = re.compile(rf"^DROP\s+COLUMN\s+(?:IF\s+EXISTS\s+)?({_IDENT})", re.IGNORE
 _RENAME = re.compile(rf"^RENAME\s+COLUMN\s+({_IDENT})\s+TO\s+({_IDENT})", re.IGNORECASE)
 _NOT_COLUMN = frozenset(
     {"PRIMARY", "FOREIGN", "UNIQUE", "CONSTRAINT", "CHECK", "KEY", "INDEX", "EXCLUDE", "LIKE"}
+)
+_ALTER_TYPE = re.compile(
+    rf"^ALTER\s+(?:COLUMN\s+)?({_IDENT})\s+(?:SET\s+DATA\s+)?TYPE\s+(.*)$",
+    re.IGNORECASE | re.DOTALL,
+)
+_SET_NOT_NULL = re.compile(rf"^ALTER\s+(?:COLUMN\s+)?({_IDENT})\s+SET\s+NOT\s+NULL", re.IGNORECASE)
+_DROP_NOT_NULL = re.compile(
+    rf"^ALTER\s+(?:COLUMN\s+)?({_IDENT})\s+DROP\s+NOT\s+NULL", re.IGNORECASE
+)
+_MODIFY = re.compile(rf"^MODIFY\s+(?:COLUMN\s+)?({_IDENT})\s+(.*)$", re.IGNORECASE | re.DOTALL)
+_CONSTRAINT_START = re.compile(
+    r"\b(NOT\s+NULL|NULL|DEFAULT|PRIMARY\s+KEY|REFERENCES|UNIQUE|CHECK|CONSTRAINT|GENERATED|"
+    r"COLLATE|AUTO_INCREMENT|AUTOINCREMENT|IDENTITY)\b",
+    re.IGNORECASE,
 )
 _PRISMA_MODEL = re.compile(r"^\s*model\s+(\w+)\s*\{(.*?)^\s*\}", re.MULTILINE | re.DOTALL)
 _PRISMA_FIELD = re.compile(r"^\s*(\w+)\s+([A-Za-z_]\w*)(\[\]|\?)?(.*)$")
@@ -101,10 +116,28 @@ def _line_at(text: str, pos: int) -> int:
     return text.count("\n", 0, pos) + 1
 
 
+def _compact(text: str) -> str | None:
+    """A type written the same way every time: lower case, no spaces."""
+    squeezed = re.sub(r"\s+", "", text).lower()
+    return squeezed or None
+
+
+def _column_from_def(name: str, rest: str) -> Column:
+    """A column from the text after its name: type up to the first constraint word."""
+    stop = _CONSTRAINT_START.search(rest)
+    type_text = _compact(rest[: stop.start()] if stop else rest)
+    not_null = re.search(r"\bNOT\s+NULL\b|\bPRIMARY\s+KEY\b", rest, re.IGNORECASE)
+    has_default = bool(
+        re.search(r"\bDEFAULT\b|\bAUTO_?INCREMENT\b|\bIDENTITY\b", rest, re.IGNORECASE)
+        or (type_text or "").endswith("serial")
+    )
+    return Column(name, type_text, nullable=not_null is None, default=has_default)
+
+
 def sql_tables(project: str, file: str, text: str) -> list[TableDef]:
     """Tables and columns declared by `CREATE TABLE`, then changed by `ALTER TABLE`, in order."""
     clean = _strip_comments(text)
-    state: dict[str, tuple[int, set[str]]] = {}
+    state: dict[str, tuple[int, dict[str, Column]]] = {}
     events: list[tuple[int, str, str, int]] = []  # (position, kind, name, body start)
     for m in _CREATE.finditer(clean):
         events.append((m.start(), "create", _qualified(m.group(1)), m.end() - 1))
@@ -112,7 +145,7 @@ def sql_tables(project: str, file: str, text: str) -> list[TableDef]:
         events.append((m.start(), "alter", _qualified(m.group(1)), m.start(2)))
     for pos, kind, name, body_start in sorted(events):
         line = _line_at(clean, pos)
-        columns = state.setdefault(name, (line, set()))[1]
+        columns = state.setdefault(name, (line, {}))[1]
         if kind == "create":
             end = _matching_paren(clean, body_start)
             if end is None:
@@ -120,7 +153,8 @@ def sql_tables(project: str, file: str, text: str) -> list[TableDef]:
             for part in _split_top(clean[body_start + 1 : end]):
                 first = _FIRST_IDENT.match(part)
                 if first and first.group(1).upper() not in _NOT_COLUMN:
-                    columns.add(_ident(first.group(1)))
+                    column = _ident(first.group(1))
+                    columns[column] = _column_from_def(column, part[first.end() :])
             continue
         statement = _ALTER.match(clean, pos)
         if statement is None:
@@ -132,16 +166,44 @@ def sql_tables(project: str, file: str, text: str) -> list[TableDef]:
                 _DROP.match(clause),
                 _ADD.match(clause),
             )
+            retyped, set_nn, drop_nn, modified = (
+                _ALTER_TYPE.match(clause),
+                _SET_NOT_NULL.match(clause),
+                _DROP_NOT_NULL.match(clause),
+                _MODIFY.match(clause),
+            )
             if renamed:
-                columns.discard(_ident(renamed.group(1)))
-                columns.add(_ident(renamed.group(2)))
+                old, new = _ident(renamed.group(1)), _ident(renamed.group(2))
+                columns[new] = replace(columns.pop(old, Column(old)), name=new)
             elif dropped:
-                columns.discard(_ident(dropped.group(1)))
+                columns.pop(_ident(dropped.group(1)), None)
             elif added and added.group(1).upper() not in _NOT_COLUMN:
-                columns.add(_ident(added.group(1)))
+                column = _ident(added.group(1))
+                columns[column] = _column_from_def(column, clause[added.end() :])
+            elif retyped:
+                column = _ident(retyped.group(1))
+                before = columns.get(column, Column(column))
+                columns[column] = replace(
+                    before, type=_column_from_def(column, retyped.group(2)).type
+                )
+            elif set_nn or drop_nn:
+                match = set_nn or drop_nn
+                assert match is not None  # noqa: S101 - one of the two matched
+                column = _ident(match.group(1))
+                columns[column] = replace(
+                    columns.get(column, Column(column)), nullable=drop_nn is not None
+                )
+            elif modified:
+                column = _ident(modified.group(1))
+                columns[column] = _column_from_def(column, modified.group(2))
     return [
         TableDef(
-            "table", name, "defines", site_of(project, file, line, f"table {name}"), frozenset(cols)
+            "table",
+            name,
+            "defines",
+            site_of(project, file, line, f"table {name}"),
+            frozenset(cols),
+            tuple(sorted(cols.values(), key=lambda c: c.name)),
         )
         for name, (line, cols) in state.items()
     ]
@@ -165,19 +227,82 @@ def _first_str(call: ast.Call) -> str | None:
     return None
 
 
-def _class_columns(cls: ast.ClassDef) -> set[str]:
-    columns: set[str] = set()
+def _kw_bool(call: ast.Call, key: str) -> bool | None:
+    for kw in call.keywords:
+        if (
+            kw.arg == key
+            and isinstance(kw.value, ast.Constant)
+            and isinstance(kw.value.value, bool)
+        ):
+            return kw.value.value
+    return None
+
+
+def _annotation_type(annotation: ast.expr | None) -> tuple[str | None, bool | None]:
+    """The type and nullability of `Mapped[int]`, `Mapped[Optional[int]]`, `Mapped[int | None]`."""
+    if not (
+        isinstance(annotation, ast.Subscript)
+        and isinstance(annotation.value, ast.Name)
+        and annotation.value.id == "Mapped"
+    ):
+        return None, None
+    inner = annotation.slice
+    optional = False
+    if (
+        isinstance(inner, ast.Subscript)
+        and isinstance(inner.value, ast.Name)
+        and inner.value.id == "Optional"
+    ):
+        inner, optional = inner.slice, True
+    elif isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.BitOr):
+        sides = [inner.left, inner.right]
+        kept = [s for s in sides if not (isinstance(s, ast.Constant) and s.value is None)]
+        if len(kept) == 1:
+            inner, optional = kept[0], True
+    return _compact(ast.unparse(inner)), optional
+
+
+def _sa_column(name: str, call: ast.Call, annotation: ast.expr | None = None) -> Column:
+    """A SQLAlchemy `Column(...)` / `mapped_column(...)`: type from the first type-like argument."""
+    type_text: str | None = None
+    for arg in call.args:
+        if isinstance(arg, ast.Constant):
+            continue  # the column name
+        if isinstance(arg, ast.Call) and _call_name(arg) in ("ForeignKey", "Computed", "Identity"):
+            continue
+        type_text = _compact(ast.unparse(arg))
+        break
+    note_type, note_optional = _annotation_type(annotation)
+    if type_text is None:
+        type_text = note_type
+    nullable = _kw_bool(call, "nullable")
+    if nullable is None:
+        if _kw_bool(call, "primary_key"):
+            nullable = False
+        elif note_optional is not None:
+            nullable = note_optional
+        elif _call_name(call) == "Column":
+            nullable = True
+    has_default = any(
+        kw.arg in ("default", "server_default", "insert_default") for kw in call.keywords
+    )
+    return Column(name, type_text, nullable, has_default)
+
+
+def _class_columns(cls: ast.ClassDef) -> list[Column]:
+    columns: list[Column] = []
     for stmt in cls.body:
         target: ast.AST | None
+        annotation: ast.expr | None = None
         if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
             target, value = stmt.targets[0], stmt.value
         elif isinstance(stmt, ast.AnnAssign) and stmt.value is not None:
-            target, value = stmt.target, stmt.value
+            target, value, annotation = stmt.target, stmt.value, stmt.annotation
         else:
             continue
         if _call_name(value) in ("Column", "mapped_column") and isinstance(target, ast.Name):
             assert isinstance(value, ast.Call)  # noqa: S101 - _call_name saw a Call
-            columns.add((_first_str(value) or target.id).lower())
+            columns.append(_sa_column((_first_str(value) or target.id).lower(), value, annotation))
     return columns
 
 
@@ -196,25 +321,34 @@ def python_tables(project: str, file: str, tree: ast.AST) -> list[TableDef]:
                 ):
                     name = stmt.value.value.lower()
                     where = site_of(project, file, node.lineno, f"table {name}")
+                    typed = _class_columns(node)
                     found.append(
-                        TableDef("table", name, "maps", where, frozenset(_class_columns(node)))
+                        TableDef(
+                            "table",
+                            name,
+                            "maps",
+                            where,
+                            frozenset(c.name for c in typed),
+                            tuple(sorted(typed, key=lambda c: c.name)),
+                        )
                     )
         elif _call_name(node) == "Table":
             assert isinstance(node, ast.Call)  # noqa: S101
             name = (_first_str(node) or "").lower()
             if name:
-                columns = frozenset(
-                    (_first_str(a) or "").lower()
+                typed = [
+                    _sa_column((_first_str(a) or "").lower(), a)
                     for a in node.args
                     if isinstance(a, ast.Call) and _call_name(a) == "Column" and _first_str(a)
-                )
+                ]
                 found.append(
                     TableDef(
                         "table",
                         name,
                         "maps",
                         site_of(project, file, node.lineno, f"table {name}"),
-                        columns,
+                        frozenset(c.name for c in typed),
+                        tuple(sorted(typed, key=lambda c: c.name)),
                     )
                 )
     return found
@@ -230,7 +364,7 @@ def prisma_tables(project: str, file: str, text: str) -> list[TableDef]:
         body = m.group(2)
         mapped = _PRISMA_TABLE_MAP.search(body)
         name = (mapped.group(1) if mapped else m.group(1)).lower()
-        columns: set[str] = set()
+        columns: dict[str, Column] = {}
         for raw in body.splitlines():
             line = raw.strip()
             if not line or line.startswith(("@@", "//")):
@@ -239,9 +373,25 @@ def prisma_tables(project: str, file: str, text: str) -> list[TableDef]:
             if field is None or field.group(2) in models:
                 continue  # relation fields are not columns
             alias = _PRISMA_MAP.search(field.group(4))
-            columns.add((alias.group(1) if alias else field.group(1)).lower())
+            column = (alias.group(1) if alias else field.group(1)).lower()
+            listed = field.group(3) == "[]"
+            columns[column] = Column(
+                column,
+                field.group(2).lower() + ("[]" if listed else ""),
+                nullable=field.group(3) == "?",
+                default="@default" in field.group(4),
+            )
         where = site_of(project, file, _line_at(text, m.start()), f"model {m.group(1)}")
-        found.append(TableDef("table", name, "maps", where, frozenset(columns)))
+        found.append(
+            TableDef(
+                "table",
+                name,
+                "maps",
+                where,
+                frozenset(columns),
+                tuple(sorted(columns.values(), key=lambda c: c.name)),
+            )
+        )
     return found
 
 
@@ -256,13 +406,40 @@ def json_schema(project: str, file: str, doc: Any) -> tuple[list[TableDef], list
         where = site_of(project, file, None, "JSON Schema without $id")
         return [], [Unresolved(project=project, kind="schema", reason="no_id", site=where)]
     props = doc.get("properties")
-    columns = (
-        frozenset(k for k in props if isinstance(k, str))
-        if isinstance(props, dict)
-        else frozenset()
-    )
+    required = doc.get("required")
+    needed = {r for r in required if isinstance(r, str)} if isinstance(required, list) else set()
+    typed: list[Column] = []
+    if isinstance(props, dict):
+        for key, spec in props.items():
+            if not isinstance(key, str):
+                continue
+            kind = spec.get("type") if isinstance(spec, dict) else None
+            if isinstance(kind, list):
+                names = sorted(k for k in kind if isinstance(k, str) and k != "null")
+                type_text: str | None = "|".join(names) or None
+                null_ok = "null" in kind
+            else:
+                type_text = kind if isinstance(kind, str) else None
+                null_ok = False
+            typed.append(
+                Column(
+                    key,
+                    type_text,
+                    nullable=key not in needed or null_ok,
+                    default=isinstance(spec, dict) and "default" in spec,
+                )
+            )
     where = site_of(project, file, None, f"$id {schema_id}")
-    return [TableDef("json_schema", schema_id, "describes", where, columns)], []
+    return [
+        TableDef(
+            "json_schema",
+            schema_id,
+            "describes",
+            where,
+            frozenset(c.name for c in typed),
+            tuple(sorted(typed, key=lambda c: c.name)),
+        )
+    ], []
 
 
 # --- matching ---------------------------------------------------------------------------------

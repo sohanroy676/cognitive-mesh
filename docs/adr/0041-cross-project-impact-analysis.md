@@ -1,7 +1,7 @@
 # ADR-0041: Cross-project impact analysis and contract diff (v1.11.0)
 
 ## Status
-Proposed (drafted 2026-11-04 in plan mode; the four marked user decisions were taken before drafting). No code until the user accepts it. Extends ADR-0036 and ADR-0037 (workspace and contract edges) and ADR-0040 (roles, `writes`). ADR-0005 (never execute, sensitive files never opened) and ADR-0007 (tree-sitter private to `graph/js_parse.py`) stay in force.
+Accepted by the user 2026-11-04 (drafted in plan mode; the four marked user decisions were taken before drafting). Implementation in progress on `feature/extended-roadmap-v1.7`. Extends ADR-0036 and ADR-0037 (workspace and contract edges) and ADR-0040 (roles, `writes`). ADR-0005 (never execute, sensitive files never opened) and ADR-0007 (tree-sitter private to `graph/js_parse.py`) stay in force.
 
 ## Date
 2026-11-04
@@ -74,3 +74,15 @@ Design:
 - `ALTER COLUMN ... TYPE` and dialect-specific types are read by regular expressions; a miss shows as `unknown` or a missing difference, and is listed in the limits.
 - The reader's summary is a model's reading of other projects' files: unverified, and it never validates a verdict.
 - Tests required (from the roadmap): renamed route is breaking, optional addition is compatible, computed route is unknown, removed env var, changed column type in a shared table, an attempt to write another project raises; plus bad ref, ref starting with `-`, non-git root, GitHub project as current, oversized archive, reader refusing uncited paths, and no secret value in any output.
+
+## Implementation notes (2026-11-04)
+- Built as written, with these differences found while building:
+  - **Base export** runs `git archive --format=tar --output=FILE COMMIT -- .` with the project folder as the working directory. The `COMMIT:path` form drafted above archives nothing when git is run from a subfolder, so a project inside a larger repository (a monorepo folder) is exported by running inside it. A test covers that case. The ref must match a fixed pattern (`fullmatch`), and git refusing the repository and git refusing the ref give different messages.
+  - **`workspace/graph.py`** gained `ProjectRead` (project, root, ingestion, contract facts, published packages), `read_projects` and `link_reads`; `build_workspace_graph` is now those two in a row, with the same output. `workspace/cli.py::load_workspace` returns the graph and the reads.
+  - **Typed columns** are a `Column` record on `TableDef.typed`; `TableDef.columns` (names) is unchanged, so ADR-0037 edges and output are unchanged. SQL types are read up to the first constraint word; `ALTER COLUMN ... TYPE`, `SET/DROP NOT NULL` and MySQL `MODIFY` are applied in order. JSON Schema "nullable" means "not required".
+  - **Type verdicts** compare the type family (text before `(`, `[` or `<`): a different family is `breaking`, the same family with different arguments (`varchar(100)` to `varchar(200)`) is `unknown`.
+  - **Package contract:** Python exports come from `src/<module>/__init__.py` or `<module>/__init__.py` next to the manifest (`<module>` is the distribution name with `-` and `.` replaced by `_`); JS exports come from `exports["."]`, `main` or `module`, else `src/index.*` or `index.*`. A `dist/` entry that is not in the repository leaves the export list incomplete, which gives `unknown`, not a pass.
+  - **`--workspace` / `--project`** are accepted by `run`, by `task --plan` and by `task --conduct`. The `--root` folder must be the named project's folder (exit 19 otherwise). Agents reach other projects only through `AgentContext.workspace`.
+  - **Added things** (a route, column, setting or export) are `compatible` with the note "added; nothing that exists today can depend on it"; an added column is compatible only when a dependent's column list proves it is not used, and a required one is `unknown`.
+- `packaging` (PyPA, 26.3) is now a direct dependency; the lock file gained only that line.
+- Limits that are still true: other local projects are not read-only on disk (only the accessor stops a write); `from pkg.sub import x` and other submodule imports are not followed; request and response bodies, GraphQL, gRPC and runtime traffic are not compared; migration order is lexical file order; the reader has not been run with a real model; no GitHub-cloned project was used as a dependent by hand (the code path is the same as for local projects).

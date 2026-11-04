@@ -301,6 +301,10 @@ def _add_claims(
     ref: TraceRef,
     diagnostics: list[ExperienceDiagnostic],
 ) -> None:
+    # Only `dependencies_of` and `unresolved_report` become claims. `compare_dependencies`,
+    # `compare_with_recalled`, `dependents_of` (ADR-0041) and the model-written capabilities do
+    # not: a check or a listing must never become evidence for what it checks (a decision here
+    # and in `current.py`/`graph/rederive.py` is needed before any of them can).
     try:
         if capability == "dependencies_of":
             deps = DependenciesOfOutput.model_validate(result.output)

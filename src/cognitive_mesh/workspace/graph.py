@@ -1,14 +1,16 @@
 """The workspace graph: projects, detected package edges and declared links, kept apart."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
 from cognitive_mesh.graph import build_dependency_graph
-from cognitive_mesh.ingestion import IngestionError, ingest_application
+from cognitive_mesh.ingestion import IngestionError, IngestionResult, ingest_application
 from cognitive_mesh.workspace.config_names import link_config
 from cognitive_mesh.workspace.contracts import link_api
+from cognitive_mesh.workspace.exports import PackageContract, package_contracts
 from cognitive_mesh.workspace.extract import extract_project
 from cognitive_mesh.workspace.facts import ProjectFacts
 from cognitive_mesh.workspace.link import (
@@ -42,16 +44,24 @@ class WorkspaceGraph(BaseModel):
     unresolved: tuple[Unresolved, ...] = ()
 
 
-def build_workspace_graph(
-    projects: list[Project],
-    links: list[DeclaredLink],
-    resolve_root: Callable[[Project], Path | None],
-) -> WorkspaceGraph:
-    """Ingest each project (read-only, never executed) and link them. A project that cannot be
-    read is reported and contributes no edges; the others are still linked."""
-    published = {}
-    declared = {}
-    facts: dict[str, ProjectFacts] = {}
+@dataclass(frozen=True)
+class ProjectRead:
+    """One project as read from disk: the ingestion, the contract facts and the packages it
+    publishes. Kept so impact analysis (ADR-0041) does not ingest a project twice."""
+
+    project: Project
+    root: Path
+    result: IngestionResult
+    facts: ProjectFacts
+    packages: tuple[PackageContract, ...]
+
+
+def read_projects(
+    projects: list[Project], resolve_root: Callable[[Project], Path | None]
+) -> tuple[dict[str, ProjectRead], list[WorkspaceDiagnostic]]:
+    """Ingest each project (read-only, never executed). A project that cannot be read is reported
+    and left out."""
+    reads: dict[str, ProjectRead] = {}
     diagnostics: list[WorkspaceDiagnostic] = []
     for project in projects:
         root = resolve_root(project)
@@ -75,13 +85,40 @@ def build_workspace_graph(
                 )
             )
             continue
-        published[project.name] = published_names(project.name, result)
-        declared[project.name] = declared_dependencies(project.name, build_dependency_graph(result))
-        facts[project.name] = extract_project(project.name, result)
+        facts = extract_project(project.name, result)
+        reads[project.name] = ProjectRead(
+            project, root, result, facts, tuple(package_contracts(project.name, result))
+        )
         diagnostics.extend(
             WorkspaceDiagnostic(project=project.name, code=code, message=message)
-            for code, message in dict.fromkeys(facts[project.name].notes)
+            for code, message in dict.fromkeys(facts.notes)
         )
+    return reads, diagnostics
+
+
+def build_workspace_graph(
+    projects: list[Project],
+    links: list[DeclaredLink],
+    resolve_root: Callable[[Project], Path | None],
+) -> WorkspaceGraph:
+    """Ingest each project (read-only, never executed) and link them. A project that cannot be
+    read is reported and contributes no edges; the others are still linked."""
+    reads, diagnostics = read_projects(projects, resolve_root)
+    return link_reads(projects, links, reads, diagnostics)
+
+
+def link_reads(
+    projects: list[Project],
+    links: list[DeclaredLink],
+    reads: dict[str, ProjectRead],
+    diagnostics: list[WorkspaceDiagnostic],
+) -> WorkspaceGraph:
+    published = {name: published_names(name, read.result) for name, read in reads.items()}
+    declared = {
+        name: declared_dependencies(name, build_dependency_graph(read.result))
+        for name, read in reads.items()
+    }
+    facts = {name: read.facts for name, read in reads.items()}
     api, api_open = link_api(facts)
     schema_edges, schema_open = link_schemas(facts)
     config, config_open = link_config(facts)

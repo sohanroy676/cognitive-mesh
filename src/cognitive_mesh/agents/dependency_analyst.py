@@ -7,6 +7,8 @@ from cognitive_mesh.agents.context import NO_PRIOR_CONTEXT
 from cognitive_mesh.agents.models import AgentContext, EvidenceRef, FailureKind
 from cognitive_mesh.graph import DependencyGraph, Edge, GraphError
 from cognitive_mesh.graph.rederive import Holding, Rederivation, rederive
+from cognitive_mesh.impact import ImpactError, list_dependents, parse_target
+from cognitive_mesh.impact.render import site_text
 
 SAME_ANALYZER_NOTE = (
     "re-derived from the current graph by the same analyzer that made the claim: a repeatable "
@@ -110,6 +112,29 @@ class CompareWithRecalledOutput(_Strict):
     items: list[CompareItem]
 
 
+class DependentsOfInput(_Strict):
+    target: str = Field(min_length=1, max_length=300)
+    limit: int = Field(default=200, ge=1, le=1000)
+
+
+class DependentItem(_Strict):
+    status: str  # detected | unknown
+    project: str
+    kind: str
+    subject: str
+    label: str
+    provider: str | None
+    consumers: list[str]
+
+
+class DependentsOfOutput(_Strict):
+    project: str
+    target: str
+    total: int
+    truncated: bool
+    dependents: list[DependentItem]
+
+
 def _evidence(edge: Edge) -> list[EvidenceRef]:
     return [
         EvidenceRef(path=e.ref.path, sha256=e.ref.sha256, line=e.line, rule=e.rule)
@@ -171,6 +196,17 @@ class DependencyAnalyst(Agent):
                     input_model=CompareWithRecalledInput,
                     output_model=CompareWithRecalledOutput,
                     handler=self._compare_with_recalled,
+                ),
+                Capability(
+                    name="dependents_of",
+                    description=(
+                        "List the other workspace projects and locations that depend on a target "
+                        "of the current project (file:, route:, table:, env:, package, symbol:); "
+                        "no model."
+                    ),
+                    input_model=DependentsOfInput,
+                    output_model=DependentsOfOutput,
+                    handler=self._dependents_of,
                 ),
                 Capability(
                     name="unresolved_report",
@@ -272,6 +308,56 @@ class DependencyAnalyst(Agent):
             items=items,
         )
         return Handled(output, _unique([ref for item in items for ref in item.evidence]))
+
+    @staticmethod
+    def _dependents_of(args: DependentsOfInput, context: AgentContext) -> Handled:
+        access = context.workspace
+        if access is None:
+            raise AgentFault(FailureKind.MISSING_CONTEXT, "a workspace is required")
+        try:
+            report = list_dependents(
+                access.current, parse_target(args.target), access.graph, access.reads
+            )
+        except ImpactError as exc:
+            raise AgentFault(FailureKind.INVALID_INPUT, str(exc)) from None
+        shown = report.dependents[: args.limit]
+        output = DependentsOfOutput(
+            project=report.project,
+            target=report.target,
+            total=len(report.dependents),
+            truncated=len(report.dependents) > args.limit,
+            dependents=[
+                DependentItem(
+                    status=d.status,
+                    project=d.project,
+                    kind=d.kind,
+                    subject=d.subject,
+                    label=d.label,
+                    provider=site_text(d.provider) if d.provider else None,
+                    consumers=[site_text(s) for s in d.consumers],
+                )
+                for d in shown
+            ],
+        )
+        evidence: list[EvidenceRef] = []
+        for item in shown:
+            for site in item.consumers:
+                read = access.reads.get(site.project)
+                file = (
+                    next((f for f in read.result.files if f.ref.path == site.path), None)
+                    if read
+                    else None
+                )
+                if file is not None:
+                    evidence.append(
+                        EvidenceRef(
+                            path=f"{site.project}:{site.path}",
+                            sha256=file.ref.sha256,
+                            line=site.line,
+                            rule="dependents_of",
+                        )
+                    )
+        return Handled(output, _unique(evidence))
 
     @staticmethod
     def _unresolved_report(args: UnresolvedReportInput, context: AgentContext) -> Handled:

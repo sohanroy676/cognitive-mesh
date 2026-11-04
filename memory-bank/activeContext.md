@@ -3,6 +3,8 @@
 <!-- Update this at the end of every session. This is the first thing to read when resuming. -->
 
 ## Current focus
+Session 11 end (2026-11-04): v1.11.0 (ADR-0041, accepted: cross-project impact analysis, contract diff, `reader` role, `workspace impact|contract-diff`, exit 23, `--workspace/--project` on `run`/`task`) is on `feature/extended-roadmap-v1.7`; CI and tag ids are in `progress.md`. Still no merge to main. Next version: v1.12.0 Small-change agent (branch, checks, pull request): ADR-0042 first, Proposed, wait for acceptance; it amends ADR-0005 (running tests). Reuse `impact.contract_diff` as the impact check and `WorkspaceAccess.require_writable` as the write gate. See `session_prompt.md`.
+
 Session 10 end (2026-11-04): v1.10.0 (ADR-0040, accepted: conductor, per-step model routing with fallback, evidence label at 20 calls, opt-in exploration, trace schema 7, exit 22) is on `feature/extended-roadmap-v1.7`, pushed and tagged `v1.10.0` on `2a47e97`; CI: branch run 41790077755 (passed), tag run 41790585121 (passed). Still no merge to main. Next version: v1.11.0 Cross-project impact analysis (ADR-0041 first, Proposed, wait for acceptance). See `session_prompt.md`.
 
 Session 9 end (2026-11-04): v1.9.0 (ADR-0039 decision records: trace schema 6, graph format 7, `decisions record|link|list|show|trace`, decisions in the vector index and in `recall`, outcomes schema 3) is on `feature/extended-roadmap-v1.7`, pushed and tagged `v1.9.0` (`af1e252`; branch run 41784754008 (passed), tag run 41785211643 (passed)). Still no merge to main. Next version: v1.10.0 Orchestrator model (ADR-0040 first, Proposed, wait for acceptance). See `session_prompt.md`.

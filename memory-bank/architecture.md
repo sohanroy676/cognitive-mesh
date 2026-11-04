@@ -84,6 +84,8 @@ while tracking their source, validity, confidence, and conflicts.
   traces) keeps unrelated experience out and lists it for the person. `workflow.prepare_context` wires recall,
   the gate and the pack for the `task` command; `code_explainer` reads the pack as untrusted data and
   `dependency_analyst.compare_with_recalled` re-checks each claim against the current graph.
+- Cross-project Impact
+  Implemented in v1.11.0 (ADR-0041) as `src/cognitive_mesh/impact/` over the workspace reads (`workspace/graph.py::ProjectRead`): dependents of a target with evidence on both sides, a contract snapshot (routes, typed columns, JSON Schema properties, config names, package version and exports) and a diff between a git ref and the working tree with `breaking` / `compatible` / `unknown` / `unused` verdicts. Other projects are reached through the read-only `WorkspaceAccess` (`AgentContext.workspace`); a model-backed `reader` role summarises dependents' files (model_unverified). Nothing is stored.
 - Local Web UI
   Implemented in v1.5.0 (ADR-0031 to ADR-0035, released as v1.5.0) as `src/cognitive_mesh/ui/`: a stdlib
   `ThreadingHTTPServer` on 127.0.0.1, GET only, access token + Host check, read-only views over the trace store,

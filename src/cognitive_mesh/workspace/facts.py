@@ -30,12 +30,26 @@ class Call:
 
 
 @dataclass(frozen=True)
+class Column:
+    """One column (or JSON Schema property) as far as the extractor could read it (ADR-0041).
+
+    `None` means the source did not say, which is not the same as False.
+    """
+
+    name: str
+    type: str | None = None  # lower case, spaces removed: `varchar(50)`
+    nullable: bool | None = None  # JSON Schema: not required
+    default: bool | None = None  # whether a default is declared
+
+
+@dataclass(frozen=True)
 class TableDef:
     kind: str  # table | json_schema
     name: str  # normalised key
     role: str  # defines | maps | describes
     site: Site
     columns: frozenset[str] = frozenset()
+    typed: tuple[Column, ...] = ()  # same names as `columns`, with types where they were read
 
 
 @dataclass(frozen=True)

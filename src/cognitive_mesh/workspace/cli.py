@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from cognitive_mesh.identity import derive_identity
+from cognitive_mesh.impact import ImpactError, contract_diff, list_dependents, parse_target
+from cognitive_mesh.impact.render import diff_json, diff_text, impact_json, impact_text
 from cognitive_mesh.workspace.fetch import (
     checkout_dir,
     fetch_github,
@@ -15,7 +17,13 @@ from cognitive_mesh.workspace.fetch import (
     normalise_github_url,
     parse_github_url,
 )
-from cognitive_mesh.workspace.graph import WorkspaceGraph, build_workspace_graph
+from cognitive_mesh.workspace.graph import (
+    ProjectRead,
+    WorkspaceGraph,
+    build_workspace_graph,
+    link_reads,
+    read_projects,
+)
 from cognitive_mesh.workspace.models import Project, ProjectKind, WorkspaceError
 from cognitive_mesh.workspace.render import (
     deps_json,
@@ -28,6 +36,7 @@ from cognitive_mesh.workspace.store import WorkspaceStore
 
 EXIT_OK = 0
 EXIT_WORKSPACE_ERROR = 19
+EXIT_IMPACT_ERROR = 23  # a target, ref or project the impact analysis cannot use (ADR-0041)
 
 
 def add_parser(sub: Any) -> None:
@@ -70,6 +79,24 @@ def add_parser(sub: Any) -> None:
     cached(deps)
     deps.add_argument("project")
     deps.add_argument("--json", action="store_true", dest="as_json")
+    impact = ws_sub.add_parser("impact", help="which other projects depend on a target here")
+    common(impact)
+    cached(impact)
+    impact.add_argument("project", help="the current project")
+    impact.add_argument(
+        "--target",
+        required=True,
+        help="file:PATH, route:METHOD /path, table:NAME, env:NAME, package or symbol:NAME",
+    )
+    impact.add_argument("--json", action="store_true", dest="as_json")
+    diff = ws_sub.add_parser(
+        "contract-diff", help="what a change to the current project does to the projects using it"
+    )
+    common(diff)
+    cached(diff)
+    diff.add_argument("project", help="the current project (a local folder in a git repository)")
+    diff.add_argument("--base", default="HEAD", help="git ref to compare the working tree with")
+    diff.add_argument("--json", action="store_true", dest="as_json")
     refresh = ws_sub.add_parser("refresh", help="fetch GitHub projects missing from the cache")
     common(refresh)
     cached(refresh)
@@ -102,12 +129,27 @@ def load_workspace_graph(workspace: Path, cache: Path | None = None) -> Workspac
     return build_workspace_graph(projects, links, resolver)
 
 
+def load_workspace(
+    workspace: Path, cache: Path | None = None
+) -> tuple[WorkspaceGraph, dict[str, ProjectRead]]:
+    """The workspace graph and each project's read (read-only); raises `WorkspaceError`."""
+    with WorkspaceStore.open_existing(workspace) as store:
+        projects = store.projects()
+        links = store.links()
+    resolver = _resolver(cache if cache is not None else workspace.parent / "workspace-cache")
+    reads, diagnostics = read_projects(projects, resolver)
+    return link_reads(projects, links, reads, diagnostics), reads
+
+
 def run(args: argparse.Namespace) -> int:
     try:
         return _dispatch(args)
     except WorkspaceError as exc:
         print(f"workspace: {exc}", file=sys.stderr)
         return EXIT_WORKSPACE_ERROR
+    except ImpactError as exc:
+        print(f"workspace: {exc}", file=sys.stderr)
+        return EXIT_IMPACT_ERROR
 
 
 def _dispatch(args: argparse.Namespace) -> int:
@@ -124,6 +166,8 @@ def _dispatch(args: argparse.Namespace) -> int:
             store.remove_project(args.name)
         print(f"removed {args.name} (its history is kept)")
         return EXIT_OK
+    if command in ("impact", "contract-diff"):
+        return _impact(args)
     with WorkspaceStore.open_existing(args.workspace) as store:
         projects = store.projects()
         if command == "list":
@@ -139,6 +183,27 @@ def _dispatch(args: argparse.Namespace) -> int:
         print(to_mermaid(wg), end="")
     else:
         print(to_text(wg), end="")
+    return EXIT_OK
+
+
+def _impact(args: argparse.Namespace) -> int:
+    wg, reads = load_workspace(args.workspace, args.cache)
+    if args.project not in {p.name for p in wg.projects}:
+        raise WorkspaceError("no project has that name")
+    if args.project not in reads:
+        raise WorkspaceError("the project is not on disk; run `workspace refresh`")
+    if args.workspace_command == "impact":
+        report = list_dependents(args.project, parse_target(args.target), wg, reads)
+        if args.as_json:
+            print(json.dumps(impact_json(report), indent=2, sort_keys=True))
+        else:
+            print(impact_text(report), end="")
+        return EXIT_OK
+    diff = contract_diff(args.project, args.base, wg, reads)
+    if args.as_json:
+        print(json.dumps(diff_json(diff), indent=2, sort_keys=True))
+    else:
+        print(diff_text(diff), end="")
     return EXIT_OK
 
 

@@ -290,3 +290,184 @@ def parse_js_calls(suffix: str, text: str) -> JsCallResult:
         env_reads=tuple(sorted(reads, key=key)),
         has_error=tree.root_node.has_error,
     )
+
+
+# --- exports and named imports for impact analysis (ADR-0041) --------------------------------
+
+
+@dataclass(frozen=True)
+class JsExports:
+    """The names a module exports. `incomplete` is True when the list cannot be trusted:
+    `export * from`, a destructured export, or syntax errors."""
+
+    names: tuple[str, ...]
+    incomplete: bool
+
+
+@dataclass(frozen=True)
+class JsNamedImport:
+    """What one import or `require` takes from a module. `whole` is True when the code binds the
+    module as a whole (default, namespace or plain `require`), so the names used are not known."""
+
+    line: int
+    module: str
+    names: tuple[str, ...]
+    whole: bool
+
+
+def _text(node: Node | None) -> str:
+    return (node.text or b"").decode("utf-8", errors="replace") if node is not None else ""
+
+
+_DECLARED_NAME_TYPES = frozenset(
+    {
+        "function_declaration",
+        "generator_function_declaration",
+        "class_declaration",
+        "abstract_class_declaration",
+        "interface_declaration",
+        "type_alias_declaration",
+        "enum_declaration",
+        "function_signature",
+        "module",
+    }
+)
+
+
+def _declared_names(declaration: Node) -> tuple[list[str], bool]:
+    """(names, incomplete) of the declaration in `export <declaration>`."""
+    if declaration.type in _DECLARED_NAME_TYPES:
+        name = _text(declaration.child_by_field_name("name"))
+        return ([name] if name else []), not name
+    if declaration.type in ("lexical_declaration", "variable_declaration"):
+        names: list[str] = []
+        incomplete = False
+        for child in declaration.named_children:
+            if child.type != "variable_declarator":
+                continue
+            target = child.child_by_field_name("name")
+            if target is not None and target.type == "identifier":
+                names.append(_text(target))
+            else:
+                incomplete = True  # destructuring: the exported names are computed
+        return names, incomplete
+    return [], True
+
+
+def parse_js_exports(suffix: str, text: str) -> JsExports:
+    """The top-level `export` names of JS/TS text. Raises ValueError for an unsupported suffix."""
+    grammar = _GRAMMAR_BY_SUFFIX.get(suffix.lower())
+    if grammar is None:
+        raise ValueError(f"unsupported suffix: {suffix}")
+    tree = _parser(grammar).parse(text.encode("utf-8"))
+    names: list[str] = []
+    incomplete = tree.root_node.has_error
+    for statement in tree.root_node.named_children:
+        if statement.type != "export_statement" or statement.has_error:
+            continue
+        if any(c.type == "*" for c in statement.children):
+            incomplete = True
+            continue
+        if any(c.type == "default" for c in statement.children):
+            names.append("default")
+            continue
+        declaration = statement.child_by_field_name("declaration")
+        if declaration is not None:
+            found, partial = _declared_names(declaration)
+            names.extend(found)
+            incomplete = incomplete or partial
+            continue
+        clause = next((c for c in statement.named_children if c.type == "export_clause"), None)
+        if clause is not None:
+            for spec in clause.named_children:
+                if spec.type == "export_specifier":
+                    label = spec.child_by_field_name("alias") or spec.child_by_field_name("name")
+                    if label is not None:
+                        names.append(_text(label))
+            continue
+        if any(c.type == "namespace_export" for c in statement.named_children):
+            node = next(c for c in statement.named_children if c.type == "namespace_export")
+            names.append(_text(node.named_children[0]) if node.named_children else "")
+    return JsExports(tuple(sorted({n for n in names if n})), incomplete)
+
+
+def _import_names(statement: Node) -> tuple[list[str], bool]:
+    clause = next((c for c in statement.named_children if c.type == "import_clause"), None)
+    if clause is None:
+        return [], True  # `import "x"`: nothing is named
+    names: list[str] = []
+    whole = False
+    for part in clause.named_children:
+        if part.type == "identifier":
+            names.append("default")
+        elif part.type == "namespace_import":
+            whole = True
+        elif part.type == "named_imports":
+            names.extend(
+                _text(spec.child_by_field_name("name"))
+                for spec in part.named_children
+                if spec.type == "import_specifier"
+            )
+    return names, whole
+
+
+def _require_names(declarator: Node) -> tuple[str, list[str], bool] | None:
+    value = declarator.child_by_field_name("value")
+    if value is None or value.type != "call_expression":
+        return None
+    callee = value.child_by_field_name("function")
+    args = _args(value)
+    if (
+        callee is None
+        or callee.type != "identifier"
+        or _text(callee) != "require"
+        or len(args) != 1
+    ):
+        return None
+    module = _literal(args[0])
+    if module is None:
+        return None
+    target = declarator.child_by_field_name("name")
+    if target is not None and target.type == "object_pattern":
+        names: list[str] = []
+        whole = False
+        for part in target.named_children:
+            if part.type == "shorthand_property_identifier_pattern":
+                names.append(_text(part))
+            elif part.type == "pair_pattern":
+                key = part.child_by_field_name("key")
+                if key is not None and key.type == "property_identifier":
+                    names.append(_text(key))
+                else:
+                    whole = True
+            else:
+                whole = True  # rest element or anything else
+        return module, names, whole
+    return module, [], True
+
+
+def parse_js_named_imports(suffix: str, text: str) -> tuple[JsNamedImport, ...]:
+    """Each static import and plain `const ... = require("m")`, with the names it takes."""
+    grammar = _GRAMMAR_BY_SUFFIX.get(suffix.lower())
+    if grammar is None:
+        raise ValueError(f"unsupported suffix: {suffix}")
+    tree = _parser(grammar).parse(text.encode("utf-8"))
+    found: list[JsNamedImport] = []
+    stack: list[Node] = [tree.root_node]
+    while stack:
+        node = stack.pop()
+        if node.is_error or node.is_missing:
+            continue
+        line = node.start_point[0] + 1
+        if node.type == "import_statement" and not node.has_error:
+            module = _literal(node.child_by_field_name("source"))
+            if module is not None:
+                names, whole = _import_names(node)
+                found.append(JsNamedImport(line, module, tuple(sorted(set(names))), whole))
+        elif node.type == "variable_declarator" and not node.has_error:
+            required = _require_names(node)
+            if required is not None:
+                module, names, whole = required
+                found.append(JsNamedImport(line, module, tuple(sorted(set(names))), whole))
+        stack.extend(reversed(node.children))
+    return tuple(sorted(found, key=lambda item: (item.line, item.module)))

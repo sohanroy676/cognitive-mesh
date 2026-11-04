@@ -18,6 +18,7 @@ from cognitive_mesh.agents.models import (
     FailureKind,
     ModelInfo,
 )
+from cognitive_mesh.agents.reader import Reader
 from cognitive_mesh.agents.registry import AgentRegistry, default_registry
 
 __all__ = [
@@ -40,6 +41,7 @@ __all__ = [
     "FailureKind",
     "Handled",
     "ModelInfo",
+    "Reader",
     "RecalledContext",
     "call_model",
     "default_registry",

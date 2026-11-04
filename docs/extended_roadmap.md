@@ -213,6 +213,7 @@ A chat assistant, first as a local web demo and then as a VS Code extension, tha
   package version and exports) before and after a proposed change, and report each difference that a dependent
   uses as `breaking`, `compatible` or `unknown`.
 - ADR: what counts as breaking for each contract kind, and how `unknown` is presented.
+  Decided in ADR-0041 (accepted 2026-11-04).
 
 #### Test
 - Renaming a route a dependent calls is breaking. Adding an optional field is compatible. A computed route is unknown.
