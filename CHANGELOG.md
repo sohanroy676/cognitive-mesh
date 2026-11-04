@@ -7,6 +7,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - Record v1.12.0 CI runs and session 12 handoff
+- **adr:** Propose ADR-0043 showing improvement (v1.13.0)
 
 ## [1.12.0] - 2026-11-04
 
