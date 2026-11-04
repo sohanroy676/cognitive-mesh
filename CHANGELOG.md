@@ -3,7 +3,10 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.11.0] - 2026-11-04
+
+### Added
+- **impact:** Add cross-project impact analysis and contract diff (v1.11.0)
 
 ### Documentation
 - Record v1.10.0 CI runs and session 10 handoff
