@@ -3,7 +3,7 @@
 Update this file at the end of every session and whenever the user asks for a new-session prompt.
 
 ## Short prompt to paste into a new session
-Continue Cognitive Mesh (extended roadmap, next v2.0.0; v1.13.0 is implemented, see 'Where we are'). Work only on branch `feature/extended-roadmap-v1.7` (do not branch off main); check it out and pull first. Read `session_prompt.md` at the repo root first and follow it. Update it at the end of the session or when I ask for a new prompt.
+Continue Cognitive Mesh (extended roadmap, next v2.0.0; v1.13.0 is implemented, see 'Where we are'). Work only on branch `feature/extended-roadmap-v1.7` (do not branch off main); check it out and pull first. Read `session_prompt.md` at the repo root first and follow it. Do not use subagents (no Agent tool, no Explore/Plan agents); do all reading and searching yourself with Read, Grep and Glob. Update it at the end of the session or when I ask for a new prompt.
 
 ## Where we are (end of session 13, 2026-11-04)
 - v1.13.0 (ADR-0043, accepted): `eval run TASKSET --out DIR --model ID --catalog FILE [--repeats N] [--allow-unisolated-checks]` and `eval report DIR [--eval-id N] [--json]`. A TOML task set (at most 20 tasks, each with files and its own check argv) runs through `change.pipeline.make_change` once per arm and repeat, memory off and memory on, one catalog entry; arm order alternates per task; each arm has its own trace db, index, graph, outcomes and worktrees under `DIR/r<R>/<arm>/`. The on arm gets earlier change drafts of its own arm only (`change/past.py`, `AgentContext.past_changes`, the coder prompt's `past_changes`; diff only for a draft whose check succeeded). Records: `DIR/eval.sqlite3` (append-only, `interrupted` derived). Report: counts, every item and pair, `mixed models` and unfinished pairs not counted, `too few paired tasks to conclude anything` below 20 pairs. Exit 25. No new dependency, no trace schema bump. Suite 2160 passed, 8 skipped (about 10 minutes).
@@ -75,6 +75,7 @@ Continue Cognitive Mesh (extended roadmap, next v2.0.0; v1.13.0 is implemented, 
 2. Read this file, then `docs/extended_roadmap.md` for the current version, and `memory-bank/activeContext.md` / `progress.md` on demand.
 
 ## Rules
+- Do not use subagents (the Agent tool, including Explore and Plan agents). Do the exploration yourself with Read, Grep, Glob and Bash. User instruction, session 13.
 - Never commit to main. Extended-roadmap work stays on `feature/extended-roadmap-v1.7`. Never push, merge, tag or delete branches (local or remote) without approval. Local branches are all kept.
 - Draft an ADR and get acceptance before any code that needs a design decision.
 - Regenerate `CHANGELOG.md` as the last commit with plain `uv run git-cliff -o CHANGELOG.md` (`--tag vX.Y.Z` only on a `chore/release-vX.Y.Z` branch; compare the section date with `date -u +%F`). Only after the branch contains every commit. After any merge into main, run git-cliff to a temp file and diff against `CHANGELOG.md` (ignoring CR) BEFORE pushing.
