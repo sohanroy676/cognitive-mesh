@@ -5,6 +5,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **serve:** Local web app with chat, graph and data servers
+
 ### Documentation
 - Record v1.13.0 CI runs and session 13 handoff
 
