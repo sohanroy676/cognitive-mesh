@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.13.0] - 2026-11-04
 
 ### Added
 - **evaluate:** Compare memory off and on for small changes (v1.13.0)
@@ -12,6 +12,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - Record v1.12.0 CI runs and session 12 handoff
 - **adr:** Propose ADR-0043 showing improvement (v1.13.0)
 - Record v1.13.0 eval, ADR-0043 notes and session 13 handoff
+- Forbid subagents in the session prompt
 
 ## [1.12.0] - 2026-11-04
 
