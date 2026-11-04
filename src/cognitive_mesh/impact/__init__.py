@@ -5,6 +5,7 @@ read-only `git archive` of `base_export`.
 """
 
 from collections.abc import Mapping
+from pathlib import Path
 
 from cognitive_mesh.impact.base_export import exported_base
 from cognitive_mesh.impact.dependents import Target, list_dependents, parse_target
@@ -25,10 +26,17 @@ from cognitive_mesh.workspace.models import ProjectKind
 
 
 def contract_diff(
-    current: str, base_ref: str, wg: WorkspaceGraph, reads: Mapping[str, ProjectRead]
+    current: str,
+    base_ref: str,
+    wg: WorkspaceGraph,
+    reads: Mapping[str, ProjectRead],
+    *,
+    tree: Path | None = None,
 ) -> ContractDiff:
     """Findings between the project at `base_ref` and its working tree, judged against how the
-    other workspace projects use it now. The current project must be a local folder in git."""
+    other workspace projects use it now. The current project must be a local folder in git.
+    With `tree` (a folder holding the project's files, e.g. a change's worktree, ADR-0042) that
+    folder is compared instead of the working tree."""
     read = reads.get(current)
     if read is None:
         raise ImpactError("the current project could not be read")
@@ -36,11 +44,17 @@ def contract_diff(
         raise ImpactError("the current project must be a local folder")
     others = {name: r for name, r in reads.items() if name != current}
     try:
-        with exported_base(read.root, base_ref) as (tree, commit):
-            base = snapshot_of_tree(current, tree)
+        with exported_base(read.root, base_ref) as (base_tree, commit):
+            base = snapshot_of_tree(current, base_tree)
     except IngestionError:
         raise ImpactError("the project at the base ref cannot be read") from None
-    now = snapshot_of(current, read.result, read.facts)
+    if tree is not None:
+        try:
+            now = snapshot_of_tree(current, tree)
+        except IngestionError:
+            raise ImpactError("the changed project cannot be read") from None
+    else:
+        now = snapshot_of(current, read.result, read.facts)
     findings = diff_contracts(current, base, now, others, wg.detected)
     return ContractDiff(
         project=current, base_ref=base_ref, base_commit=commit, findings=tuple(findings)

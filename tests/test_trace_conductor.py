@@ -126,7 +126,7 @@ def test_migration_6_to_7_keeps_old_calls_and_allows_run_level_rows(
     db = tmp_path / "t.sqlite3"
     with monkeypatch.context() as patch:
         patch.setattr(
-            store_module, "MIGRATIONS", {k: v for k, v in store_module.MIGRATIONS.items() if k != 6}
+            store_module, "MIGRATIONS", {k: v for k, v in store_module.MIGRATIONS.items() if k < 6}
         )
         old_store, _, _ = _run(CallsClient(_ok()), db)
         old_store.close()
@@ -136,7 +136,7 @@ def test_migration_6_to_7_keeps_old_calls_and_allows_run_level_rows(
     info = {r[1]: r[3] for r in sql(db, "PRAGMA table_info(model_calls)")}
     assert info["step_id"] == 1  # NOT NULL before
     TraceStore.create(db).close()
-    assert sql(db, "PRAGMA user_version") == [(SCHEMA_VERSION,)] == [(7,)]
+    assert sql(db, "PRAGMA user_version") == [(SCHEMA_VERSION,)] == [(8,)]
     assert sql(db, "SELECT * FROM model_calls") == before
     info = {r[1]: r[3] for r in sql(db, "PRAGMA table_info(model_calls)")}
     assert info["step_id"] == 0  # nullable now

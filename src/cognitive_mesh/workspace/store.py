@@ -5,7 +5,9 @@ newer version or malformed rows are refused. Free text is checked and redacted b
 """
 
 import contextlib
+import json
 import sqlite3
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
@@ -15,13 +17,34 @@ from pydantic import ValidationError
 
 from cognitive_mesh.identity import IdentityError, validate_app_id
 from cognitive_mesh.ingestion.secrets import redact_secrets
-from cognitive_mesh.workspace.models import DeclaredLink, Project, ProjectKind, WorkspaceError
+from cognitive_mesh.workspace.models import (
+    CheckCommand,
+    DeclaredLink,
+    Project,
+    ProjectKind,
+    WorkspaceError,
+)
 
-SCHEMA_VERSION: Final = 1
+SCHEMA_VERSION: Final = 2
 APPLICATION_ID: Final = 0x434D5753  # "CMWS": tells a workspace file from any other SQLite file
 MAX_NOTE_CHARS: Final = 1000
 MAX_BY_CHARS: Final = 100
 MAX_KIND_CHARS: Final = 40
+MAX_CHECK_ARGS: Final = 50
+MAX_CHECK_ARG_CHARS: Final = 500
+DEFAULT_CHECK_TIMEOUT_S: Final = 300
+MAX_CHECK_TIMEOUT_S: Final = 3600
+
+_CHECKS_TABLE: Final = """
+CREATE TABLE checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id),
+    argv_json TEXT NOT NULL,
+    timeout_s INTEGER NOT NULL,
+    by TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+"""
 
 _SCHEMA: Final = f"""
 PRAGMA application_id = {APPLICATION_ID};
@@ -46,6 +69,7 @@ CREATE TABLE declared_links (
     by TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+{_CHECKS_TABLE}
 PRAGMA user_version = {SCHEMA_VERSION};
 """
 
@@ -110,6 +134,11 @@ class WorkspaceStore:
                 conn.executescript(f"BEGIN IMMEDIATE; {_SCHEMA} COMMIT;")
             else:
                 cls._check_header(conn)
+                if _pragma_int(conn, "user_version") == 1:
+                    conn.executescript(
+                        f"BEGIN IMMEDIATE; {_CHECKS_TABLE} PRAGMA user_version = {SCHEMA_VERSION};"
+                        " COMMIT;"
+                    )
         except sqlite3.Error:
             conn.close()
             raise WorkspaceError("cannot open the workspace file (sqlite error)") from None
@@ -143,7 +172,7 @@ class WorkspaceStore:
             raise WorkspaceError(
                 f"the workspace file has version {version}, newer than this program supports"
             )
-        if version != SCHEMA_VERSION:
+        if version not in (1, SCHEMA_VERSION):
             raise WorkspaceError(f"unsupported workspace file version ({version})")
 
     def close(self) -> None:
@@ -300,3 +329,69 @@ class WorkspaceStore:
             raise WorkspaceError("cannot read the workspace file (sqlite error)") from None
         except ValueError:
             raise WorkspaceError("the workspace file holds a malformed link row") from None
+
+    def set_check(
+        self,
+        name: str,
+        argv: Sequence[str],
+        *,
+        timeout_s: int = DEFAULT_CHECK_TIMEOUT_S,
+        by: str,
+        now: datetime | None = None,
+    ) -> CheckCommand:
+        """Store the command a person declares as the project's check (ADR-0042). History stays."""
+        found = self.project(name)
+        if _pragma_int(self._conn, "user_version") < SCHEMA_VERSION:
+            raise WorkspaceError("the workspace file is an older version")
+        words = list(argv)
+        if not words or len(words) > MAX_CHECK_ARGS:
+            raise WorkspaceError(f"a check command needs 1 to {MAX_CHECK_ARGS} words")
+        for word in words:
+            if not word or len(word) > MAX_CHECK_ARG_CHARS or not word.isprintable():
+                raise WorkspaceError("a check command word is empty, too long or not printable")
+        if not 1 <= timeout_s <= MAX_CHECK_TIMEOUT_S:
+            raise WorkspaceError(f"the check timeout must be 1 to {MAX_CHECK_TIMEOUT_S} seconds")
+        clean_by = _clean(by, MAX_BY_CHARS, "author")
+        created = _stamp(now)
+        new_id = self._write(
+            "INSERT INTO checks (project_id, argv_json, timeout_s, by, created_at)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (found.id, json.dumps(words), timeout_s, clean_by, created),
+        )
+        return CheckCommand(
+            id=new_id,
+            project=name,
+            argv=tuple(words),
+            timeout_s=timeout_s,
+            by=clean_by,
+            created_at=datetime.fromisoformat(created),
+        )
+
+    def check_command(self, name: str) -> CheckCommand | None:
+        """The newest declared check of a project, or None (also for a version 1 file)."""
+        found = self.project(name)
+        if _pragma_int(self._conn, "user_version") < SCHEMA_VERSION:
+            return None
+        try:
+            row = self._conn.execute(
+                "SELECT id, argv_json, timeout_s, by, created_at FROM checks"
+                " WHERE project_id = ? ORDER BY id DESC LIMIT 1",
+                (found.id,),
+            ).fetchone()
+            if row is None:
+                return None
+            words = json.loads(row[1])
+            if not isinstance(words, list) or not all(isinstance(w, str) for w in words):
+                raise ValueError("argv")
+            return CheckCommand(
+                id=row[0],
+                project=name,
+                argv=tuple(words),
+                timeout_s=row[2],
+                by=row[3],
+                created_at=datetime.fromisoformat(row[4]),
+            )
+        except sqlite3.Error:
+            raise WorkspaceError("cannot read the workspace file (sqlite error)") from None
+        except (ValueError, ValidationError):
+            raise WorkspaceError("the workspace file holds a malformed check row") from None

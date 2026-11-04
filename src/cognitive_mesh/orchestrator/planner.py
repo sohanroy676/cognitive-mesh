@@ -24,7 +24,10 @@ class ValidatedPlan:
     state: dict[str, StateEntry] = field(default_factory=dict)
 
 
-def plan_task(plan: TaskPlan, registry: AgentRegistry) -> ValidatedPlan:
+def plan_task(
+    plan: TaskPlan, registry: AgentRegistry, *, allow_writes: bool = False
+) -> ValidatedPlan:
+    """Validate a plan. A step that changes a project needs `allow_writes` (ADR-0042)."""
     steps = plan.steps
     if not steps:
         raise PlanError("the plan has no steps")
@@ -45,6 +48,11 @@ def plan_task(plan: TaskPlan, registry: AgentRegistry) -> ValidatedPlan:
             raise PlanError(
                 f"step {step.step_id!r} needs capability {step.capability!r}, "
                 "which no registered agent declares"
+            )
+        if not allow_writes and registry.writes(step.capability):
+            raise PlanError(
+                f"step {step.step_id!r} would change a project; only `change propose` may"
+                " run such a step"
             )
     by_id = {s.step_id: s for s in steps}
     _check_state(plan.state, by_id, registry)

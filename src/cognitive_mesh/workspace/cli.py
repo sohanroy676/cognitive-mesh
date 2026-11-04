@@ -10,6 +10,7 @@ from typing import Any
 from cognitive_mesh.identity import derive_identity
 from cognitive_mesh.impact import ImpactError, contract_diff, list_dependents, parse_target
 from cognitive_mesh.impact.render import diff_json, diff_text, impact_json, impact_text
+from cognitive_mesh.workspace.access import WorkspaceAccess
 from cognitive_mesh.workspace.fetch import (
     checkout_dir,
     fetch_github,
@@ -32,7 +33,7 @@ from cognitive_mesh.workspace.render import (
     to_mermaid,
     to_text,
 )
-from cognitive_mesh.workspace.store import WorkspaceStore
+from cognitive_mesh.workspace.store import DEFAULT_CHECK_TIMEOUT_S, WorkspaceStore
 
 EXIT_OK = 0
 EXIT_WORKSPACE_ERROR = 19
@@ -97,6 +98,18 @@ def add_parser(sub: Any) -> None:
     diff.add_argument("project", help="the current project (a local folder in a git repository)")
     diff.add_argument("--base", default="HEAD", help="git ref to compare the working tree with")
     diff.add_argument("--json", action="store_true", dest="as_json")
+    setc = ws_sub.add_parser(
+        "set-check", help="declare the command that checks a project (never read from the repo)"
+    )
+    common(setc)
+    setc.add_argument("project")
+    setc.add_argument("--by", required=True, help="who declares it (an unauthenticated label)")
+    setc.add_argument("--timeout", type=int, default=DEFAULT_CHECK_TIMEOUT_S, dest="timeout_s")
+    setc.add_argument("check_argv", nargs=argparse.REMAINDER, help="-- COMMAND ARG... (no shell)")
+    showc = ws_sub.add_parser("show-check", help="print the declared check command")
+    common(showc)
+    showc.add_argument("project")
+    showc.add_argument("--json", action="store_true", dest="as_json")
     refresh = ws_sub.add_parser("refresh", help="fetch GitHub projects missing from the cache")
     common(refresh)
     cached(refresh)
@@ -141,6 +154,24 @@ def load_workspace(
     return link_reads(projects, links, reads, diagnostics), reads
 
 
+def build_access(workspace: Path, project: str, root: Path) -> WorkspaceAccess:
+    """The workspace as agents may read it: other projects read-only, `project` the current one.
+    `root` (the folder a run analyses or changes) must be that project's folder."""
+    graph, reads = load_workspace(workspace)
+    if project not in {p.name for p in graph.projects}:
+        raise WorkspaceError("no project has that name")
+    read = reads.get(project)
+    if read is None:
+        raise WorkspaceError("the project is not on disk; run `workspace refresh`")
+    try:
+        same = read.root.samefile(root)
+    except OSError:
+        same = False
+    if not same:
+        raise WorkspaceError("the project is not the --root folder")
+    return WorkspaceAccess(project, graph, reads)
+
+
 def run(args: argparse.Namespace) -> int:
     try:
         return _dispatch(args)
@@ -160,6 +191,27 @@ def _dispatch(args: argparse.Namespace) -> int:
         with WorkspaceStore.create(args.workspace) as store:
             link = store.add_link(args.source, args.target, args.kind, args.note, args.by)
         print(f"declared link #{link.id}: {link.source} -> {link.target} (not detected evidence)")
+        return EXIT_OK
+    if command == "set-check":
+        words = list(args.check_argv)
+        if words[:1] == ["--"]:
+            words = words[1:]
+        with WorkspaceStore.create(args.workspace) as store:
+            declared = store.set_check(args.project, words, timeout_s=args.timeout_s, by=args.by)
+        print(
+            f"declared check #{declared.id} for {declared.project}"
+            f" (timeout {declared.timeout_s} s): {' '.join(declared.argv)}"
+        )
+        return EXIT_OK
+    if command == "show-check":
+        with WorkspaceStore.open_existing(args.workspace) as store:
+            shown = store.check_command(args.project)
+        if args.as_json:
+            print(json.dumps(shown.model_dump(mode="json") if shown else None, indent=2))
+        elif shown is None:
+            print(f"no check command is declared for {args.project}")
+        else:
+            print(f"{' '.join(shown.argv)}  (timeout {shown.timeout_s} s, declared by {shown.by})")
         return EXIT_OK
     if command == "remove":
         with WorkspaceStore.create(args.workspace) as store:

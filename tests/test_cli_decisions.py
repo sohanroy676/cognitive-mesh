@@ -508,7 +508,7 @@ def test_a_schema_five_database_must_be_upgraded_by_writing_first(
     world: World, capsys: pytest.CaptureFixture[str]
 ) -> None:
     conn = sqlite3.connect(world.db)
-    for table in ("decision_links", "decision_citations", "decisions"):
+    for table in ("change_events", "changes", "decision_links", "decision_citations", "decisions"):
         conn.execute(f"DROP TABLE {table}")  # noqa: S608
     conn.execute("PRAGMA user_version = 5")
     conn.commit()

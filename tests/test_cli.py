@@ -295,6 +295,7 @@ def test_agents_json_has_schemas(capsys: pytest.CaptureFixture[str]) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert [a["id"] for a in payload["agents"]] == [
         "code_explainer",
+        "coder",
         "dependency_analyst",
         "reader",
     ]

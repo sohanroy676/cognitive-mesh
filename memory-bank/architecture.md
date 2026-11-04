@@ -86,6 +86,8 @@ while tracking their source, validity, confidence, and conflicts.
   `dependency_analyst.compare_with_recalled` re-checks each claim against the current graph.
 - Cross-project Impact
   Implemented in v1.11.0 (ADR-0041) as `src/cognitive_mesh/impact/` over the workspace reads (`workspace/graph.py::ProjectRead`): dependents of a target with evidence on both sides, a contract snapshot (routes, typed columns, JSON Schema properties, config names, package version and exports) and a diff between a git ref and the working tree with `breaking` / `compatible` / `unknown` / `unused` verdicts. Other projects are reached through the read-only `WorkspaceAccess` (`AgentContext.workspace`); a model-backed `reader` role summarises dependents' files (model_unverified). Nothing is stored.
+- Small Changes
+  Implemented in v1.12.0 (ADR-0042) as `src/cognitive_mesh/change/` and `agents/coder.py`: a coder model drafts a unified diff of the current project only; `diffparse.py` judges it, `worktree.py` applies it on a new branch in a separate git worktree, the v1.11.0 contract diff refuses a change that breaks a used contract, `checks.py` runs the person-declared check (not isolated, labelled `env_only`) and the exit code becomes a `check` outcome, `github.py` pushes and opens a pull request only after `change approve`. Status is derived from append-only events in the trace database. Nothing is merged by the tool.
 - Local Web UI
   Implemented in v1.5.0 (ADR-0031 to ADR-0035, released as v1.5.0) as `src/cognitive_mesh/ui/`: a stdlib
   `ThreadingHTTPServer` on 127.0.0.1, GET only, access token + Host check, read-only views over the trace store,

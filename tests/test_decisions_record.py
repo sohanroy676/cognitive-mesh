@@ -18,8 +18,8 @@ from cognitive_mesh.traces import SCHEMA_VERSION, TraceStore
 from decisions_support import git, make_app, make_db, person
 
 
-def test_schema_is_version_seven() -> None:
-    assert SCHEMA_VERSION == 7
+def test_schema_is_version_eight() -> None:
+    assert SCHEMA_VERSION == 8
 
 
 def test_a_person_decision_is_stored_and_read_back_in_a_new_connection(tmp_path: Path) -> None:
@@ -276,7 +276,7 @@ def test_a_decision_whose_superseded_row_is_malformed_is_malformed_too(tmp_path:
 def test_migration_five_to_six_adds_the_tables_and_keeps_old_data(tmp_path: Path) -> None:
     db = make_db(tmp_path)
     conn = sqlite3.connect(db)
-    for table in ("decision_links", "decision_citations", "decisions"):
+    for table in ("change_events", "changes", "decision_links", "decision_citations", "decisions"):
         conn.execute(f"DROP TABLE {table}")  # noqa: S608 - fixed names
     conn.execute("PRAGMA user_version = 5")
     conn.commit()

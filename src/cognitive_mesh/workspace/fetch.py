@@ -1,4 +1,5 @@
-"""Fetch a public GitHub repository with the `git` CLI (ADR-0036). The only module that runs `git`.
+"""Fetch a public GitHub repository with the `git` CLI (ADR-0036). Holds `run_git`, the one place
+`git` is started (`impact/` and `change/` call it too).
 
 Fixed argument lists, no shell, no prompts, no credentials, no hooks, a timeout on every call.
 Failures map to fixed kinds and messages; git's own output is never repeated (it can hold URLs).
@@ -111,6 +112,17 @@ def _git_env() -> dict[str, str]:
 
 def run_git(argv: Sequence[str], cwd: Path | None) -> GitResult:
     """Run git with a fixed argument list. Raises FetchError for a missing git or a timeout."""
+    return run_git_with(argv, cwd)
+
+
+def run_git_with(
+    argv: Sequence[str],
+    cwd: Path | None,
+    *,
+    env_extra: Mapping[str, str] | None = None,
+    timeout_s: int = TIMEOUT_S,
+) -> GitResult:
+    """`run_git` with extra environment variables and a per-call timeout (ADR-0042)."""
     git = shutil.which("git")
     if git is None:
         raise FetchError(FetchFailure.GIT_MISSING)
@@ -118,12 +130,12 @@ def run_git(argv: Sequence[str], cwd: Path | None) -> GitResult:
         done = subprocess.run(  # noqa: S603 - fixed argv, no shell, validated inputs
             [git, *argv],
             cwd=cwd,
-            env=_git_env(),
+            env={**_git_env(), **(env_extra or {})},
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=TIMEOUT_S,
+            timeout=timeout_s,
             check=False,
             stdin=subprocess.DEVNULL,
         )

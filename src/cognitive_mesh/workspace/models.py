@@ -44,6 +44,18 @@ class DeclaredLink(_Frozen):
     created_at: datetime
 
 
+class CheckCommand(_Frozen):
+    """The command a person declared as a project's check (ADR-0042): an argv list, never a shell
+    line. Declared by a person; nothing reads it from the repository."""
+
+    id: int
+    project: str
+    argv: tuple[str, ...]
+    timeout_s: int
+    by: str
+    created_at: datetime
+
+
 class ManifestRef(_Frozen):
     """One manifest location inside one project."""
 

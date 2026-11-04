@@ -238,7 +238,7 @@ A chat assistant, first as a local web demo and then as a VS Code extension, tha
 - **Pull request:** after the person approves the diff, push the branch and open a PR (GitHub token from env). The
   PR body links the decisions and evidence. Nothing is merged by the tool.
 - ADR: running tests (amends ADR-0005: which command, where, isolation, limits), the worktree flow, the size limit,
-  PR permissions.
+  PR permissions. Decided in ADR-0042 (accepted 2026-11-04).
 
 #### Test
 - A diff touching another project's path is refused. A diff over the limit is refused. A malformed diff fails cleanly.

@@ -207,21 +207,23 @@ def test_a_write_step_may_target_only_the_current_project(tmp_path: Path) -> Non
             registry=_registry_with_writer(),
             current_project="mine",
         )
-    assert all("may only change the current project" in r for r in caught.value.refusals)
+    assert all("would change a project" in r for r in caught.value.refusals)
+    # ADR-0042: a step that writes is refused whatever project it names
     own = [{"step_id": "w", "capability": "write_file", "inputs": {"project": "mine"}}]
-    conducted, _ = _run(
-        ScriptedClient(reply(steps=own, assignments={})),
-        tmp_path,
-        registry=_registry_with_writer(),
-        current_project="mine",
-    )
-    assert conducted.plan.plan.steps[0].step_id == "w"
+    with pytest.raises(ConductorError) as caught_own:
+        _run(
+            ScriptedClient(reply(steps=own, assignments={}), repeat=True),
+            tmp_path,
+            registry=_registry_with_writer(),
+            current_project="mine",
+        )
+    assert all("would change a project" in r for r in caught_own.value.refusals)
 
 
 def test_the_writes_flag_is_in_the_capability_specs() -> None:
     specs = {c.name: c.writes for s in _registry_with_writer().specs() for c in s.capabilities}
     assert specs["write_file"] is True
-    assert not any(v for k, v in specs.items() if k != "write_file")
+    assert {k for k, v in specs.items() if v} == {"write_file", "propose_change"}
 
 
 def test_eligible_entries_follow_catalog_order_and_skip_unusable_ones(tmp_path: Path) -> None:

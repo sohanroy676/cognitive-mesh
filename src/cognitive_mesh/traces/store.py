@@ -18,6 +18,7 @@ from typing import Self
 from pydantic import TypeAdapter, ValidationError
 
 from cognitive_mesh.agents import AgentResult, AgentSuccess, RecalledContext
+from cognitive_mesh.change.models import ChangeEvent, ChangeRecord
 from cognitive_mesh.decisions.models import (
     Citation,
     CitationKind,
@@ -173,6 +174,43 @@ INSERT INTO model_calls_v7 SELECT run_id, agent_task_id, call_no, step_id, entry
     model, role, task_type, latency_ms, prompt_tokens, completion_tokens, result FROM model_calls;
 DROP TABLE model_calls;
 ALTER TABLE model_calls_v7 RENAME TO model_calls;
+""",
+    # 7 -> 8 (ADR-0042): changes made by the small-change agent and their append-only events. The
+    # status of a change is derived from the events; nothing here is ever updated or deleted.
+    7: """
+CREATE TABLE changes (
+    change_id TEXT PRIMARY KEY,
+    project TEXT NOT NULL,
+    app_id TEXT,
+    base_branch TEXT,
+    base_commit TEXT NOT NULL,
+    branch TEXT NOT NULL,
+    worktree TEXT NOT NULL,
+    max_files INTEGER NOT NULL CHECK (max_files >= 1),
+    max_lines INTEGER NOT NULL CHECK (max_lines >= 1),
+    request_len INTEGER NOT NULL CHECK (request_len >= 0),
+    created_at TEXT NOT NULL
+);
+CREATE TABLE change_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    change_id TEXT NOT NULL REFERENCES changes(change_id),
+    kind TEXT NOT NULL CHECK (kind IN ('applied', 'refused', 'impact', 'check', 'check_skipped',
+        'approved', 'pushed', 'push_failed', 'pr_opened', 'pr_failed', 'discarded')),
+    commit_sha TEXT,
+    diff_sha256 TEXT,
+    ref TEXT,
+    detail TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX change_events_by_change ON change_events (change_id, id);
+CREATE TRIGGER changes_no_update BEFORE UPDATE ON changes
+BEGIN SELECT RAISE(ABORT, 'changes are append-only'); END;
+CREATE TRIGGER changes_no_delete BEFORE DELETE ON changes
+BEGIN SELECT RAISE(ABORT, 'changes are append-only'); END;
+CREATE TRIGGER change_events_no_update BEFORE UPDATE ON change_events
+BEGIN SELECT RAISE(ABORT, 'changes are append-only'); END;
+CREATE TRIGGER change_events_no_delete BEFORE DELETE ON change_events
+BEGIN SELECT RAISE(ABORT, 'changes are append-only'); END;
 """,
 }
 SCHEMA_VERSION = 1 + len(MIGRATIONS)
@@ -644,6 +682,114 @@ class TraceStore:
             malformed=tuple(sorted(set(malformed))),
         )
 
+    # -- changes (ADR-0042) ----------------------------------------------------------------
+
+    def add_change(self, change: ChangeRecord) -> None:
+        """Record the header of a change. Written once; events follow."""
+        conn = self._conn
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                "INSERT INTO changes (change_id, project, app_id, base_branch, base_commit,"
+                " branch, worktree, max_files, max_lines, request_len, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    change.change_id,
+                    change.project,
+                    change.app_id,
+                    change.base_branch,
+                    change.base_commit,
+                    change.branch,
+                    change.worktree,
+                    change.max_files,
+                    change.max_lines,
+                    change.request_len,
+                    _iso(change.created_at),
+                ),
+            )
+            conn.execute("COMMIT")
+        except sqlite3.IntegrityError:
+            _rollback(conn)
+            raise TraceStoreError("that change is already recorded") from None
+        except sqlite3.Error:
+            _rollback(conn)
+            raise TraceStoreError("cannot record the change (sqlite error)") from None
+
+    def add_change_event(self, event: ChangeEvent) -> int:
+        """Append one event to a recorded change; returns its number."""
+        conn = self._conn
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            cur = conn.execute(
+                "INSERT INTO change_events (change_id, kind, commit_sha, diff_sha256, ref, detail,"
+                " created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    event.change_id,
+                    event.kind.value,
+                    event.commit,
+                    event.diff_sha256,
+                    event.ref,
+                    event.detail,
+                    _iso(event.created_at),
+                ),
+            )
+            conn.execute("COMMIT")
+        except sqlite3.IntegrityError:
+            _rollback(conn)
+            raise TraceStoreError(
+                "the change event refers to a change that is not recorded"
+            ) from None
+        except sqlite3.Error:
+            _rollback(conn)
+            raise TraceStoreError("cannot record the change event (sqlite error)") from None
+        return int(cur.lastrowid or 0)
+
+    def read_changes(self) -> list[tuple[ChangeRecord, list[ChangeEvent]]]:
+        """Every change (oldest first) with its events in order; a malformed row is an error."""
+        try:
+            heads = self._conn.execute(
+                "SELECT * FROM changes ORDER BY created_at, change_id"
+            ).fetchall()
+            rows = self._conn.execute("SELECT * FROM change_events ORDER BY id").fetchall()
+        except sqlite3.Error:
+            raise TraceStoreError("cannot read the trace database (sqlite error)") from None
+        try:
+            events: dict[str, list[ChangeEvent]] = defaultdict(list)
+            for row in rows:
+                events[str(row["change_id"])].append(
+                    ChangeEvent(
+                        id=row["id"],
+                        change_id=row["change_id"],
+                        kind=row["kind"],
+                        commit=row["commit_sha"],
+                        diff_sha256=row["diff_sha256"],
+                        ref=row["ref"],
+                        detail=row["detail"],
+                        created_at=row["created_at"],
+                    )
+                )
+            return [
+                (
+                    ChangeRecord(
+                        change_id=h["change_id"],
+                        project=h["project"],
+                        app_id=h["app_id"],
+                        base_branch=h["base_branch"],
+                        base_commit=h["base_commit"],
+                        branch=h["branch"],
+                        worktree=h["worktree"],
+                        max_files=h["max_files"],
+                        max_lines=h["max_lines"],
+                        request_len=h["request_len"],
+                        created_at=h["created_at"],
+                    ),
+                    events.get(str(h["change_id"]), []),
+                )
+                for h in heads
+            ]
+        except ValueError:
+            raise TraceStoreError("the trace database holds a malformed change row") from None
+
     def get(self, run_id: str) -> RunTrace:
         try:
             row = self._conn.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
@@ -814,9 +960,18 @@ def _migrate(conn: sqlite3.Connection, version: int) -> None:
         if script is None:
             raise TraceStoreError(f"no migration from trace database version {version}")
         try:
-            conn.executescript(
-                f"BEGIN IMMEDIATE;\n{script}\nPRAGMA user_version = {version + 1};\nCOMMIT;"
-            )
+            conn.execute("BEGIN IMMEDIATE")
+            # The version is re-read under the write lock: a script that happens to succeed twice
+            # (the 6 to 7 rebuild does) must not run again and set the version back (ADR-0042).
+            held = _user_version(conn)
+            if held != version:
+                _rollback(conn)
+                version = held
+                continue
+            for statement in _statements(script):
+                conn.execute(statement)
+            conn.execute(f"PRAGMA user_version = {version + 1}")
+            conn.execute("COMMIT")
         except sqlite3.Error:
             _rollback(conn)
             # Another process may have applied this step between our version read and our write.
@@ -826,6 +981,16 @@ def _migrate(conn: sqlite3.Connection, version: int) -> None:
             version = current
             continue
         version += 1
+
+
+def _statements(script: str) -> Iterator[str]:
+    """The statements of a migration script, one by one (a trigger body keeps its semicolons)."""
+    pending = ""
+    for line in script.splitlines(keepends=True):
+        pending += line
+        if sqlite3.complete_statement(pending):
+            yield pending.strip()
+            pending = ""
 
 
 def _create_baseline(conn: sqlite3.Connection) -> int:

@@ -100,6 +100,39 @@ class Settings(BaseSettings):
         return self
 
 
+class GithubSettings(BaseSettings):
+    """What `change pr` needs (ADR-0042). Separate from `Settings` so that publishing a branch
+    does not require a model provider."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore", populate_by_name=True
+    )
+
+    github_token: SecretStr | None = Field(default=None, validation_alias="GITHUB_TOKEN")
+    allow_remote_content: bool = Field(
+        default=False, validation_alias="COGMESH_ALLOW_REMOTE_CONTENT"
+    )
+
+    @field_validator("github_token")
+    @classmethod
+    def _check_token_characters(cls, value: SecretStr | None) -> SecretStr | None:
+        # One printable-ASCII word, so it can never add a line to a header. Never echo the value.
+        if value is not None:
+            secret = value.get_secret_value()
+            if secret.strip() and not all("!" <= ch <= "~" for ch in secret):
+                raise ValueError("must be printable ASCII with no spaces or line breaks")
+        return value
+
+
+def load_github_settings() -> GithubSettings:
+    """The GitHub token and remote-content opt-in; raises ConfigError without echoing a value."""
+    try:
+        return GithubSettings()
+    except ValidationError as exc:
+        names = sorted({str(e["loc"][0]) for e in exc.errors() if e["loc"]})
+        raise ConfigError(f"Invalid configuration: {', '.join(names)} (see .env.example)") from None
+
+
 def _env_name(loc: tuple[int | str, ...]) -> str:
     if not loc:
         return "settings"

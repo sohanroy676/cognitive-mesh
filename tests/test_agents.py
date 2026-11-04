@@ -43,6 +43,7 @@ VALID_INPUTS: dict[str, dict[str, object]] = {
     "explain_file": {"path": "pyproject.toml"},
     "dependents_of": {"target": "route:GET /users"},
     "summarise_dependents": {"target": "route:GET /users"},
+    "propose_change": {"project": "api", "request": "add a comment"},
 }
 
 
@@ -52,7 +53,10 @@ class _GoodClient:
 
     def complete(self, request: ModelRequest) -> ModelResponse:
         text = json.dumps({"summary": "ok", "symbols": []})
-        if "other projects" in request.system:  # the reader (ADR-0041)
+        if "unified diff" in request.system:  # the coder (ADR-0042)
+            diff = "--- a/x" + chr(10) + "+++ b/x" + chr(10)
+            text = json.dumps({"diff": diff, "summary": "s", "reasoning": "r"})
+        elif "other projects" in request.system:  # the reader (ADR-0041)
             first = json.loads(request.prompt)["files"][0]
             cited = {"project": first["project"], "summary": "uses it", "paths": [first["path"]]}
             text = json.dumps({"summaries": [cited]})
@@ -108,7 +112,7 @@ def test_every_declared_capability_runs_with_controlled_inputs(tmp_path: Path) -
 
 def test_specs_are_discoverable_and_sorted() -> None:
     specs = default_registry().specs()
-    assert [s.id for s in specs] == ["code_explainer", "dependency_analyst", "reader"]
+    assert [s.id for s in specs] == ["code_explainer", "coder", "dependency_analyst", "reader"]
     for spec in specs:
         assert spec.role and spec.description
         for cap in spec.capabilities:
@@ -116,7 +120,7 @@ def test_specs_are_discoverable_and_sorted() -> None:
             assert cap.output_schema["type"] == "object"
     explainer = specs[0].capabilities[0]
     assert explainer.uses_model is True
-    assert all(not c.uses_model for c in specs[1].capabilities)
+    assert all(not c.uses_model for c in specs[2].capabilities)
     json.dumps([s.model_dump(mode="json") for s in specs])
 
 
