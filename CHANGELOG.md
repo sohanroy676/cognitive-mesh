@@ -7,6 +7,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - Record v1.10.0 CI runs and session 10 handoff
+- **adr:** Propose ADR-0041 cross-project impact analysis
 
 ## [1.10.0] - 2026-11-04
 
