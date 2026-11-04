@@ -5,9 +5,13 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **decisions:** Add decision records (v1.9.0, ADR-0039)
+
 ### Documentation
 - Record v1.8.0 CI runs and session 8 handoff
 - **adr:** Propose ADR-0039 decision records
+- Document v1.9.0 decision records and record session 9
 
 ## [1.8.0] - 2026-11-04
 
