@@ -7,6 +7,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - Record v1.11.0 CI runs and session 11 handoff
+- **adr:** Propose ADR-0042 small-change agent
 
 ## [1.11.0] - 2026-11-04
 
