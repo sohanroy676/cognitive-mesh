@@ -186,6 +186,7 @@ A chat assistant, first as a local web demo and then as a VS Code extension, tha
   choice is marked `insufficient_evidence`, and a small, stated share of tasks may explore other models.
 - Every conductor plan is a decision record (v1.9.0).
 - ADR: conductor input and output contract, role list, validation rules, fallback order, the exploration rule.
+  Drafted as ADR-0040 (Proposed 2026-11-04, awaiting the user's acceptance; no code yet).
 
 #### Test
 - Fake conductor returns plans that are valid, cyclic, reference unknown models, assign a write role to another project,
