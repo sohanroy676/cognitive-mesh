@@ -7,6 +7,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - Record v1.8.0 CI runs and session 8 handoff
+- **adr:** Propose ADR-0039 decision records
 
 ## [1.8.0] - 2026-11-04
 
