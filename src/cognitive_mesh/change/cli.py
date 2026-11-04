@@ -162,11 +162,16 @@ def _dispatch(args: argparse.Namespace) -> int:
 
 
 def _registry_factory(args: argparse.Namespace) -> Any:
+    return registry_factory_for(args.model, args.catalog)
+
+
+def registry_factory_for(model: str | None, catalog: Path | None) -> Any:
+    """A factory of registries whose coder calls the chosen model and records each call."""
     overrides: dict[str, Any] = {}
-    if args.model is not None:
-        overrides.update(provider="catalog", model=args.model)
-    if args.catalog is not None:
-        overrides["model_catalog"] = args.catalog
+    if model is not None:
+        overrides.update(provider="catalog", model=model)
+    if catalog is not None:
+        overrides["model_catalog"] = catalog
     settings = load_settings(**overrides)
     base = build_model_client(settings, ["coder"])
     entry = catalog_entry_id(settings)

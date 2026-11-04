@@ -14,6 +14,7 @@ from cognitive_mesh import __version__, decisions_cli, models_cli
 from cognitive_mesh.agents import AgentContext, AgentRegistry, default_registry
 from cognitive_mesh.change import cli as change_cli
 from cognitive_mesh.config import ConfigError, load_settings, load_settings_if_configured
+from cognitive_mesh.evaluate import cli as eval_cli
 from cognitive_mesh.graph import (
     DEFAULT_MAX_EDGES,
     DEFAULT_MAX_NODES,
@@ -94,6 +95,7 @@ EXIT_CATALOG_ERROR = models_cli.EXIT_CATALOG_ERROR  # 20 (ADR-0038)
 EXIT_DECISION_ERROR = decisions_cli.EXIT_DECISION_ERROR  # 21 (ADR-0039)
 EXIT_CONDUCTOR_ERROR = 22  # the conductor produced no usable plan (ADR-0040)
 EXIT_CHANGE_ERROR = change_cli.EXIT_CHANGE_ERROR  # 24 (ADR-0042); 23 is the impact exit
+EXIT_EVAL_ERROR = eval_cli.EXIT_EVAL_ERROR  # 25 (ADR-0043)
 MAX_PLAN_BYTES = 256 * 1024
 DEFAULT_MIN_SIMILARITY = 0.2  # from one live run on 3 documents (ADR-0014); a rough starting point
 
@@ -301,6 +303,7 @@ def _build_parser() -> argparse.ArgumentParser:
     ui.add_argument("--no-browser", action="store_true", help="print the URL, do not open it")
     workspace_cli.add_parser(sub)
     change_cli.add_parser(sub)
+    eval_cli.add_parser(sub)
     models_cli.add_parser(sub)
     decisions_cli.add_parser(sub)
     experience = sub.add_parser("experience", help="build and query the experience graph")
@@ -2153,6 +2156,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return workspace_cli.run(args)
     if args.command == "change":
         return change_cli.run(args)
+    if args.command == "eval":
+        return eval_cli.run(args)
     if args.command == "models":
         return models_cli.run(args)
     if args.command == "decisions":

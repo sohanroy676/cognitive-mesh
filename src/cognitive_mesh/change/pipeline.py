@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Final
 
 from cognitive_mesh.agents import AgentContext, AgentSuccess
+from cognitive_mesh.agents.context import PastChange, RecalledContext
 from cognitive_mesh.agents.registry import AgentRegistry
 from cognitive_mesh.change.checks import (
     FEEDBACK_CHARS,
@@ -71,6 +72,9 @@ class ChangeRequest:
     worktrees: Path = Path("cogmesh-worktrees")
     base_ref: str = "HEAD"
     allow_unisolated_checks: bool = False
+    # Memory for the coder (ADR-0043); both empty means a run without memory.
+    recalled: RecalledContext | None = None
+    past_changes: tuple[PastChange, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -177,7 +181,11 @@ class _Pipeline:
         validated = plan_task(plan, registry, allow_writes=True)
         ingestion = ingest_application(self.root)
         context = AgentContext(
-            ingestion=ingestion, graph=build_dependency_graph(ingestion), workspace=self.access
+            ingestion=ingestion,
+            graph=build_dependency_graph(ingestion),
+            recalled=req.recalled,
+            workspace=self.access,
+            past_changes=req.past_changes,
         )
         recorder = TraceRecorder(self.store, now=self.now)
         run_id = recorder.begin(

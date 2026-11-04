@@ -141,3 +141,27 @@ class RecalledContext(_Frozen):
     def none(cls) -> Self:
         """The explicit 'no prior context' pack, for a first session or when nothing passed."""
         return cls(message=NO_PRIOR_CONTEXT)
+
+
+MAX_PAST_CHANGES: Final = 5
+MAX_PAST_DIFF_CHARS: Final = 4_000
+PAST_CHANGE_LABEL: Final = (
+    "earlier change attempts; summaries and diffs were written by a model and are not verified"
+)
+
+
+class PastChange(_Frozen):
+    """One earlier draft of a change, offered to the coder as data (ADR-0043).
+
+    `outcome`, `impact` and `check` are fixed phrases written by code. `summary` and `diff` are
+    model-written and untrusted; the diff is present only when that draft's check succeeded, and a
+    passing check says only that the declared command passed.
+    """
+
+    change_id: str
+    draft: str  # "applied" or "refused:<code>"
+    impact: str = ""
+    check: str = ""
+    summary: str = ""
+    diff: str | None = Field(default=None, max_length=MAX_PAST_DIFF_CHARS)
+    similarity: float = 0.0
