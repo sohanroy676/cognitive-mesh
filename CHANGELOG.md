@@ -5,6 +5,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **orchestrator:** Add conductor model with per-step routing (v1.10.0)
+
 ### Documentation
 - Record v1.9.0 CI runs and session 9 handoff
 - **adr:** Propose ADR-0040 orchestrator model
