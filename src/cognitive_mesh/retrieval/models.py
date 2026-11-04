@@ -5,8 +5,9 @@ from typing import Final, Literal
 from pydantic import BaseModel, ConfigDict
 
 from cognitive_mesh.experience.assess import ClaimAssessment
+from cognitive_mesh.experience.decision_assess import DecisionAssessment
 from cognitive_mesh.experience.models import REPETITION_NOTE
-from cognitive_mesh.memory.models import SIMILARITY_NOTE
+from cognitive_mesh.memory.models import SIMILARITY_NOTE, UnverifiedDecisionHit
 
 RAW_LABEL: Final = "raw trace: a record of what happened, not validated knowledge"
 VALIDATION_NOTE: Final = (
@@ -57,6 +58,24 @@ class Unconfirmed(_Frozen):
     reason: str  # source_missing | source_changed | source_unreadable | not_in_graph
 
 
+class RecalledDecision(_Frozen):
+    """A decision found by meaning (`similarity`) or because it cites something recalled."""
+
+    assessment: DecisionAssessment
+    similarity: float | None = None  # None: found only through the graph
+    excerpt: str = ""  # start of the embedded text, untrusted data
+    cites_recalled: tuple[str, ...] = ()  # recalled graph ids this decision cites
+
+
+class DecisionRecall(_Frozen):
+    indexed: bool  # False: the index has no decisions collection
+    indexed_documents: int = 0
+    dropped_weak: int = 0
+    decisions: tuple[RecalledDecision, ...] = ()
+    unconfirmed: tuple[UnverifiedDecisionHit, ...] = ()
+    message: str = ""
+
+
 class RecallResult(_Frozen):
     query_length: int
     k: int
@@ -70,4 +89,5 @@ class RecallResult(_Frozen):
     experiences_without_claims: tuple[RawExperience, ...]
     unconfirmed: tuple[Unconfirmed, ...]
     message: str
+    decisions: DecisionRecall | None = None  # ADR-0039; None: not asked
     notes: tuple[str, ...] = RETRIEVAL_NOTES

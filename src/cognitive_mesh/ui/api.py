@@ -287,7 +287,7 @@ class UiApi:
 
     def recall(self, params: Mapping[str, str]) -> Reply:
         from cognitive_mesh.memory import MemoryIndex  # chromadb is slow to import
-        from cognitive_mesh.retrieval import recall
+        from cognitive_mesh.retrieval import recall, recall_decisions_for
 
         query = _text(params, "q")
         k = _number(params, "k", 5, int)
@@ -313,6 +313,23 @@ class UiApi:
                 min_similarity=min_similarity,
                 today=today,
                 environment=current_environment(),
+            )
+            found = found.model_copy(
+                update={
+                    "decisions": recall_decisions_for(
+                        found,
+                        query,
+                        index,
+                        store,
+                        loaded.snapshot,
+                        reviews=reviews,
+                        outcomes=outcomes,
+                        root=self.config.root,
+                        k=k,
+                        min_similarity=min_similarity,
+                        today=today,
+                    )
+                }
             )
         notes = [f"date used for expiry: {today.isoformat()} (UTC)"]
         notes.append(

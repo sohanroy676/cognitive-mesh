@@ -22,12 +22,14 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from cognitive_mesh.ingestion.secrets import redact_secrets
 
-SCHEMA_VERSION: Final = 2  # 2 (ADR-0022): the nullable `valid_until` column
+# 2 (ADR-0022): the `valid_until` column; 3 (ADR-0039): a decision id may be the subject
+SCHEMA_VERSION: Final = 3
 APPLICATION_ID: Final = 0x434F5554  # "COUT": tells an outcomes file from any other SQLite file
 MAX_DETAIL_CHARS: Final = 1000
 MAX_RECORDER_CHARS: Final = 100
 
 _CLAIM_ID = re.compile(r"claim:[0-9a-f]{32}")
+_SUBJECT_ID = re.compile(r"(claim|decision):[0-9a-f]{32}")
 _FINGERPRINT = re.compile(r"[0-9a-f]{64}")
 
 _SCHEMA: Final = f"""
@@ -125,19 +127,22 @@ def _check_header(conn: sqlite3.Connection) -> None:
         raise OutcomeStoreError(
             f"the outcomes file has version {version}, newer than this program supports"
         )
-    if version not in (1, SCHEMA_VERSION):
+    if version not in (1, 2, SCHEMA_VERSION):
         raise OutcomeStoreError(f"unsupported outcomes file version ({version})")
 
 
 def _upgrade(conn: sqlite3.Connection) -> None:
-    """Version 1 -> 2 in one transaction; the version is re-read under the lock, so a process
-    that lost the race to upgrade does nothing."""
+    """Upgrade to the current version in one transaction; the version is re-read under the lock,
+    so a process that lost the race to upgrade does nothing. Version 3 changes no table: it marks
+    a file that may hold decision ids, which an older program must refuse."""
     if _pragma_int(conn, "user_version") == SCHEMA_VERSION:
         return
     try:
         conn.execute("BEGIN IMMEDIATE")
         if _pragma_int(conn, "user_version") == 1:
             conn.execute("ALTER TABLE outcomes ADD COLUMN valid_until TEXT")
+            conn.execute("PRAGMA user_version = 2")
+        if _pragma_int(conn, "user_version") == 2:
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         conn.execute("COMMIT")
     except sqlite3.Error:
@@ -241,8 +246,10 @@ class OutcomeStore:
         """Append one outcome. It links to the newest row for the same claim and code version."""
         if not self._writable:
             raise OutcomeStoreError("the outcomes file was opened read-only")
-        if not _CLAIM_ID.fullmatch(claim_id):
-            raise OutcomeStoreError("the claim id is not a claim id")
+        if not _SUBJECT_ID.fullmatch(claim_id):
+            raise OutcomeStoreError("the id is not a claim id or a decision id")
+        if source is OutcomeSource.PROMOTION and not _CLAIM_ID.fullmatch(claim_id):
+            raise OutcomeStoreError("only a claim can be promoted")
         if not _FINGERPRINT.fullmatch(fingerprint):
             raise OutcomeStoreError("the fingerprint is not a sha256 hex digest")
         if (source is OutcomeSource.PROMOTION) != (result is OutcomeResult.REJECTED):

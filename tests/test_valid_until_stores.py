@@ -90,7 +90,7 @@ def test_an_outcome_keeps_its_valid_until_across_sessions(tmp_path: Path) -> Non
         )  # fmt: skip
     with OutcomeStore.open_existing(path) as store:
         (got,) = store.list_outcomes()
-    assert got.valid_until == TODAY and version(path) == 2
+    assert got.valid_until == TODAY and version(path) == 3  # 3: ADR-0039
 
 
 def test_a_past_valid_until_is_refused_and_stores_nothing(tmp_path: Path) -> None:
@@ -147,7 +147,7 @@ def test_a_version_1_outcomes_file_reads_and_upgrades_like_reviews(tmp_path: Pat
     with OutcomeStore.create(path) as store:
         store.add(CLAIM, FP, OutcomeSource.CHECK, OutcomeResult.FAILED, "d", "me", now=NOW)
         assert [o.previous_id for o in store.list_outcomes()] == [None, 1]
-    assert version(path) == 2
+    assert version(path) == 3  # 3: ADR-0039 (a version-1 file passes through 2)
 
 
 def test_a_newer_file_is_still_refused(tmp_path: Path) -> None:

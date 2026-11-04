@@ -28,8 +28,10 @@ from experience_support import deps_step, make_db, unresolved_step
 
 A, B, C = "module:a.py", "module:b.py", "module:c.py"
 
-# Format 6 of this fixture. If this changes, every stored graph file changes meaning.
-GOLDEN_HASH = "ae93a1a4fe75bdea7705e2574811b81c67b193b37404b6271321292acbacd4d5"
+# Format 7 of this fixture (ADR-0039: the format number is hashed and every reference now carries
+# `decision_id` and `file_sha256`; format 6 gave ae93a1a4...). If this changes, every stored graph
+# file changes meaning.
+GOLDEN_HASH = "f571a1887651ade509bb0c7798757f55e356388ee71df9d4e866bf4e2f3a4678"
 GOLDEN_COUNTS = (24, 38)
 
 

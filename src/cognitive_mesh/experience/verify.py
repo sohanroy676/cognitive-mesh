@@ -78,6 +78,21 @@ def _check_attempts(
     return statuses
 
 
+def _decision_statuses(decisions: Iterable[ExpNode], store: TraceStore) -> dict[str, SourceStatus]:
+    """A decision node is ok while its row is in the trace store and still matches its id."""
+    listing = store.read_decisions()
+    present = {d.decision_id for d in listing.decisions}
+    malformed = set(listing.malformed)
+    return {
+        n.id: SourceStatus.OK
+        if n.id in present
+        else SourceStatus.UNREADABLE
+        if n.id in malformed
+        else SourceStatus.MISSING
+        for n in decisions
+    }
+
+
 def check_attempts(
     graph: ExperienceGraph, store: TraceStore, attempt_ids: Collection[str]
 ) -> dict[str, SourceStatus]:
@@ -101,6 +116,7 @@ def check_nodes(
     cache: dict[str, dict[str, MemoryDocument] | None] = {}
     memo: dict[str, SourceStatus] = {}
     by_run: dict[str, list[str]] | None = None
+    decision_cache: dict[str, SourceStatus] = {}
 
     def attempt(node: ExpNode) -> SourceStatus:
         return _check_attempts([node], store, cache)[node.id]
@@ -129,6 +145,12 @@ def check_nodes(
             found = _aggregate([status_of(e.target) for e in final])
         elif node.kind is NodeKind.CLAIM:
             found = _aggregate([status_of(e.target) for e in graph.evidence(node_id)])
+        elif node.kind is NodeKind.DECISION:
+            if not decision_cache:
+                decision_cache.update(_decision_statuses(graph.nodes(NodeKind.DECISION), store))
+            found = decision_cache.get(node_id, SourceStatus.MISSING)
+        elif node.kind is NodeKind.FILE:
+            found = _aggregate([status_of(e.source) for e in graph.in_edges(node_id)])
         else:  # entities: capability, agent, target
             around = [
                 e.source
@@ -161,6 +183,10 @@ def check_sources(snapshot: Snapshot, store: TraceStore) -> SourceReport:
         statuses[node.id] = _aggregate(found)
         support[node.id] = sum(1 for s in found if s is SourceStatus.OK)
 
+    statuses.update(_decision_statuses(graph.nodes(NodeKind.DECISION), store))
+    for node in graph.nodes(NodeKind.FILE):
+        statuses[node.id] = _aggregate([statuses[e.source] for e in graph.in_edges(node.id)])
+
     for node in graph.nodes():
         if node.id in statuses:
             continue  # entities: capability, agent, target
@@ -175,12 +201,13 @@ def check_sources(snapshot: Snapshot, store: TraceStore) -> SourceReport:
     diagnostics = tuple(
         ExperienceDiagnostic(
             code=_CODES[statuses[n.id]],
-            run_id=n.ref.run_id if n.ref else None,
+            run_id=(n.ref.run_id or None) if n.ref else None,
             node_id=n.id,
             message=_TEXT[statuses[n.id]],
         )
         for n in graph.nodes()
-        if n.kind in (NodeKind.RUN, NodeKind.ATTEMPT) and statuses[n.id] is not SourceStatus.OK
+        if n.kind in (NodeKind.RUN, NodeKind.ATTEMPT, NodeKind.DECISION)
+        and statuses[n.id] is not SourceStatus.OK
     )
     return SourceReport(statuses=statuses, claim_support=support, diagnostics=diagnostics)
 

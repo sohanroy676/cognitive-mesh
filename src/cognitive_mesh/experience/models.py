@@ -8,14 +8,14 @@ Claims are `unvalidated`: repetition across runs is counted, never treated as pr
 import hashlib
 import json
 from enum import StrEnum
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from cognitive_mesh.identity import IdentityHow
 from cognitive_mesh.validity import Environment, EnvScope
 
-FORMAT_VERSION: Final = 6
+FORMAT_VERSION: Final = 7  # 7 (ADR-0039): decision and file nodes, decision edges
 CLAIM_NOTE: Final = "claims are unvalidated: repeated observation is not proof of truth"
 REPETITION_NOTE: Final = "repeated observation is counted, never treated as proof of truth"
 
@@ -36,6 +36,8 @@ class NodeKind(StrEnum):
     AGENT = "agent"
     TARGET = "target"  # what a step was about, e.g. a dependency-graph node id
     CLAIM = "claim"
+    DECISION = "decision"  # ADR-0039: a recorded decision
+    FILE = "file"  # ADR-0039: a file a decision cites, per application
 
 
 class EdgeKind(StrEnum):
@@ -47,6 +49,9 @@ class EdgeKind(StrEnum):
     EVIDENCED_BY = "evidenced_by"  # claim -> attempt
     SUBJECT = "subject"  # claim -> target
     OBJECT = "object"  # claim -> target
+    DECIDED_IN = "decided_in"  # decision -> run
+    CITES = "cites"  # decision -> node, file or decision
+    SUPERSEDES = "supersedes"  # decision -> the earlier decision
 
 
 class SourceStatus(StrEnum):
@@ -58,6 +63,7 @@ class SourceStatus(StrEnum):
 
 class DiagnosticCode(StrEnum):
     MALFORMED_RUN = "malformed_run"
+    MALFORMED_DECISION = "malformed_decision"  # a decision row that cannot be read
     RUN_NOT_FINISHED = "run_not_finished"  # interrupted runs contribute no nodes
     UNUSABLE_OUTPUT = "unusable_output"  # a deterministic output that does not match its schema
     SOURCE_MISSING = "source_missing"
@@ -72,11 +78,19 @@ class _Frozen(BaseModel):
 class TraceRef(_Frozen):
     """Where in the trace database a graph element comes from."""
 
-    run_id: str = Field(min_length=1)
+    run_id: str = ""  # empty only on a reference to a decision that was not made in a run
     step_id: str | None = None
     attempt_no: int | None = None
     text_sha256: str | None = None  # the ADR-0014 document hash of the final attempt
     source_fingerprint: str | None = None  # the run's fingerprint of the analysed application
+    decision_id: str | None = None  # ADR-0039: the decision row this element comes from
+    file_sha256: str | None = None  # ADR-0039: the sha256 of a cited file when it was recorded
+
+    @model_validator(mode="after")
+    def _points_somewhere(self) -> Self:
+        if not self.run_id and self.decision_id is None:
+            raise ValueError("a reference names a run or a decision")
+        return self
 
     @property
     def doc_id(self) -> str | None:
@@ -110,6 +124,8 @@ class ExpNode(_Frozen):
     # the environment they are valid for; none is produced yet.
     scope: EnvScope | None = None
     environment: Environment | None = None
+    # Decision nodes only (ADR-0039): who stands behind the text. Model-written is never verified.
+    basis: Literal["person", "model_unverified"] | None = None
 
 
 class ExpEdge(_Frozen):

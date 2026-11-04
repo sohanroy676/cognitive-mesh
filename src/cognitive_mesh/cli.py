@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
-from cognitive_mesh import __version__, models_cli
+from cognitive_mesh import __version__, decisions_cli, models_cli
 from cognitive_mesh.agents import AgentContext, AgentRegistry, default_registry
 from cognitive_mesh.config import ConfigError, load_settings, load_settings_if_configured
 from cognitive_mesh.graph import (
@@ -60,7 +60,8 @@ if TYPE_CHECKING:
     from cognitive_mesh.experience.outcomes import Outcome
     from cognitive_mesh.experience.reviews import Review
     from cognitive_mesh.experience.store import LoadedGraph
-    from cognitive_mesh.memory import Embedder
+    from cognitive_mesh.memory import Embedder, MemoryIndex
+    from cognitive_mesh.retrieval import DecisionRecall, RecallResult
     from cognitive_mesh.workflow import PreparedContext
 
 EXIT_OK = 0
@@ -83,6 +84,7 @@ EXIT_PROMOTION_REFUSED = 17
 EXIT_UI_ERROR = 18
 EXIT_WORKSPACE_ERROR = workspace_cli.EXIT_WORKSPACE_ERROR  # 19 (ADR-0036)
 EXIT_CATALOG_ERROR = models_cli.EXIT_CATALOG_ERROR  # 20 (ADR-0038)
+EXIT_DECISION_ERROR = decisions_cli.EXIT_DECISION_ERROR  # 21 (ADR-0039)
 MAX_PLAN_BYTES = 256 * 1024
 DEFAULT_MIN_SIMILARITY = 0.2  # from one live run on 3 documents (ADR-0014); a rough starting point
 
@@ -260,6 +262,7 @@ def _build_parser() -> argparse.ArgumentParser:
     ui.add_argument("--no-browser", action="store_true", help="print the URL, do not open it")
     workspace_cli.add_parser(sub)
     models_cli.add_parser(sub)
+    decisions_cli.add_parser(sub)
     experience = sub.add_parser("experience", help="build and query the experience graph")
     exp_sub = experience.add_subparsers(dest="experience_command", required=True)
     exp_build = exp_sub.add_parser("build", help="build the graph file from the trace database")
@@ -857,14 +860,31 @@ def _run_memory(args: argparse.Namespace) -> int:
         embedder = _make_embedder()
         if args.memory_command == "index":
             with TraceStore.open_existing(args.db) as store:
-                report = MemoryIndex.open_for_write(args.index, embedder).index_traces(store)
+                writable = MemoryIndex.open_for_write(args.index, embedder)
+                report = writable.index_traces(store)
+                decision_report = writable.index_decisions(store)  # ADR-0039
             if args.as_json:
-                print(json.dumps(report.model_dump(mode="json"), indent=2))
+                payload = report.model_dump(mode="json")
+                payload["decisions"] = decision_report.model_dump(mode="json")
+                print(json.dumps(payload, indent=2))
             else:
                 print(
                     f"indexed: {report.added} added, {report.updated} updated, "
                     f"{report.unchanged} unchanged, {report.orphaned} orphaned"
                 )
+                print(
+                    f"decisions: {decision_report.added} added, "
+                    f"{decision_report.updated} updated, "
+                    f"{decision_report.unchanged} unchanged, "
+                    f"{decision_report.orphaned} orphaned"
+                )
+            if decision_report.malformed:
+                ids = ", ".join(_printable(i) for i in decision_report.malformed)
+                print(
+                    f"{len(decision_report.malformed)} malformed decision row(s) skipped: {ids}",
+                    file=sys.stderr,
+                )
+                return EXIT_TRACE_STORE_ERROR
             if report.malformed_runs:
                 ids = ", ".join(_printable(i) for i in report.malformed_runs)
                 print(
@@ -934,6 +954,9 @@ def _recall(args: argparse.Namespace) -> int:
             today=today,
             environment=current_environment(),
         )
+        found = found.model_copy(
+            update={"decisions": _recall_decisions(args, index, store, loaded, found, today)}
+        )
     if args.as_json:
         print(json.dumps(found.model_dump(mode="json"), indent=2))
         return EXIT_OK
@@ -958,6 +981,8 @@ def _recall(args: argparse.Namespace) -> int:
             f"step={_printable(raw.step_id)} attempt={raw.attempt_no} {_printable(raw.capability)}"
         )
         print(f"    {raw.label}")
+    if found.decisions is not None:
+        _print_recalled_decisions(found.decisions)
     if found.unconfirmed:
         print(f"not confirmed ({len(found.unconfirmed)}), never offered as support:")
     for miss in found.unconfirmed:
@@ -972,6 +997,63 @@ def _recall(args: argparse.Namespace) -> int:
     for note in found.notes:
         print(note)
     return EXIT_OK
+
+
+def _recall_decisions(
+    args: argparse.Namespace,
+    index: "MemoryIndex",
+    store: TraceStore,
+    loaded: "LoadedGraph",
+    found: "RecallResult",
+    today: date,
+) -> "DecisionRecall":
+    """Decisions for `recall` (ADR-0039): by meaning, plus those citing what was recalled."""
+    from cognitive_mesh.experience.reviews import ReviewStore
+    from cognitive_mesh.retrieval import recall_decisions_for
+
+    reviews = None
+    if args.reviews is not None:
+        with ReviewStore.open_existing(args.reviews) as review_store:
+            reviews = review_store.list_reviews()
+    return recall_decisions_for(
+        found,
+        args.query,
+        index,
+        store,
+        loaded.snapshot,
+        reviews=reviews,
+        outcomes=_outcomes_input(args.outcomes) if args.outcomes is not None else None,
+        root=args.root,
+        k=args.k,
+        min_similarity=args.min_similarity,
+        today=today,
+    )
+
+
+def _print_recalled_decisions(recall: "DecisionRecall") -> None:
+    if not recall.indexed:
+        print(recall.message)
+        return
+    if recall.decisions:
+        print(f"decisions ({len(recall.decisions)}):")
+    for item in recall.decisions:
+        a = item.assessment
+        print(f"  [{a.status.value}] {a.decision_id}  {_printable(a.summary)}")
+        if item.similarity is not None:
+            print(f"    retrieved by meaning (similarity {item.similarity:.3f})")
+        for cited in item.cites_recalled:
+            print(f"    cites recalled {_printable(cited)}")
+        if a.basis == "model_unverified":
+            print("    written by a model; the reasoning is not verified")
+        for reason in a.reasons:
+            print(f"    note: {_printable(reason)}")
+    for miss in recall.unconfirmed:
+        print(
+            f"  {miss.similarity:.3f}  {_printable(miss.decision_id)}  "
+            f"NOT CONFIRMED ({miss.reason.value})"
+        )
+    if not recall.decisions and recall.message:
+        print(f"decisions: {recall.message}")
 
 
 def _run_ui(args: argparse.Namespace) -> int:
@@ -1339,8 +1421,8 @@ def _experience_outcome(args: argparse.Namespace) -> int:
 
     graph = _load_graph(args.graph)
     node = graph.node(args.claim_id)
-    if node.kind is not NodeKind.CLAIM:
-        raise ExperienceNodeNotFoundError("the node is not a claim")
+    if node.kind not in (NodeKind.CLAIM, NodeKind.DECISION):  # ADR-0039: decisions too
+        raise ExperienceNodeNotFoundError("the node is not a claim or a decision")
     current = observe_current(args.root)
     with OutcomeStore.create(args.outcomes) as outcome_store:
         row = outcome_store.add(
@@ -1360,6 +1442,8 @@ def _experience_outcome(args: argparse.Namespace) -> int:
             f"{_printable(node.name)} at code version {row.fingerprint[:12]}"
         )
         print("an outcome is a recorded check or a person's account; it does not prove the claim")
+        if node.kind is NodeKind.DECISION:
+            print("(for a decision: it says how the decision worked out, not whether it was right)")
     return EXIT_OK
 
 
@@ -1630,6 +1714,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return workspace_cli.run(args)
     if args.command == "models":
         return models_cli.run(args)
+    if args.command == "decisions":
+        return decisions_cli.run(args)
     if args.command == "ui":
         return _run_ui(args)
     if args.command == "agents":

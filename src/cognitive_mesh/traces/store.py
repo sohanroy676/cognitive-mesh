@@ -18,6 +18,16 @@ from typing import Self
 from pydantic import TypeAdapter, ValidationError
 
 from cognitive_mesh.agents import AgentResult, AgentSuccess, RecalledContext
+from cognitive_mesh.decisions.models import (
+    Citation,
+    CitationKind,
+    Decision,
+    DecisionError,
+    DecisionLink,
+    DecisionListing,
+    DuplicateDecisionError,
+    decision_digest,
+)
 from cognitive_mesh.orchestrator import StepStatus
 from cognitive_mesh.providers.recording import CallRecord
 from cognitive_mesh.traces.models import (
@@ -80,6 +90,63 @@ CREATE TABLE model_calls (
     PRIMARY KEY (run_id, agent_task_id, call_no),
     FOREIGN KEY (run_id, step_id) REFERENCES steps(run_id, step_id)
 );
+""",
+    # 5 -> 6 (ADR-0039): decision records, their citations and their commit/branch/PR links. All
+    # three tables are append-only (a correction is a new decision that supersedes the old one).
+    5: """
+CREATE TABLE decisions (
+    decision_id TEXT PRIMARY KEY,
+    app_id TEXT,
+    fingerprint TEXT,
+    run_id TEXT,
+    step_id TEXT,
+    made_by TEXT NOT NULL CHECK (made_by IN ('person', 'model')),
+    recorder TEXT,
+    entry_id TEXT,
+    provider TEXT,
+    model TEXT,
+    role TEXT,
+    agent_task_id TEXT,
+    basis TEXT NOT NULL CHECK (basis IN ('person', 'model_unverified')),
+    summary TEXT NOT NULL,
+    options_json TEXT NOT NULL,
+    chosen TEXT NOT NULL,
+    reasoning TEXT NOT NULL,
+    supersedes TEXT REFERENCES decisions(decision_id),
+    created_at TEXT NOT NULL,
+    redactions_json TEXT NOT NULL,
+    CHECK ((made_by = 'person') = (basis = 'person'))
+);
+CREATE TABLE decision_citations (
+    decision_id TEXT NOT NULL REFERENCES decisions(decision_id),
+    n INTEGER NOT NULL CHECK (n >= 1),
+    kind TEXT NOT NULL CHECK (kind IN ('node', 'file', 'decision')),
+    target TEXT NOT NULL,
+    sha256 TEXT,
+    PRIMARY KEY (decision_id, n)
+);
+CREATE TABLE decision_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    decision_id TEXT NOT NULL REFERENCES decisions(decision_id),
+    kind TEXT NOT NULL CHECK (kind IN ('commit', 'branch', 'pr')),
+    value TEXT NOT NULL,
+    how TEXT NOT NULL CHECK (how IN ('observed', 'declared')),
+    recorder TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX decision_links_by_value ON decision_links (kind, value);
+CREATE TRIGGER decisions_no_update BEFORE UPDATE ON decisions
+BEGIN SELECT RAISE(ABORT, 'decisions are append-only'); END;
+CREATE TRIGGER decisions_no_delete BEFORE DELETE ON decisions
+BEGIN SELECT RAISE(ABORT, 'decisions are append-only'); END;
+CREATE TRIGGER decision_citations_no_update BEFORE UPDATE ON decision_citations
+BEGIN SELECT RAISE(ABORT, 'decisions are append-only'); END;
+CREATE TRIGGER decision_citations_no_delete BEFORE DELETE ON decision_citations
+BEGIN SELECT RAISE(ABORT, 'decisions are append-only'); END;
+CREATE TRIGGER decision_links_no_update BEFORE UPDATE ON decision_links
+BEGIN SELECT RAISE(ABORT, 'decisions are append-only'); END;
+CREATE TRIGGER decision_links_no_delete BEFORE DELETE ON decision_links
+BEGIN SELECT RAISE(ABORT, 'decisions are append-only'); END;
 """,
 }
 SCHEMA_VERSION = 1 + len(MIGRATIONS)
@@ -360,7 +427,179 @@ class TraceStore:
             _rollback(conn)
             raise
 
+    def add_decision(self, decision: Decision) -> None:
+        """Append one decision with its citations (ADR-0039), or nothing.
+
+        Refuses a superseded or cited decision that does not exist or belongs to another
+        application, a run or step that does not exist, and a model call that does not exist.
+        """
+        conn = self._conn
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            self._check_decision_refs(decision)
+            if conn.execute(
+                "SELECT 1 FROM decisions WHERE decision_id = ?", (decision.decision_id,)
+            ).fetchone():
+                raise DuplicateDecisionError("the decision is already recorded")
+            conn.execute(
+                "INSERT INTO decisions (decision_id, app_id, fingerprint, run_id, step_id,"
+                " made_by, recorder, entry_id, provider, model, role, agent_task_id, basis,"
+                " summary, options_json, chosen, reasoning, supersedes, created_at,"
+                " redactions_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
+                " ?, ?)",
+                (
+                    decision.decision_id,
+                    decision.app_id,
+                    decision.fingerprint,
+                    decision.run_id,
+                    decision.step_id,
+                    decision.made_by.value,
+                    decision.recorder,
+                    decision.entry_id,
+                    decision.provider,
+                    decision.model,
+                    decision.role,
+                    decision.agent_task_id,
+                    decision.basis.value,
+                    decision.summary,
+                    json.dumps(list(decision.options)),
+                    decision.chosen,
+                    decision.reasoning,
+                    decision.supersedes,
+                    decision.created_at.isoformat(),
+                    json.dumps(list(decision.redactions)),
+                ),
+            )
+            for n, cite in enumerate(decision.citations, start=1):
+                conn.execute(
+                    "INSERT INTO decision_citations (decision_id, n, kind, target, sha256)"
+                    " VALUES (?, ?, ?, ?, ?)",
+                    (decision.decision_id, n, cite.kind.value, cite.target, cite.sha256),
+                )
+            conn.execute("COMMIT")
+        except sqlite3.IntegrityError:
+            _rollback(conn)
+            raise DecisionError(
+                "the decision is already recorded or refers to a missing row"
+            ) from None
+        except sqlite3.Error:
+            _rollback(conn)
+            raise TraceStoreError("cannot record the decision (sqlite error)") from None
+        except DecisionError:
+            _rollback(conn)
+            raise
+
+    def _check_decision_refs(self, decision: Decision) -> None:
+        conn = self._conn
+        ids = [decision.supersedes] if decision.supersedes else []
+        ids += [c.target for c in decision.citations if c.kind is CitationKind.DECISION]
+        for other_id in ids:
+            row = conn.execute(
+                "SELECT app_id FROM decisions WHERE decision_id = ?", (other_id,)
+            ).fetchone()
+            if row is None:
+                raise DecisionError("a cited or superseded decision does not exist")
+            if row["app_id"] != decision.app_id:
+                raise DecisionError("a cited or superseded decision belongs to another application")
+        if decision.run_id is not None:
+            found = conn.execute(
+                "SELECT 1 FROM steps WHERE run_id = ? AND step_id = ?",
+                (decision.run_id, decision.step_id),
+            ).fetchone()
+            if found is None:
+                raise DecisionError("the run or step of the decision does not exist")
+        if decision.agent_task_id is not None:
+            found = conn.execute(
+                "SELECT 1 FROM model_calls WHERE agent_task_id = ? AND (? IS NULL OR run_id = ?)",
+                (decision.agent_task_id, decision.run_id, decision.run_id),
+            ).fetchone()
+            if found is None:
+                raise DecisionError("the model call of the decision was not recorded")
+
+    def add_decision_link(self, link: DecisionLink) -> None:
+        """Append one commit, branch or PR link to an existing decision."""
+        conn = self._conn
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            found = conn.execute(
+                "SELECT 1 FROM decisions WHERE decision_id = ?", (link.decision_id,)
+            ).fetchone()
+            if found is None:
+                raise DecisionError("no decision has this id")
+            conn.execute(
+                "INSERT INTO decision_links (decision_id, kind, value, how, recorder, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    link.decision_id,
+                    link.kind.value,
+                    link.value,
+                    link.how.value,
+                    link.recorder,
+                    link.created_at.isoformat(),
+                ),
+            )
+            conn.execute("COMMIT")
+        except sqlite3.Error:
+            _rollback(conn)
+            raise TraceStoreError("cannot record the link (sqlite error)") from None
+        except DecisionError:
+            _rollback(conn)
+            raise
+
     # -- reading ---------------------------------------------------------------------------
+
+    def read_decisions(self) -> DecisionListing:
+        """Every decision (oldest first) and link; a malformed row is reported by id."""
+        try:
+            rows = self._conn.execute(
+                "SELECT * FROM decisions ORDER BY created_at, decision_id"
+            ).fetchall()
+            cites = self._conn.execute(
+                "SELECT * FROM decision_citations ORDER BY decision_id, n"
+            ).fetchall()
+            link_rows = self._conn.execute("SELECT * FROM decision_links ORDER BY id").fetchall()
+        except sqlite3.Error:
+            raise TraceStoreError("cannot read the trace database (sqlite error)") from None
+        by_decision: dict[str, list[sqlite3.Row]] = defaultdict(list)
+        for cite in cites:
+            by_decision[str(cite["decision_id"])].append(cite)
+        decisions: list[Decision] = []
+        malformed: list[str] = []
+        for row in rows:
+            decision_id = str(row["decision_id"])
+            try:
+                decisions.append(_build_decision(row, by_decision.get(decision_id, [])))
+            except (ValueError, TypeError, DecisionError):  # ValidationError is a ValueError
+                malformed.append(decision_id)
+        known = {d.decision_id: d for d in decisions}
+        for d in decisions:  # a reference that points nowhere is malformed, never silently kept
+            refs = [c.target for c in d.citations if c.kind is CitationKind.DECISION]
+            if d.supersedes:
+                refs.append(d.supersedes)
+            if any(ref not in known for ref in refs) and d.decision_id not in malformed:
+                malformed.append(d.decision_id)
+        good = tuple(d for d in decisions if d.decision_id not in malformed)
+        links: list[DecisionLink] = []
+        for link_row in link_rows:
+            try:
+                links.append(
+                    DecisionLink(
+                        id=link_row["id"],
+                        decision_id=link_row["decision_id"],
+                        kind=link_row["kind"],
+                        value=link_row["value"],
+                        how=link_row["how"],
+                        recorder=link_row["recorder"],
+                        created_at=link_row["created_at"],
+                    )
+                )
+            except (ValueError, DecisionError):
+                malformed.append(f"link:{link_row['id']}")
+        return DecisionListing(
+            decisions=good,
+            links=tuple(link for link in links if link.decision_id in known),
+            malformed=tuple(sorted(set(malformed))),
+        )
 
     def get(self, run_id: str) -> RunTrace:
         try:
@@ -468,6 +707,45 @@ class TraceStore:
                 )
             )
         return TraceListing(runs=tuple(runs), malformed=tuple(malformed))
+
+
+def _build_decision(row: sqlite3.Row, cites: Sequence[sqlite3.Row]) -> Decision:
+    """Rebuild and validate one decision. Raises ValueError/DecisionError on a malformed row."""
+    options = json.loads(row["options_json"])
+    redactions = json.loads(row["redactions_json"])
+    if not (isinstance(options, list) and isinstance(redactions, list)):
+        raise ValueError("malformed json column")
+    citations = []
+    for number, cite in enumerate(cites, start=1):
+        if cite["n"] != number:
+            raise ValueError("citations are not numbered 1..n")
+        citations.append(Citation(kind=cite["kind"], target=cite["target"], sha256=cite["sha256"]))
+    decision = Decision(
+        decision_id=row["decision_id"],
+        app_id=row["app_id"],
+        fingerprint=row["fingerprint"],
+        run_id=row["run_id"],
+        step_id=row["step_id"],
+        made_by=row["made_by"],
+        recorder=row["recorder"],
+        entry_id=row["entry_id"],
+        provider=row["provider"],
+        model=row["model"],
+        role=row["role"],
+        agent_task_id=row["agent_task_id"],
+        basis=row["basis"],
+        summary=row["summary"],
+        options=tuple(options),
+        chosen=row["chosen"],
+        reasoning=row["reasoning"],
+        citations=tuple(citations),
+        supersedes=row["supersedes"],
+        created_at=row["created_at"],
+        redactions=tuple(redactions),
+    )
+    if decision_digest(decision) != decision.decision_id:
+        raise DecisionError("the stored decision does not match its id")
+    return decision
 
 
 def _connect(path: Path) -> sqlite3.Connection:

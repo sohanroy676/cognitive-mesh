@@ -92,3 +92,51 @@ class SearchResult(_Frozen):
     indexed_documents: int
     message: str
     note: str = SIMILARITY_NOTE
+
+
+class DecisionDocument(_Frozen):
+    """One decision as embedded (ADR-0039)."""
+
+    decision_id: str
+    app_id: str | None
+    basis: str  # "person" | "model_unverified"
+    summary: str
+    text: str
+    text_sha256: str
+
+
+class DecisionIndexReport(_Frozen):
+    added: int
+    updated: int
+    unchanged: int
+    orphaned: int  # indexed decisions whose row is no longer readable; kept
+    malformed: tuple[str, ...]  # decision ids that could not be read, never hidden
+
+
+class DecisionHit(_Frozen):
+    decision_id: str
+    app_id: str | None
+    basis: str
+    summary: str
+    similarity: float
+    excerpt: str  # start of the document rebuilt from the trace database, untrusted data
+
+
+class UnverifiedDecisionHit(_Frozen):
+    """A match whose decision row could not be confirmed. Never shown as a decision."""
+
+    decision_id: str
+    similarity: float
+    reason: SourceCheck
+
+
+class DecisionSearchResult(_Frozen):
+    query_length: int
+    k: int
+    min_similarity: float
+    hits: tuple[DecisionHit, ...]
+    unverified: tuple[UnverifiedDecisionHit, ...]
+    dropped_weak: int
+    indexed_documents: int
+    message: str
+    note: str = SIMILARITY_NOTE

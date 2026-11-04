@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from cognitive_mesh.agents import AgentSuccess
 from cognitive_mesh.agents.dependency_analyst import DependenciesOfOutput, UnresolvedReportOutput
 from cognitive_mesh.agents.models import Basis
+from cognitive_mesh.decisions.models import CitationKind
 from cognitive_mesh.experience.models import (
     DiagnosticCode,
     EdgeKind,
@@ -108,7 +109,59 @@ def build_from_traces(store: TraceStore) -> Snapshot:
             )
             continue
         _add_run(acc, trace, diagnostics)
+    _add_decisions(acc, store, diagnostics)
     return acc.snapshot(diagnostics)
+
+
+def file_node_id(app_id: str | None, path: str) -> str:
+    """A cited file, per application: the same path in two applications is two nodes."""
+    return f"file:{app_id}:{path}" if app_id is not None else f"file:{path}"
+
+
+def _add_decisions(
+    acc: _Accumulator, store: TraceStore, diagnostics: list[ExperienceDiagnostic]
+) -> None:
+    """Decisions (ADR-0039) come from the same trace store, so a rebuild keeps every citation."""
+    listing = store.read_decisions()
+    for bad in listing.malformed:
+        diagnostics.append(
+            ExperienceDiagnostic(
+                code=DiagnosticCode.MALFORMED_DECISION,
+                node_id=bad,
+                message="a decision row is malformed in the trace database and was skipped",
+            )
+        )
+    for d in listing.decisions:
+        ref = TraceRef(run_id=d.run_id or "", decision_id=d.decision_id)
+        acc.node(
+            ExpNode(
+                id=d.decision_id,
+                kind=NodeKind.DECISION,
+                name=d.summary,
+                ref=ref,
+                app_id=d.app_id,
+                basis=d.basis.value,
+            )
+        )
+    for d in listing.decisions:
+        ref = TraceRef(run_id=d.run_id or "", decision_id=d.decision_id)
+        run_node = f"run:{d.run_id}"
+        if d.run_id is not None and run_node in acc.nodes:
+            acc.edge(d.decision_id, run_node, EdgeKind.DECIDED_IN, ref)
+        if d.supersedes is not None:
+            acc.edge(d.decision_id, d.supersedes, EdgeKind.SUPERSEDES, ref)
+        for cite in d.citations:
+            if cite.kind is CitationKind.FILE:
+                target = file_node_id(d.app_id, cite.target)
+                acc.node(ExpNode(id=target, kind=NodeKind.FILE, name=cite.target, app_id=d.app_id))
+                acc.edge(
+                    d.decision_id,
+                    target,
+                    EdgeKind.CITES,
+                    ref.model_copy(update={"file_sha256": cite.sha256}),
+                )
+            elif cite.target in acc.nodes:  # a node that is not in the graph yields no edge
+                acc.edge(d.decision_id, cite.target, EdgeKind.CITES, ref)
 
 
 def _is_python_stdlib(node_id: str) -> bool:

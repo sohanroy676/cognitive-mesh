@@ -12,9 +12,18 @@ from typing import Any, Final
 import chromadb
 from chromadb.config import Settings
 
+from cognitive_mesh.memory.decision_documents import (
+    DECISION_TEXT_FORMAT_VERSION,
+    decision_document,
+    verify_decision,
+)
 from cognitive_mesh.memory.documents import eligible_documents, verify_source
 from cognitive_mesh.memory.embedder import BATCH_SIZE, Embedder
 from cognitive_mesh.memory.models import (
+    DecisionDocument,
+    DecisionHit,
+    DecisionIndexReport,
+    DecisionSearchResult,
     IndexReport,
     MemoryDocument,
     MemoryHit,
@@ -22,6 +31,7 @@ from cognitive_mesh.memory.models import (
     ModelKey,
     SearchResult,
     SourceCheck,
+    UnverifiedDecisionHit,
     UnverifiedHit,
 )
 from cognitive_mesh.traces import (
@@ -30,6 +40,7 @@ from cognitive_mesh.traces import (
 )
 
 COLLECTION: Final = "experiences"
+DECISIONS_COLLECTION: Final = "decisions"  # ADR-0039: own text format and check
 MAX_QUERY_CHARS: Final = 2000
 MAX_K: Final = 50
 EXCERPT_CHARS: Final = 300
@@ -46,6 +57,10 @@ def _metadata_for(key: ModelKey) -> dict[str, str | int]:
         "dimension": key.dimension,
         "text_format": key.text_format,
     }
+
+
+def _decision_key(key: ModelKey) -> ModelKey:
+    return key.model_copy(update={"text_format": DECISION_TEXT_FORMAT_VERSION})
 
 
 def _check_compatible(collection: Any, key: ModelKey) -> None:
@@ -102,9 +117,10 @@ def _doc_metadata(doc: MemoryDocument) -> dict[str, str | int]:
 
 
 class MemoryIndex:
-    def __init__(self, collection: Any, embedder: Embedder) -> None:
+    def __init__(self, collection: Any, embedder: Embedder, decisions: Any | None = None) -> None:
         self._col = collection
         self._embedder = embedder
+        self._decisions = decisions  # None: an index built before decisions existed
 
     @classmethod
     def open_for_write(cls, path: Path, embedder: Embedder) -> "MemoryIndex":
@@ -124,7 +140,18 @@ class MemoryIndex:
         except Exception:
             raise MemoryIndexError("cannot open the memory index") from None
         _check_compatible(collection, embedder.key)
-        return cls(collection, embedder)
+        dkey = _decision_key(embedder.key)
+        try:
+            decisions = _retry(
+                lambda: client.get_or_create_collection(
+                    DECISIONS_COLLECTION, metadata=_metadata_for(dkey), embedding_function=None
+                ),
+                only_locked=False,
+            )
+        except Exception:
+            raise MemoryIndexError("cannot open the memory index") from None
+        _check_compatible(decisions, dkey)
+        return cls(collection, embedder, decisions)
 
     @classmethod
     def open_existing(cls, path: Path, embedder: Embedder) -> "MemoryIndex":
@@ -137,7 +164,19 @@ class MemoryIndex:
         except Exception:
             raise MemoryIndexError("the directory is not a memory index") from None
         _check_compatible(collection, embedder.key)
-        return cls(collection, embedder)
+        decisions: Any | None = None
+        try:
+            decisions = client.get_collection(DECISIONS_COLLECTION, embedding_function=None)
+        except Exception:  # an index built before decisions existed has none: not an error
+            decisions = None
+        if decisions is not None:
+            _check_compatible(decisions, _decision_key(embedder.key))
+        return cls(collection, embedder, decisions)
+
+    @property
+    def has_decisions(self) -> bool:
+        """True when this index has a decisions collection (it may still be empty)."""
+        return self._decisions is not None
 
     def count(self) -> int:
         try:
@@ -300,5 +339,159 @@ class MemoryIndex:
                 "no sufficiently similar experience"
                 if not unverified
                 else "no similar experience with a confirmed source"
+            )
+        return result(tuple(hits), tuple(unverified), dropped, message)
+
+    # -- decisions (ADR-0039) --------------------------------------------------------------
+
+    def index_decisions(self, store: TraceStore) -> DecisionIndexReport:
+        """Embed every readable decision that is new or changed. Safe to repeat."""
+        if self._decisions is None:
+            raise MemoryIndexError("this index has no decisions collection")
+        listing = store.read_decisions()
+        docs: dict[str, DecisionDocument] = {
+            d.decision_id: decision_document(d) for d in listing.decisions
+        }
+        known = self._known_decision_hashes(list(docs))
+        todo = [d for d in docs.values() if known.get(d.decision_id) != d.text_sha256]
+        added = sum(1 for d in todo if d.decision_id not in known)
+        for start in range(0, len(todo), BATCH_SIZE):
+            self._upsert_decisions(todo[start : start + BATCH_SIZE])
+        try:
+            all_ids = set(self._decisions.get(include=[])["ids"])
+        except Exception:
+            raise MemoryIndexError("cannot read the memory index") from None
+        return DecisionIndexReport(
+            added=added,
+            updated=len(todo) - added,
+            unchanged=len(docs) - len(todo),
+            orphaned=len(all_ids - set(docs)),
+            malformed=tuple(sorted(listing.malformed)),
+        )
+
+    def _known_decision_hashes(self, ids: Sequence[str]) -> dict[str, str]:
+        known: dict[str, str] = {}
+        try:
+            for start in range(0, len(ids), 500):
+                got = self._decisions.get(  # type: ignore[union-attr]
+                    ids=list(ids[start : start + 500]), include=["metadatas"]
+                )
+                for doc_id, meta in zip(got["ids"], got["metadatas"], strict=True):
+                    known[doc_id] = str((meta or {}).get("text_sha256", ""))
+        except Exception:
+            raise MemoryIndexError("cannot read the memory index") from None
+        return known
+
+    def _upsert_decisions(self, batch: Sequence[DecisionDocument]) -> None:
+        vectors = self._embedder.embed([d.text for d in batch])
+        dimension = self._embedder.key.dimension
+        if len(vectors) != len(batch) or any(len(v) != dimension for v in vectors):
+            raise MemoryIndexError("the embedder returned vectors of the wrong size")
+        try:
+            _retry(
+                lambda: self._decisions.upsert(  # type: ignore[union-attr]
+                    ids=[d.decision_id for d in batch],
+                    embeddings=vectors,
+                    metadatas=[
+                        {"text_sha256": d.text_sha256, "basis": d.basis, "app_id": d.app_id or ""}
+                        for d in batch
+                    ],
+                ),
+                only_locked=True,
+            )
+        except Exception:
+            raise MemoryIndexError("cannot write to the memory index") from None
+
+    def search_decisions(
+        self, query: str, store: TraceStore, *, k: int, min_similarity: float
+    ) -> DecisionSearchResult:
+        """Like `search`, over decisions. Each hit is rebuilt from its trace row or set aside."""
+        if self._decisions is None:
+            raise MemoryIndexError("this index has no decisions collection")
+        text = query.strip()
+        if not text:
+            raise ValueError("the query is empty")
+        if len(text) > MAX_QUERY_CHARS:
+            raise ValueError(f"the query is longer than {MAX_QUERY_CHARS} characters")
+        if not 1 <= k <= MAX_K:
+            raise ValueError(f"k must be between 1 and {MAX_K}")
+        if not 0.0 <= min_similarity <= 1.0:
+            raise ValueError("min_similarity must be between 0 and 1")
+        try:
+            total = int(self._decisions.count())
+        except Exception:
+            raise MemoryIndexError("cannot read the memory index") from None
+
+        def result(
+            hits: tuple[DecisionHit, ...] = (),
+            unverified: tuple[UnverifiedDecisionHit, ...] = (),
+            dropped: int = 0,
+            message: str = "",
+        ) -> DecisionSearchResult:
+            return DecisionSearchResult(
+                query_length=len(text),
+                k=k,
+                min_similarity=min_similarity,
+                hits=hits,
+                unverified=unverified,
+                dropped_weak=dropped,
+                indexed_documents=total,
+                message=message,
+            )
+
+        if total == 0:
+            return result(message="no decisions are indexed; run `memory index` first")
+        vector = self._embedder.embed([text])
+        if len(vector) != 1 or len(vector[0]) != self._embedder.key.dimension:
+            raise MemoryIndexError("the embedder returned vectors of the wrong size")
+        try:
+            got = self._decisions.query(
+                query_embeddings=vector,
+                n_results=min(k, total),
+                include=["metadatas", "distances"],
+            )
+            ids = got["ids"][0]
+            metas = got["metadatas"][0]
+            distances = got["distances"][0]
+        except Exception:
+            raise MemoryIndexError("cannot search the memory index") from None
+
+        listing = store.read_decisions()
+        hits: list[DecisionHit] = []
+        unverified: list[UnverifiedDecisionHit] = []
+        dropped = 0
+        for decision_id, meta, distance in zip(ids, metas, distances, strict=True):
+            similarity = round(max(-1.0, min(1.0, 1.0 - float(distance))), 4)
+            if similarity < min_similarity:
+                dropped += 1
+                continue
+            try:
+                expected = str(meta["text_sha256"])
+            except (KeyError, TypeError):
+                raise MemoryIndexError("the memory index holds a malformed entry") from None
+            doc, check = verify_decision(listing, str(decision_id), expected)
+            if doc is None or check is not SourceCheck.OK:
+                unverified.append(
+                    UnverifiedDecisionHit(
+                        decision_id=str(decision_id), similarity=similarity, reason=check
+                    )
+                )
+                continue
+            hits.append(
+                DecisionHit(
+                    decision_id=doc.decision_id,
+                    app_id=doc.app_id,
+                    basis=doc.basis,
+                    summary=doc.summary,
+                    similarity=similarity,
+                    excerpt=doc.text[:EXCERPT_CHARS],
+                )
+            )
+        message = ""
+        if not hits:
+            message = (
+                "no sufficiently similar decision"
+                if not unverified
+                else "no similar decision with a confirmed source"
             )
         return result(tuple(hits), tuple(unverified), dropped, message)
