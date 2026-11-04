@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
-## [Unreleased]
+## [1.10.0] - 2026-11-04
 
 ### Added
 - **orchestrator:** Add conductor model with per-step routing (v1.10.0)
