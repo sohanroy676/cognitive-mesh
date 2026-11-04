@@ -1,7 +1,7 @@
 # ADR-0043: Showing improvement at small scale: memory off versus on (v1.13.0)
 
 ## Status
-Proposed (drafted in plan mode 2026-11-04; the six marked user decisions were taken before drafting). No code until the user accepts. Extends ADR-0042 (the change pipeline), ADR-0040 (model call records, evidence label) and ADR-0039 (decision records). Amends ADR-0042 decision 1 (the coder receives no memory today) and ADR-0017 (the context pack gains one group). ADR-0005, ADR-0011, ADR-0013, ADR-0017 (request text not stored) and ADR-0018 (outcomes) stay in force.
+Accepted by the user 2026-11-04 (drafted in plan mode; the six marked user decisions were taken before drafting). Implementation in progress on `feature/extended-roadmap-v1.7`. Extends ADR-0042 (the change pipeline), ADR-0040 (model call records, evidence label) and ADR-0039 (decision records). Amends ADR-0042 decision 1 (the coder receives no memory today) and ADR-0017 (the context pack gains one group). ADR-0005, ADR-0011, ADR-0013, ADR-0017 (request text not stored) and ADR-0018 (outcomes) stay in force.
 
 ## Date
 2026-11-04
@@ -67,3 +67,15 @@ Design:
 - The memory-on arm sees the task's own earlier attempts or another repeat.
 - A check runs without `--allow-unisolated-checks`, or a run's own success is counted as validation without a check outcome.
 - Model-written text in a past change is treated as instructions or shown as verified.
+
+## Implementation notes (2026-11-04)
+- Built as written, with these differences found while building:
+  - **Where the past changes live.** `PastChange` is in `agents/context.py` and rides on `AgentContext.past_changes`, not inside `RecalledContext`, so the pack stored with every run (`run_context`, ADR-0017) keeps its shape and no trace schema changes. `change/past.py` builds them: decision-index hits are joined to the change events by the draft's decision id. The claims pack goes to the coder through `AgentContext.recalled` and `prior_context_for_prompt`, and is left out of the prompt when empty.
+  - **The claims pack is empty in a change-only evaluation.** Claims come only from deterministic `dependencies_of` and `unresolved_report` outputs, which change runs do not produce; the pack is still built and its size stored per item (`claims_offered`), so a later task set that mixes in such runs would use it.
+  - **`change propose` has no `--index`/`--graph`.** Memory reaches the coder only through `eval run`; adding it to `change propose` was not needed for the comparison and is not built.
+  - **Task set `[set]`** holds `name`, `workspace`, `project` and `root` (the project's folder, as `--root` is for the other commands); `worktree_base` was dropped because each arm's worktrees live in its own folder under the output folder. The output folder must be new or empty and outside the project's repository.
+  - **Append-only in two tables.** An item is begun in `eval_items` and finished in `eval_item_results`; an evaluation is finished in `eval_finished`. No row is ever updated. `interrupted` is derived on read.
+  - **A broken memory aborts the item** (`memory_unavailable`) instead of running it without memory; a `ChangeError` and similar stops are stored `aborted` (`change_not_started`); any other exception leaves the item `interrupted` and stops the evaluation.
+  - **"Mixed models"** is any call recorded under a catalog entry other than the evaluation's one; calls recorded without an entry are not counted as mixed.
+  - `registry_factory_for(model, catalog)` in `change/cli.py` is the shared registry builder; exit code 25 is `EXIT_EVAL_ERROR`.
+- Not built: statistics, a UI view, several models in one evaluation, a `--json` progress stream. No real model or real MiniLM run yet (see `docs/COMMANDS.md` for what was run).

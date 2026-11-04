@@ -262,6 +262,8 @@ A chat assistant, first as a local web demo and then as a VS Code extension, tha
   sample counts and no claim beyond what was measured.
 - Starts with a handful of small tasks on the fixture workspace and free models only.
 
+- ADR: decided in ADR-0043 (accepted 2026-11-04).
+
 #### Test
 - Deterministic fake-model runs give the expected report. Runs with mixed models are never compared as one.
 
