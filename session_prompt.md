@@ -6,7 +6,7 @@ Update this file at the end of every session and whenever the user asks for a ne
 Continue Cognitive Mesh (extended roadmap, next v1.11.0). Work only on branch `feature/extended-roadmap-v1.7` (do not branch off main); check it out and pull first. Read `session_prompt.md` at the repo root first and follow it. Update it at the end of the session or when I ask for a new prompt.
 
 ## Where we are (end of session 10, 2026-11-04)
-- v1.10.0 (ADR-0040, accepted): `task --conduct --conductor ENTRY --catalog FILE [--explore-rate R] [--workspace FILE --project NAME]`. Conductor plan validated (plan_from_steps + assignment checks + `writes`), two drafts, exit 22 and nothing stored on failure; `RoutedClient` per-step models with catalog-order fallback (max 2); evidence label `recorded` at 20 known-outcome calls; trace schema 7 (run-level conductor calls, decisions written in `finish_run`); decisions may name a run without a step. Suite 1878 passed, 8 skipped. Committed locally; NOT yet pushed, CI-run or tagged (ask the user; pre-approved on this branch per the branch policy below, but the changelog must be regenerated with `--tag v1.10.0` last).
+- v1.10.0 (ADR-0040, accepted): `task --conduct --conductor ENTRY --catalog FILE [--explore-rate R] [--workspace FILE --project NAME]`. Conductor plan validated (plan_from_steps + assignment checks + `writes`), two drafts, exit 22 and nothing stored on failure; `RoutedClient` per-step models with catalog-order fallback (max 2); evidence label `recorded` at 20 known-outcome calls; trace schema 7 (run-level conductor calls, decisions written in `finish_run`); decisions may name a run without a step. Suite 1878 passed, 8 skipped. pushed and tagged `v1.10.0` on `2a47e97`; CI: branch run 41790077755 (passed), tag run 41790585121 (passed).
 - Open from v1.10.0: no real model has conducted a task (`tests/test_live_conductor.py` unrun); conductor calls of a refused plan are lost; `models stats` credits the attempt outcome to every call in an attempt; decisions of conducted runs carry no observed git link; static reachability only; no UI view of assignments.
 - Next: v1.11.0 Cross-project impact analysis (read `docs/extended_roadmap.md`): plan mode, draft ADR-0041 as Proposed, no code until the user accepts. Reuse `workspace` graph, read-only accessor, `CapabilitySpec.writes`, the conductor's `current_project`.
 
@@ -34,7 +34,7 @@ Continue Cognitive Mesh (extended roadmap, next v1.11.0). Work only on branch `f
 ## Workflow facts learned (session 8)
 - The changelog section date is today's UTC date when generated with `--tag`; a CI run after UTC midnight fails the changelog step. Check `date -u` before regenerating and before CI; if CI crosses midnight, regenerate with `--tag vX.Y.Z`, commit, push, rerun CI, tag that commit.
 - Pushes on this branch can be blocked by the auto-mode classifier even though session_prompt says they are pre-approved; when that happens ask the user to approve or to push with `! git push ...`. An explicit request in the user's message (as at the end of session 8) is enough.
-- Big heredocs break in the Bash tool; write scripts with the Write tool or a short heredoc. The session scratchpad can vanish between turns; keep edit helper scripts small. Multi-line replacements on CRLF files must normalise line endings first (an `edit(path, [(old, new)])` helper that reads with newline='' and replaces after `
+- Big heredocs break in the Bash tool; write scripts with the Write tool or a short heredoc. The session scratchpad can vanish between turns; keep edit helper scripts small. Multi-line replacements on CRLF files must normalise line endings first (an `edit(path, [(old, new)])` helper that reads with newline='' and replaces after `
 ` to `
 `).
 - The full suite takes about 6 minutes; run it in the background and poll with a bounded loop (`sleep` alone is blocked).
@@ -46,7 +46,7 @@ Continue Cognitive Mesh (extended roadmap, next v1.11.0). Work only on branch `f
 - Large inline Python/heredoc scripts break in the Bash tool here; write scripts to the scratchpad with the Write tool and run them. Edit CRLF files with Python (newline='') or the Edit tool.
 
 ## Start of session
-1. `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3` (expect v1.9.0 until v1.10.0 is tagged), `git checkout feature/extended-roadmap-v1.7 && git pull`, `gh auth status` (must be sohanroy676), `gh run list --limit 6`.
+1. `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3` (expect v1.10.0), `git checkout feature/extended-roadmap-v1.7 && git pull`, `gh auth status` (must be sohanroy676), `gh run list --limit 6`.
 2. Read this file, then `docs/extended_roadmap.md` for the current version, and `memory-bank/activeContext.md` / `progress.md` on demand.
 
 ## Rules
