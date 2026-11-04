@@ -7,6 +7,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Documentation
 - Record v1.9.0 CI runs and session 9 handoff
+- **adr:** Propose ADR-0040 orchestrator model
 
 ## [1.9.0] - 2026-11-04
 
