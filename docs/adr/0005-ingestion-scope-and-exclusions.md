@@ -77,3 +77,6 @@ Accepted by the user before coding.
   `package-lock.json` can fall back to "transitive dependencies unknown".
 - Subresource-integrity hashes (`sha256-`, `sha384-`, `sha512-` prefixes) are never flagged by the
   entropy rule, so lockfiles are not filled with false redactions.
+
+## Amendment 2026-11-04: running a declared check (ADR-0042, Proposed)
+Not accepted yet. ADR-0042 proposes one exception to "never executed": the check command a person stored for the current project, run on a change the tool made in a git worktree, with a timeout, a reduced environment, no isolation guarantee and an explicit opt-in on each run. Ingestion, the graph and the agents still execute nothing.
