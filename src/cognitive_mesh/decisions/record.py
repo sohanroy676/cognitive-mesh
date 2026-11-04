@@ -83,8 +83,7 @@ def observed_git_refs(root: Path) -> list[tuple[LinkKind, str]]:
     return refs
 
 
-def record_decision(
-    store: TraceStore,
+def prepare_decision(
     *,
     summary: str,
     options: Sequence[str],
@@ -104,12 +103,15 @@ def record_decision(
     run_id: str | None = None,
     step_id: str | None = None,
     root: Path | None = None,
+    view: FileView | None = None,
     app_id: str | None = None,
     now: datetime | None = None,
-) -> tuple[Decision, tuple[DecisionLink, ...]]:
-    """Validate and store one decision. Returns it with the observed links that were stored.
+) -> Decision:
+    """Validate one decision and give it its id, without storing it (ADR-0040).
 
-    Raises `DecisionError` (fixed messages) for anything invalid; nothing is stored then.
+    `view` is a file view the caller already took (so several decisions of one run ingest the
+    root once); with `root` and no `view` the root is ingested here. Raises `DecisionError`
+    (fixed messages) for anything invalid.
     """
     if len(options) > MAX_OPTIONS:
         raise DecisionError(f"a decision has at most {MAX_OPTIONS} options")
@@ -126,9 +128,10 @@ def record_decision(
     clean_chosen = text(chosen, MAX_CHOSEN, "chosen option")
     clean_reasoning = text(reasoning, MAX_REASONING, "reasoning", multiline=True)
 
-    if cite_files and root is None:
+    if cite_files and root is None and view is None:
         raise DecisionError("citing a file needs --root")
-    view = observe_files(root) if root is not None else None
+    if view is None and root is not None:
+        view = observe_files(root)
     identity_id = _app_id(root, app_id)
 
     citations: list[Citation] = [
@@ -177,11 +180,70 @@ def record_decision(
         )
     except ValidationError as exc:
         raise validation_failed(exc) from None
+    return _stamped(draft, created)
+
+
+def _stamped(draft: Decision, created: datetime) -> Decision:
+    """The decision at time `created`, with the id of that exact record."""
+    timed = draft.model_copy(update={"created_at": created})
+    return timed.model_copy(update={"decision_id": decision_digest(timed)})
+
+
+def record_decision(
+    store: TraceStore,
+    *,
+    summary: str,
+    options: Sequence[str],
+    chosen: str,
+    reasoning: str,
+    made_by: MadeBy,
+    recorder: str | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+    role: str | None = None,
+    entry_id: str | None = None,
+    agent_task_id: str | None = None,
+    cite_nodes: Sequence[str] = (),
+    cite_files: Sequence[str] = (),
+    cite_decisions: Sequence[str] = (),
+    supersedes: str | None = None,
+    run_id: str | None = None,
+    step_id: str | None = None,
+    root: Path | None = None,
+    app_id: str | None = None,
+    now: datetime | None = None,
+) -> tuple[Decision, tuple[DecisionLink, ...]]:
+    """Validate and store one decision. Returns it with the observed links that were stored.
+
+    Raises `DecisionError` (fixed messages) for anything invalid; nothing is stored then.
+    """
+    first = prepare_decision(
+        summary=summary,
+        options=options,
+        chosen=chosen,
+        reasoning=reasoning,
+        made_by=made_by,
+        recorder=recorder,
+        provider=provider,
+        model=model,
+        role=role,
+        entry_id=entry_id,
+        agent_task_id=agent_task_id,
+        cite_nodes=cite_nodes,
+        cite_files=cite_files,
+        cite_decisions=cite_decisions,
+        supersedes=supersedes,
+        run_id=run_id,
+        step_id=step_id,
+        root=root,
+        app_id=app_id,
+        now=now,
+    )
+    created = first.created_at
     # The id covers the record including its time, so two identical records differ by their
     # clock reading; a coarse clock can repeat, so a duplicate id is retried a microsecond later.
     for attempt in range(MAX_CLOCK_RETRIES + 1):
-        stamped = draft.model_copy(update={"created_at": created + timedelta(microseconds=attempt)})
-        decision = stamped.model_copy(update={"decision_id": decision_digest(stamped)})
+        decision = _stamped(first, created + timedelta(microseconds=attempt))
         try:
             store.add_decision(decision)
             break

@@ -55,7 +55,7 @@ class PlanGenerationError(Exception):
     """No usable plan was produced. The message is fixed text and plan ids only."""
 
 
-def _catalog(registry: AgentRegistry) -> list[dict[str, object]]:
+def capability_catalog(registry: AgentRegistry) -> list[dict[str, object]]:
     seen: set[str] = set()
     out: list[dict[str, object]] = []
     for spec in registry.specs():
@@ -75,7 +75,7 @@ def _catalog(registry: AgentRegistry) -> list[dict[str, object]]:
     return out
 
 
-class _Rejected(Exception):
+class Rejected(Exception):
     """A draft the validators refused. The model may correct it; `error` is what the caller sees."""
 
     def __init__(self, error: PlanGenerationError) -> None:
@@ -107,7 +107,7 @@ def generate_plan(
     last = PlanGenerationError("the model's plan was rejected")
     previous: str | None = None
     for _ in range(MAX_DRAFTS):
-        body: dict[str, object] = {"request": text, "capabilities": _catalog(registry)}
+        body: dict[str, object] = {"request": text, "capabilities": capability_catalog(registry)}
         if files is not None:
             body["files"] = sorted(files)[:MAX_FILES_IN_PROMPT]
             body["files_truncated"] = len(files) > MAX_FILES_IN_PROMPT
@@ -115,7 +115,7 @@ def generate_plan(
             body["previous_rejection"] = previous
         try:
             return _draft(client, json.dumps(body), registry, task_id, timeout_s, known)
-        except _Rejected as exc:
+        except Rejected as exc:
             last = exc.error
             previous = str(exc.error)
     raise last
@@ -147,34 +147,45 @@ def _draft(
     try:
         data = json.loads(response.text)
     except (ValueError, RecursionError):
-        raise _Rejected(PlanGenerationError("the model reply was not valid JSON")) from None
+        raise Rejected(PlanGenerationError("the model reply was not valid JSON")) from None
     if not isinstance(data, dict) or set(data) != {"steps"} or not isinstance(data["steps"], list):
-        raise _Rejected(
+        raise Rejected(
             PlanGenerationError(
                 f'the model reply was not an object with only a "steps" list ({SHAPE_HINT})'
             )
         )
-    _add_missing_dependencies(data["steps"])
+    plan = plan_from_steps(data["steps"], task_id, registry, known_files)
+    return plan, response
+
+
+def plan_from_steps(
+    steps: list[object],
+    task_id: str,
+    registry: AgentRegistry,
+    known_files: frozenset[str] | None,
+) -> TaskPlan:
+    """Steps from a model's reply to a validated `TaskPlan`, or `Rejected` (ADR-0010, ADR-0040)."""
+    _add_missing_dependencies(steps)
     try:
         plan = TaskPlan.model_validate_json(
-            json.dumps({"task_id": task_id, "steps": data["steps"]}), strict=True
+            json.dumps({"task_id": task_id, "steps": steps}), strict=True
         )
     except ValidationError as exc:
         kinds = ", ".join(sorted({str(e["type"]) for e in exc.errors()}))
-        raise _Rejected(
+        raise Rejected(
             PlanGenerationError(f"the model's steps are not a valid plan ({kinds}; {KEY_HINT})")
         ) from None
     try:
         plan_task(plan, registry)
     except PlanError as exc:
-        raise _Rejected(PlanGenerationError(f"the model's plan was rejected: {exc}")) from None
+        raise Rejected(PlanGenerationError(f"the model's plan was rejected: {exc}")) from None
     try:
         refuse_repeated_work(plan.steps)
     except PlanError as exc:
-        raise _Rejected(PlanGenerationError(f"the model's plan was rejected: {exc}")) from None
+        raise Rejected(PlanGenerationError(f"the model's plan was rejected: {exc}")) from None
     if known_files is not None:
         _refuse_unknown_files(plan, known_files)
-    return plan, response
+    return plan
 
 
 def _add_missing_dependencies(steps: list[object]) -> None:
@@ -204,7 +215,7 @@ def _refuse_unknown_files(plan: TaskPlan, known_files: frozenset[str]) -> None:
             continue
         path = str(step.inputs.get("path", "")).removeprefix("module:")
         if path not in known_files:
-            raise _Rejected(
+            raise Rejected(
                 PlanGenerationError(
                     f"step {step.step_id!r} names a file that is not in the application"
                 )

@@ -124,6 +124,8 @@ against the real services.
 
 Decisions (v1.9.0, [ADR-0039](docs/adr/0039-decision-records.md)) are records of what was decided, the options, the reasoning and the evidence cited: `cognitive-mesh decisions record` stores one (a cited file keeps its hash), `decisions trace --pr ORG/REPO#N` goes from a pull request back to the decisions and their evidence, and a status (`stale` when a cited file changed, `validated` only by a recorded outcome for the current code) is computed each time. Reasoning is what its author wrote, never evidence for itself; nothing writes a decision on its own yet.
 
+Conducted tasks (v1.10.0, [ADR-0040](docs/adr/0040-orchestrator-model.md)): `cognitive-mesh task REQUEST --conduct --conductor ENTRY --catalog FILE ...` lets a conductor model draft the plan and choose a catalog model for each model step. Its plan is data: it is validated before anything runs (an unusable plan exits 22 and nothing runs), every assignment shows a count-based evidence label (`recorded` from 20 calls with a known outcome, otherwise `insufficient_evidence`; nothing is called better), a rate-limited or unavailable model hands over to the next eligible catalog entries, and the plan, each assignment and every call are recorded, with the conductor's reasons stored as `model_unverified` decisions. `--explore-rate` is off by default. Only a scratch stub server has conducted a task so far; no real model has.
+
 Keys come only from the environment or an ignored `.env`; never commit one. Every command, option and exit code is
 listed in [docs/COMMANDS.md](docs/COMMANDS.md).
 

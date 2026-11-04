@@ -182,8 +182,8 @@ class Decision(BaseModel):
             raise ValueError("malformed decision id")
         if self.fingerprint is not None and not _SHA256.fullmatch(self.fingerprint):
             raise ValueError("malformed fingerprint")
-        if (self.run_id is None) != (self.step_id is None):
-            raise ValueError("run_id and step_id go together")
+        if self.step_id is not None and self.run_id is None:
+            raise ValueError("a step needs its run_id")
         if self.supersedes is not None and not DECISION_ID.fullmatch(self.supersedes):
             raise ValueError("malformed superseded decision id")
         if self.supersedes == self.decision_id:

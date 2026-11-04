@@ -54,12 +54,9 @@ def _catalog_client(
         )
     if entry.remote:
         _require_opt_ins(settings, entry)
-    client = _build_entry_client(settings.model, entry)
+    client = build_entry_client(settings.model, entry)
     if entry.remote:
-        warn(
-            f"warning: file contents go to {entry.host} (catalog entry {settings.model}, "
-            f"tier {entry.tier}, data_use {entry.data_use}, as declared in the catalog)"
-        )
+        warn(remote_warning(settings.model, entry))
     return client
 
 
@@ -76,7 +73,32 @@ def _require_opt_ins(settings: Settings, entry: CatalogEntry) -> None:
         )
 
 
-def _build_entry_client(entry_id: str, entry: CatalogEntry) -> ModelClient:
+def remote_warning(entry_id: str, entry: CatalogEntry) -> str:
+    return (
+        f"warning: file contents go to {entry.host} (catalog entry {entry_id}, "
+        f"tier {entry.tier}, data_use {entry.data_use}, as declared in the catalog)"
+    )
+
+
+def entry_problem(settings: Settings, entry: CatalogEntry) -> str | None:
+    """Why this catalog entry cannot be used now, or None (ADR-0040). Makes no network call.
+
+    The text is fixed and names no key variable or value, because it may be shown to the conductor.
+    """
+    if entry.remote:
+        if not settings.allow_remote_content:
+            return "it sends file contents to a remote host and that is not allowed"
+        if entry.data_use != "no_training" and not settings.allow_training_use:
+            return "its data use may include training and that is not allowed"
+    if entry.api_key_env is not None:
+        try:
+            read_key(entry.api_key_env)
+        except ConfigError:
+            return "its API key is not set or not usable"
+    return None
+
+
+def build_entry_client(entry_id: str, entry: CatalogEntry) -> ModelClient:
     if entry.wire == "ollama":
         return OllamaClient(entry.base_url, entry.model)
     key = read_key(entry.api_key_env) if entry.api_key_env is not None else None

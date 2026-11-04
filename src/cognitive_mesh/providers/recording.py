@@ -21,6 +21,9 @@ from cognitive_mesh.providers.base import (
     ProviderErrorKind,
 )
 
+CONDUCTOR_ROLE = "conductor"
+CONDUCTOR_TASK_TYPE = "conduct"
+
 
 class CallResult(StrEnum):
     OK = "ok"
@@ -39,7 +42,7 @@ class CallRecord(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     agent_task_id: str = Field(min_length=1, max_length=300)
-    step_id: str = Field(min_length=1, max_length=200)
+    step_id: str | None = Field(default=None, min_length=1, max_length=200)  # None: conductor call
     call_no: int = Field(ge=1)
     entry_id: str | None = None  # the catalog entry; None when COGMESH_PROVIDER=groq|ollama
     provider: str = Field(min_length=1, max_length=200)
@@ -50,6 +53,13 @@ class CallRecord(BaseModel):
     prompt_tokens: int | None = Field(default=None, ge=0)
     completion_tokens: int | None = Field(default=None, ge=0)
     result: CallResult
+
+    @model_validator(mode="after")
+    def _only_the_conductor_has_no_step(self) -> Self:
+        # ADR-0040: the conductor's own calls belong to the run, not to a plan step.
+        if (self.step_id is None) != (self.role == CONDUCTOR_ROLE):
+            raise ValueError("only a conductor call has no step, and it has no other role")
+        return self
 
     @model_validator(mode="after")
     def _failures_have_no_tokens_to_trust(self) -> Self:
@@ -66,7 +76,7 @@ class CallLog:
 
     def __init__(self) -> None:
         self._records: list[CallRecord] = []
-        self._attempt: tuple[str, str, str, str] | None = None
+        self._attempt: tuple[str, str | None, str, str] | None = None
         self._calls_in_attempt = 0
         self.dropped = 0  # records that failed validation; recording never changes a call
 
@@ -79,6 +89,13 @@ class CallLog:
     ) -> None:
         self._attempt = (agent_task_id, step_id, agent_id, capability)
         self._calls_in_attempt = 0
+
+    def begin_conductor(self, task_id: str, draft_no: int) -> str:
+        """Calls until the next `begin_*` are the conductor's draft number `draft_no` (ADR-0040)."""
+        agent_task_id = f"{task_id}._conductor.{draft_no}"
+        self._attempt = (agent_task_id, None, CONDUCTOR_ROLE, CONDUCTOR_TASK_TYPE)
+        self._calls_in_attempt = 0
+        return agent_task_id
 
     def add(
         self,

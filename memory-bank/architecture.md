@@ -39,6 +39,10 @@ while tracking their source, validity, confidence, and conflicts.
   Implemented in v0.5.0 as `src/cognitive_mesh/orchestrator/` (ADR-0010): sequential, assignment by
   capability, bounded retries, run budget, task status derived from step statuses. Amended: `input_refs` pass earlier
   step outputs to later steps, and up to two fallback agents (same capability) take over after a failure result.
+  Amended in v1.10.0 (ADR-0040): `task --conduct` has a conductor model draft the plan and assign a catalog model to
+  each model step (`orchestrator/conduct.py`, `conduct_record.py`, `routing_evidence.py`; `providers/routing.py`
+  `RoutedClient` sends each step's calls to its assigned entry and falls back in catalog order). The plan is validated
+  before it runs; the conductor's plan and per-step assignments are model-written decision records.
 - Model Provider Interface
   Route model requests to configured providers, including Groq and Ollama where available.
   Protocol and error types (v0.4.0) plus a real Ollama client (v0.6.1, ADR-0012: `providers/ollama.py`, stdlib transport

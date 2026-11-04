@@ -61,6 +61,7 @@ class Capability:
     output_model: type[BaseModel]
     handler: Callable[[Any, AgentContext], Handled]
     uses_model: bool = False
+    writes: bool = False
 
 
 def require_graph(context: AgentContext) -> DependencyGraph:
@@ -141,6 +142,7 @@ class Agent:
                     name=c.name,
                     description=c.description,
                     uses_model=c.uses_model,
+                    writes=c.writes,
                     input_schema=c.input_model.model_json_schema(),
                     output_schema=c.output_model.model_json_schema(),
                 )

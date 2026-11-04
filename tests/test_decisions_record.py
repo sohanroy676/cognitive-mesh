@@ -18,8 +18,8 @@ from cognitive_mesh.traces import SCHEMA_VERSION, TraceStore
 from decisions_support import git, make_app, make_db, person
 
 
-def test_schema_is_version_six() -> None:
-    assert SCHEMA_VERSION == 6
+def test_schema_is_version_seven() -> None:
+    assert SCHEMA_VERSION == 7
 
 
 def test_a_person_decision_is_stored_and_read_back_in_a_new_connection(tmp_path: Path) -> None:
@@ -164,14 +164,19 @@ def test_supersession_and_citation_rules(tmp_path: Path) -> None:
         assert len(store.read_decisions().decisions) == 2
 
 
-def test_run_and_step_must_exist_and_go_together(tmp_path: Path) -> None:
+def test_run_and_step_must_exist_and_a_step_needs_its_run(tmp_path: Path) -> None:
+    # Changed by ADR-0040: a decision may name a run without a step (the conductor's plan decision).
     db = make_db(tmp_path)
     with TraceStore.create(db) as store:
         assert person(store, run_id="run-1", step_id="s1").run_id == "run-1"
         with pytest.raises(DecisionError, match="does not exist"):
             person(store, run_id="run-1", step_id="nope")
-        with pytest.raises(DecisionError):
-            person(store, run_id="run-1")
+        with pytest.raises(DecisionError, match="does not exist"):
+            person(store, run_id="no-such-run")
+        with pytest.raises(DecisionError):  # a step without its run
+            person(store, step_id="s1")
+        whole_run = person(store, run_id="run-1")
+        assert (whole_run.run_id, whole_run.step_id) == ("run-1", None)
 
 
 def test_a_model_decision_is_always_unverified_and_needs_a_recorded_call(tmp_path: Path) -> None:

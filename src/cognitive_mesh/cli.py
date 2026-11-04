@@ -54,6 +54,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from cognitive_mesh.agents.context import ClaimItem
+    from cognitive_mesh.config import Settings
+    from cognitive_mesh.decisions.models import Decision
     from cognitive_mesh.experience import ExperienceGraph, SourceReport
     from cognitive_mesh.experience.assess import ClaimAssessment
     from cognitive_mesh.experience.current import CurrentSource
@@ -61,7 +63,10 @@ if TYPE_CHECKING:
     from cognitive_mesh.experience.reviews import Review
     from cognitive_mesh.experience.store import LoadedGraph
     from cognitive_mesh.memory import Embedder, MemoryIndex
+    from cognitive_mesh.orchestrator.conduct import Conducted, Swap
+    from cognitive_mesh.providers import Catalog, CatalogEntry
     from cognitive_mesh.retrieval import DecisionRecall, RecallResult
+    from cognitive_mesh.traces import CallRow
     from cognitive_mesh.workflow import PreparedContext
 
 EXIT_OK = 0
@@ -85,6 +90,7 @@ EXIT_UI_ERROR = 18
 EXIT_WORKSPACE_ERROR = workspace_cli.EXIT_WORKSPACE_ERROR  # 19 (ADR-0036)
 EXIT_CATALOG_ERROR = models_cli.EXIT_CATALOG_ERROR  # 20 (ADR-0038)
 EXIT_DECISION_ERROR = decisions_cli.EXIT_DECISION_ERROR  # 21 (ADR-0039)
+EXIT_CONDUCTOR_ERROR = 22  # the conductor produced no usable plan (ADR-0040)
 MAX_PLAN_BYTES = 256 * 1024
 DEFAULT_MIN_SIMILARITY = 0.2  # from one live run on 3 documents (ADR-0014); a rough starting point
 
@@ -112,6 +118,16 @@ def _add_model_args(parser: argparse.ArgumentParser) -> None:
         metavar="FILE",
         help="model catalog file (default: COGMESH_MODEL_CATALOG); read from nowhere else",
     )
+
+
+def _explore_rate(text: str) -> float:
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("must be a number from 0 to 0.2") from None
+    if not 0 <= value <= 0.2:
+        raise argparse.ArgumentTypeError("must be a number from 0 to 0.2")
+    return value
 
 
 def _model_overrides(args: argparse.Namespace) -> dict[str, Any]:
@@ -220,7 +236,23 @@ def _build_parser() -> argparse.ArgumentParser:
         help="run a plan with recalled experience as context (ADR-0017); records what was offered",
     )
     task.add_argument("request", help="the task in plain words; also the recall query")
-    task.add_argument("--plan", type=Path, required=True, metavar="FILE", help="plan JSON file")
+    task.add_argument("--plan", type=Path, metavar="FILE", help="plan JSON file")
+    task.add_argument(
+        "--conduct",
+        action="store_true",
+        help="let a conductor model draft the plan and assign a model to each model step "
+        "(ADR-0040); instead of --plan",
+    )
+    task.add_argument("--conductor", metavar="ENTRY", help="catalog entry that conducts")
+    task.add_argument(
+        "--explore-rate",
+        type=_explore_rate,
+        default=0.0,
+        metavar="R",
+        help="chance (0 to 0.2, default 0) of moving one model step to another eligible entry",
+    )
+    task.add_argument("--workspace", type=Path, metavar="FILE", help="workspace file (conduct)")
+    task.add_argument("--project", metavar="NAME", help="the current project in the workspace")
     task.add_argument("--root", type=Path, required=True, help="application directory to analyze")
     task.add_argument("--db", type=Path, required=True, metavar="FILE", help="trace database")
     task.add_argument("--index", type=Path, required=True, metavar="DIR", help="index directory")
@@ -833,6 +865,8 @@ def _run_traces_show(run_id: str, db: Path, as_json: bool) -> int:
     try:
         with TraceStore.open_existing(db) as store:
             trace = store.get(run_id)
+            run_calls = [r for r in store.call_rows().rows if r.run_id == run_id]
+            run_decisions = [d for d in store.read_decisions().decisions if d.run_id == run_id]
     except TraceNotFoundError:
         print(f"no run has the id {_printable(run_id)!r}", file=sys.stderr)
         return EXIT_TRACE_NOT_FOUND
@@ -843,6 +877,7 @@ def _run_traces_show(run_id: str, db: Path, as_json: bool) -> int:
         print(json.dumps(trace.model_dump(mode="json"), indent=2))
     else:
         _print_trace(trace)
+        _print_conductor_trace(run_calls, run_decisions)
     return EXIT_OK
 
 
@@ -1101,6 +1136,11 @@ def _run_task(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(exc, file=sys.stderr)
         return EXIT_CONFIG_ERROR
+    if (problem := _task_args_problem(args)) is not None:
+        print(problem, file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+    if args.conduct:
+        return _run_conducted(args)
     calls = CallLog()
     loaded = _load_run_inputs(args.plan, args.root, _model_overrides(args), calls)
     if isinstance(loaded, int):
@@ -1133,25 +1173,7 @@ def _task_with_store(
     identity: AppIdentity | None,
     calls: CallLog,
 ) -> int:
-    from cognitive_mesh import workflow
-
-    default_k, default_cutoff = workflow.PROFILE_DEFAULTS[args.profile]
-    prepared = workflow.prepare_context(
-        args.request,
-        ingestion=ingestion,
-        graph=graph,
-        store=store,
-        index_dir=args.index,
-        graph_file=args.graph,
-        reviews_file=args.reviews,
-        make_embedder=_make_embedder,
-        k=args.k if args.k is not None else default_k,
-        min_similarity=(args.min_similarity if args.min_similarity is not None else default_cutoff),
-        identity=identity,
-        today=utc_today(),
-        outcomes_file=args.outcomes,
-        profile=args.profile,
-    )
+    prepared = _prepare_context(args, store, ingestion, graph, identity)
     pack = prepared.gated.pack
     recorder = TraceRecorder(store)
     try:
@@ -1188,6 +1210,381 @@ def _task_with_store(
     if not saved:
         return EXIT_TRACE_STORE_ERROR
     return EXIT_OK if run.status is TaskStatus.SUCCEEDED else EXIT_TASK_NOT_SUCCEEDED
+
+
+def _prepare_context(
+    args: argparse.Namespace,
+    store: TraceStore,
+    ingestion: IngestionResult,
+    graph: DependencyGraph,
+    identity: AppIdentity | None,
+) -> "PreparedContext":
+    """Recall for the request and build the gated pack (`task` with and without --conduct)."""
+    from cognitive_mesh import workflow
+
+    default_k, default_cutoff = workflow.PROFILE_DEFAULTS[args.profile]
+    return workflow.prepare_context(
+        args.request,
+        ingestion=ingestion,
+        graph=graph,
+        store=store,
+        index_dir=args.index,
+        graph_file=args.graph,
+        reviews_file=args.reviews,
+        make_embedder=_make_embedder,
+        k=args.k if args.k is not None else default_k,
+        min_similarity=(args.min_similarity if args.min_similarity is not None else default_cutoff),
+        identity=identity,
+        today=utc_today(),
+        outcomes_file=args.outcomes,
+        profile=args.profile,
+    )
+
+
+def _task_args_problem(args: argparse.Namespace) -> str | None:
+    """A usage problem with the conductor flags of `task`, or None."""
+    if args.conduct:
+        if args.plan is not None:
+            return "--conduct and --plan exclude each other"
+        if args.conductor is None:
+            return (
+                "--conduct needs --conductor ENTRY (a catalog entry that lists the role conductor)"
+            )
+        if args.model is not None:
+            return "--model cannot be used with --conduct; the conductor assigns the models"
+        if (args.workspace is None) != (args.project is None):
+            return "--workspace and --project go together"
+        return None
+    if args.plan is None:
+        return "give --plan FILE, or --conduct"
+    if (
+        args.conductor is not None
+        or args.workspace is not None
+        or args.project is not None
+        or args.explore_rate
+    ):
+        return "--conductor, --workspace, --project and --explore-rate need --conduct"
+    return None
+
+
+def _run_conducted(args: argparse.Namespace) -> int:
+    """`task --conduct` (ADR-0040): a conductor model drafts and routes the plan, then it runs."""
+    from cognitive_mesh import workflow
+    from cognitive_mesh.providers import CatalogError, load_catalog
+    from cognitive_mesh.workspace.models import WorkspaceError
+
+    try:
+        workflow.validate_request(args.request)
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+    overrides: dict[str, Any] = {"provider": "catalog", "model": args.conductor}
+    if args.catalog is not None:
+        overrides["model_catalog"] = args.catalog
+    try:
+        settings = load_settings(**overrides)
+        assert settings.model_catalog is not None  # noqa: S101 - Settings requires it with catalog
+        catalog = load_catalog(settings.model_catalog)
+    except ConfigError as exc:
+        print(exc, file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+    except CatalogError as exc:
+        print(f"model catalog: {_printable(str(exc))}", file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+    try:
+        ingestion = ingest_application(args.root)
+    except IngestionError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_INGESTION_ERROR
+    identity = _identity_for(ingestion.root, args.app_id)
+    if isinstance(identity, int):
+        return identity
+    workspace: dict[str, object] | None = None
+    if args.workspace is not None:
+        try:
+            workspace = _workspace_summary(args.workspace, args.project)
+        except WorkspaceError as exc:
+            print(f"workspace: {_printable(str(exc))}", file=sys.stderr)
+            return EXIT_WORKSPACE_ERROR
+    graph = build_dependency_graph(ingestion)
+    try:
+        store = TraceStore.create(args.db)
+    except TraceStoreError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_TRACE_STORE_ERROR
+    with store:
+        return _guarded(
+            lambda: _conducted_with_store(
+                args, store, settings, catalog, ingestion, graph, identity, workspace
+            )
+        )
+
+
+def _workspace_summary(path: Path, project: str) -> dict[str, object]:
+    from cognitive_mesh.orchestrator.conduct import workspace_summary
+    from cognitive_mesh.workspace.models import WorkspaceError
+    from cognitive_mesh.workspace.render import to_json
+
+    wg = workspace_cli.load_workspace_graph(path)
+    if project not in {p.name for p in wg.projects}:
+        raise WorkspaceError("no project has that name")
+    return workspace_summary(to_json(wg))
+
+
+def _conducted_with_store(
+    args: argparse.Namespace,
+    store: TraceStore,
+    settings: "Settings",
+    catalog: "Catalog",
+    ingestion: IngestionResult,
+    graph: DependencyGraph,
+    identity: AppIdentity | None,
+    workspace: dict[str, object] | None,
+) -> int:
+    from cognitive_mesh.decisions.models import DecisionError
+    from cognitive_mesh.decisions.record import FileView
+    from cognitive_mesh.orchestrator.conduct import (
+        ConductorError,
+        ConductorInputs,
+        conduct,
+        explore,
+        model_roles,
+    )
+    from cognitive_mesh.orchestrator.conduct_record import (
+        build_conductor_decisions,
+        describe_assignments,
+        final_assignments,
+    )
+    from cognitive_mesh.orchestrator.routing_evidence import EvidenceTable
+    from cognitive_mesh.providers.factory import entry_problem
+    from cognitive_mesh.providers.routing import RoutedClient
+    from cognitive_mesh.traces import source_fingerprint
+
+    prepared = _prepare_context(args, store, ingestion, graph, identity)
+    pack = prepared.gated.pack
+    evidence = EvidenceTable(store.call_rows())
+    calls = CallLog()
+
+    def problem(entry: "CatalogEntry") -> str | None:
+        return entry_problem(settings, entry)
+
+    try:
+        conductor_client = RecordingClient(
+            build_model_client(settings, ["conductor"]), calls, args.conductor
+        )
+    except ConfigError as exc:
+        print(exc, file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+    registry = default_registry()
+    task_id = "conducted"
+    inputs = ConductorInputs(
+        registry=registry,
+        catalog=catalog,
+        problem=problem,
+        evidence=evidence,
+        files=[f.ref.path for f in ingestion.files],
+        pack=pack,
+        workspace=workspace,
+        current_project=args.project,
+    )
+    try:
+        conducted = conduct(
+            args.request,
+            inputs,
+            conductor_client,
+            task_id=task_id,
+            begin_draft=lambda n: calls.begin_conductor(task_id, n),
+            timeout_s=settings.model_timeout_s,
+        )
+        validated = plan_task(conducted.plan.plan, registry)
+    except (ConductorError, PlanError) as exc:
+        print(f"conductor: {_printable(str(exc))}", file=sys.stderr)
+        for refusal in getattr(exc, "refusals", ()):
+            print(f"  refused: {_printable(refusal)}", file=sys.stderr)
+        print("nothing was run, and the conductor's calls were not stored", file=sys.stderr)
+        return EXIT_CONDUCTOR_ERROR
+    roles = model_roles(registry)
+    router = RoutedClient(
+        catalog,
+        settings,
+        calls,
+        {sid: a.model for sid, a in conducted.plan.assignments.items()},
+        warn=lambda message: print(message, file=sys.stderr),
+    )
+    run_registry = default_registry(router, model_timeout_s=settings.model_timeout_s)
+    recorder = TraceRecorder(store)
+    try:
+        run_id = recorder.begin(
+            validated,
+            ingestion,
+            recalled=pack,
+            request_length=len(args.request),
+            identity=identity,
+        )
+    except TraceStoreError as exc:
+        print(_printable(str(exc)), file=sys.stderr)
+        return EXIT_TRACE_STORE_ERROR
+    steps = conducted.plan.plan.steps
+    step_roles = {s.step_id: roles[s.capability] for s in steps if s.capability in roles}
+    swap = explore(
+        run_id,
+        args.explore_rate,
+        {sid: a.model for sid, a in conducted.plan.assignments.items()},
+        step_roles,
+        catalog,
+        problem,
+    )
+    router.assignments.update(final_assignments(conducted, swap))
+    view = FileView(
+        source_fingerprint(ingestion), {f.ref.path: f.ref.sha256 for f in ingestion.files}
+    )
+    try:
+        decisions = build_conductor_decisions(
+            run_id=run_id,
+            task_id=task_id,
+            conducted=conducted,
+            conductor_entry=args.conductor,
+            conductor_provider=conducted.response.provider,
+            conductor_model=conducted.response.model,
+            catalog=catalog,
+            problem=problem,
+            evidence=evidence,
+            capability_roles=roles,
+            steps=steps,
+            swap=swap,
+            claim_ids=[c.claim_id for c in pack.claims],
+            view=view,
+            app_id=identity.app_id if identity else None,
+            now=utc_now(),
+        )
+    except DecisionError as exc:
+        print(
+            f"conductor: the decisions cannot be recorded: {_printable(str(exc))}", file=sys.stderr
+        )
+        return EXIT_CONDUCTOR_ERROR
+    context = AgentContext(ingestion=ingestion, graph=graph, recalled=pack)
+    run = Orchestrator(run_registry, now=utc_now, on_attempt=router.begin_attempt).run(
+        validated, context
+    )
+    saved = True
+    try:
+        recorder.finish(run_id, run, calls.records, decisions)
+    except (TraceStoreError, DecisionError) as exc:
+        saved = False
+        print(f"warning: the trace was not saved: {_printable(str(exc))}", file=sys.stderr)
+    rows = describe_assignments(conducted, swap, steps, roles, evidence)
+    switches = [
+        {"agent_task_id": s.agent_task_id, "from": s.from_entry, "to": s.to_entry, "after": s.kind}
+        for s in router.switches
+    ]
+    if args.as_json:
+        payload = _task_payload(prepared, run, run_id if saved else None, identity)
+        payload["conductor"] = {
+            "entry": args.conductor,
+            "drafts": [{"draft": d.draft_no, "refusal": d.refusal} for d in conducted.drafts],
+            "reasoning": conducted.plan.reasoning,
+            "reasoning_basis": "model_unverified",
+            "assignments": rows,
+            "exploration": (
+                None
+                if swap is None
+                else {"step_id": swap.step_id, "from": swap.from_entry, "to": swap.to_entry}
+            ),
+            "explore_rate": args.explore_rate,
+            "switches": switches,
+            "decisions": [d.decision_id for d in decisions] if saved else [],
+        }
+        print(json.dumps(payload, indent=2))
+    else:
+        _print_identity(identity)
+        _print_context(prepared)
+        _print_conducted(args.conductor, conducted, rows, args.explore_rate, swap)
+        _print_run(run)
+        for s in router.switches:
+            print(
+                f"model switch in {_printable(s.agent_task_id)}: {_printable(s.from_entry)} -> "
+                f"{_printable(s.to_entry)} after {s.kind}"
+            )
+        if saved:
+            print(f"trace: {run_id}")
+    if not saved:
+        return EXIT_TRACE_STORE_ERROR
+    return EXIT_OK if run.status is TaskStatus.SUCCEEDED else EXIT_TASK_NOT_SUCCEEDED
+
+
+def _print_conducted(
+    conductor: str,
+    conducted: "Conducted",
+    rows: "list[dict[str, object]]",
+    rate: float,
+    swap: "Swap | None",
+) -> None:
+    """The plan the conductor made. Its reasons are model-written and unverified."""
+    refused = sum(1 for d in conducted.drafts if d.refusal is not None)
+    print(
+        f"conductor plan (entry {_printable(conductor)}; model-written and unreviewed; reasons "
+        f"are not evidence); drafts: {len(conducted.drafts)}, refused: {refused}"
+    )
+    for row in rows:
+        explored = (
+            f" (conductor chose {_printable(str(row['conductor_choice']))}; explored)"
+            if row["explored"]
+            else ""
+        )
+        evidence = row["evidence"]
+        assert isinstance(evidence, dict)  # noqa: S101 - built by describe_assignments
+        print(
+            f"  {_printable(str(row['step_id']))}: {_printable(str(row['capability']))} "
+            f"role={_printable(str(row['role']))} model={_printable(str(row['model']))}{explored}"
+        )
+        print(f"    reason: {_printable(str(row['reason']))}")
+        print(
+            f"    evidence: {evidence['label']}: {evidence['known_outcomes']} call(s) with a "
+            f"known outcome of {evidence['calls']} recorded (minimum {evidence['sample_minimum']})"
+        )
+    print(f"  reasoning: {_printable(conducted.plan.reasoning)}")
+    if rate == 0:
+        print("  exploration: off")
+    elif swap is None:
+        print(f"  exploration: rate {rate}, no step was moved")
+    else:
+        print(
+            f"  exploration: rate {rate}, {_printable(swap.step_id)} moved from "
+            f"{_printable(swap.from_entry)} to {_printable(swap.to_entry)}"
+        )
+
+
+def _print_conductor_trace(calls: "Sequence[CallRow]", decisions: "Sequence[Decision]") -> None:
+    """Conductor decisions and model calls of one stored run (text view of `traces show`)."""
+    from cognitive_mesh.providers.recording import CONDUCTOR_ROLE
+
+    mine = [d for d in decisions if d.role == CONDUCTOR_ROLE]
+    if mine:
+        print("  conductor decisions (model-written, model_unverified; reasons are not evidence):")
+        for d in mine:
+            where = f"step {_printable(d.step_id)}" if d.step_id else "plan"
+            print(f"    {where}: {_printable(d.summary)}")
+            print(f"      chosen: {_printable(d.chosen)}; reason: {_printable(d.reasoning)}")
+    if calls:
+        print("  model calls:")
+        previous: tuple[str, str, str] | None = None
+        for row in calls:
+            c = row.call
+            who = f"{c.entry_id or '-'} ({c.provider}/{c.model})"
+            print(
+                f"    {_printable(c.agent_task_id)} #{c.call_no}: {_printable(who)} "
+                f"role={_printable(c.role)} {c.result.value} {c.latency_ms} ms"
+            )
+            if (
+                previous is not None
+                and previous[0] == c.agent_task_id
+                and previous[1] != (c.entry_id or "")
+            ):
+                print(
+                    f"      switched from {_printable(previous[1])} to "
+                    f"{_printable(c.entry_id or '-')} after {previous[2]}"
+                )
+            previous = (c.agent_task_id, c.entry_id or "", c.result.value)
 
 
 def _print_identity(identity: AppIdentity | None) -> None:

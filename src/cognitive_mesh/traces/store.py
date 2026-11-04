@@ -148,6 +148,32 @@ BEGIN SELECT RAISE(ABORT, 'decisions are append-only'); END;
 CREATE TRIGGER decision_links_no_delete BEFORE DELETE ON decision_links
 BEGIN SELECT RAISE(ABORT, 'decisions are append-only'); END;
 """,
+    # 6 -> 7 (ADR-0040): a model call may belong to the run instead of a plan step (the conductor's
+    # own draft calls). SQLite cannot drop NOT NULL, so the table is rebuilt; rows are copied as is.
+    # The composite foreign key is not enforced for a NULL step_id.
+    6: """
+CREATE TABLE model_calls_v7 (
+    run_id TEXT NOT NULL,
+    agent_task_id TEXT NOT NULL,
+    call_no INTEGER NOT NULL CHECK (call_no >= 1),
+    step_id TEXT,
+    entry_id TEXT,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    role TEXT NOT NULL,
+    task_type TEXT NOT NULL,
+    latency_ms INTEGER NOT NULL CHECK (latency_ms >= 0),
+    prompt_tokens INTEGER CHECK (prompt_tokens IS NULL OR prompt_tokens >= 0),
+    completion_tokens INTEGER CHECK (completion_tokens IS NULL OR completion_tokens >= 0),
+    result TEXT NOT NULL,
+    PRIMARY KEY (run_id, agent_task_id, call_no),
+    FOREIGN KEY (run_id, step_id) REFERENCES steps(run_id, step_id)
+);
+INSERT INTO model_calls_v7 SELECT run_id, agent_task_id, call_no, step_id, entry_id, provider,
+    model, role, task_type, latency_ms, prompt_tokens, completion_tokens, result FROM model_calls;
+DROP TABLE model_calls;
+ALTER TABLE model_calls_v7 RENAME TO model_calls;
+""",
 }
 SCHEMA_VERSION = 1 + len(MIGRATIONS)
 _RESULT = TypeAdapter(AgentResult)
@@ -338,8 +364,12 @@ class TraceStore:
         redactions: Sequence[str],
         steps: Sequence[StepTrace],
         calls: Sequence[CallRecord] = (),
+        decisions: Sequence[Decision] = (),
     ) -> None:
-        """Write steps, attempts, calls and the final status in one transaction, or nothing."""
+        """Write steps, attempts, calls, decisions and the final status in one transaction, or
+        nothing. Decisions (ADR-0040: the conductor's) are checked after the calls are written, so
+        a decision may name a call of this run; they go in order, so a later one may cite an
+        earlier one."""
         if status not in _FINISHED:
             raise ValueError("a finished run must be succeeded, failed or incomplete")
         conn = self._conn
@@ -394,7 +424,7 @@ class TraceStore:
             step_ids = {step.step_id for step in steps}
             for call in calls:
                 if (
-                    call.step_id not in step_ids
+                    call.step_id is not None and call.step_id not in step_ids
                 ):  # cannot happen from the orchestrator; never lose the run
                     continue
                 conn.execute(
@@ -417,13 +447,15 @@ class TraceStore:
                         call.result.value,
                     ),
                 )
+            for decision in decisions:
+                self._insert_decision(decision)
             conn.execute("COMMIT")
         except sqlite3.Error:
             _rollback(conn)
             raise TraceStoreError(
                 "cannot finish the run (sqlite error); nothing was written"
             ) from None
-        except TraceStoreError:
+        except (TraceStoreError, DecisionError):
             _rollback(conn)
             raise
 
@@ -436,46 +468,7 @@ class TraceStore:
         conn = self._conn
         try:
             conn.execute("BEGIN IMMEDIATE")
-            self._check_decision_refs(decision)
-            if conn.execute(
-                "SELECT 1 FROM decisions WHERE decision_id = ?", (decision.decision_id,)
-            ).fetchone():
-                raise DuplicateDecisionError("the decision is already recorded")
-            conn.execute(
-                "INSERT INTO decisions (decision_id, app_id, fingerprint, run_id, step_id,"
-                " made_by, recorder, entry_id, provider, model, role, agent_task_id, basis,"
-                " summary, options_json, chosen, reasoning, supersedes, created_at,"
-                " redactions_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
-                " ?, ?)",
-                (
-                    decision.decision_id,
-                    decision.app_id,
-                    decision.fingerprint,
-                    decision.run_id,
-                    decision.step_id,
-                    decision.made_by.value,
-                    decision.recorder,
-                    decision.entry_id,
-                    decision.provider,
-                    decision.model,
-                    decision.role,
-                    decision.agent_task_id,
-                    decision.basis.value,
-                    decision.summary,
-                    json.dumps(list(decision.options)),
-                    decision.chosen,
-                    decision.reasoning,
-                    decision.supersedes,
-                    decision.created_at.isoformat(),
-                    json.dumps(list(decision.redactions)),
-                ),
-            )
-            for n, cite in enumerate(decision.citations, start=1):
-                conn.execute(
-                    "INSERT INTO decision_citations (decision_id, n, kind, target, sha256)"
-                    " VALUES (?, ?, ?, ?, ?)",
-                    (decision.decision_id, n, cite.kind.value, cite.target, cite.sha256),
-                )
+            self._insert_decision(decision)
             conn.execute("COMMIT")
         except sqlite3.IntegrityError:
             _rollback(conn)
@@ -489,6 +482,50 @@ class TraceStore:
             _rollback(conn)
             raise
 
+    def _insert_decision(self, decision: Decision) -> None:
+        """The writes of `add_decision`, inside a transaction the caller owns."""
+        conn = self._conn
+        self._check_decision_refs(decision)
+        if conn.execute(
+            "SELECT 1 FROM decisions WHERE decision_id = ?", (decision.decision_id,)
+        ).fetchone():
+            raise DuplicateDecisionError("the decision is already recorded")
+        conn.execute(
+            "INSERT INTO decisions (decision_id, app_id, fingerprint, run_id, step_id,"
+            " made_by, recorder, entry_id, provider, model, role, agent_task_id, basis,"
+            " summary, options_json, chosen, reasoning, supersedes, created_at,"
+            " redactions_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
+            " ?, ?)",
+            (
+                decision.decision_id,
+                decision.app_id,
+                decision.fingerprint,
+                decision.run_id,
+                decision.step_id,
+                decision.made_by.value,
+                decision.recorder,
+                decision.entry_id,
+                decision.provider,
+                decision.model,
+                decision.role,
+                decision.agent_task_id,
+                decision.basis.value,
+                decision.summary,
+                json.dumps(list(decision.options)),
+                decision.chosen,
+                decision.reasoning,
+                decision.supersedes,
+                decision.created_at.isoformat(),
+                json.dumps(list(decision.redactions)),
+            ),
+        )
+        for n, cite in enumerate(decision.citations, start=1):
+            conn.execute(
+                "INSERT INTO decision_citations (decision_id, n, kind, target, sha256)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (decision.decision_id, n, cite.kind.value, cite.target, cite.sha256),
+            )
+
     def _check_decision_refs(self, decision: Decision) -> None:
         conn = self._conn
         ids = [decision.supersedes] if decision.supersedes else []
@@ -501,7 +538,13 @@ class TraceStore:
                 raise DecisionError("a cited or superseded decision does not exist")
             if row["app_id"] != decision.app_id:
                 raise DecisionError("a cited or superseded decision belongs to another application")
-        if decision.run_id is not None:
+        if decision.run_id is not None and decision.step_id is None:  # ADR-0040: a run-level one
+            found = conn.execute(
+                "SELECT 1 FROM runs WHERE run_id = ?", (decision.run_id,)
+            ).fetchone()
+            if found is None:
+                raise DecisionError("the run of the decision does not exist")
+        elif decision.run_id is not None:
             found = conn.execute(
                 "SELECT 1 FROM steps WHERE run_id = ? AND step_id = ?",
                 (decision.run_id, decision.step_id),
@@ -630,7 +673,7 @@ class TraceStore:
                 " a.result_status AS attempt_status"
                 " FROM model_calls c"
                 " JOIN runs r ON r.run_id = c.run_id"
-                " JOIN steps s ON s.run_id = c.run_id AND s.step_id = c.step_id"
+                " LEFT JOIN steps s ON s.run_id = c.run_id AND s.step_id = c.step_id"
                 " LEFT JOIN attempts a ON a.run_id = c.run_id AND a.step_id = c.step_id"
                 " AND a.agent_task_id = c.agent_task_id"
                 " ORDER BY c.run_id, c.agent_task_id, c.call_no"
@@ -646,8 +689,11 @@ class TraceStore:
                 record = CallRecord.model_validate(
                     {name: row[name] for name in CallRecord.model_fields}
                 )
-                if not record.agent_task_id.startswith(f"{row['task_id']}.{record.step_id}."):
+                owner = record.step_id if record.step_id is not None else "_conductor"
+                if not record.agent_task_id.startswith(f"{row['task_id']}.{owner}."):
                     raise ValueError("the call does not belong to its step")
+                if (record.step_id is None) != (row["step_status"] is None):
+                    raise ValueError("the call and its step disagree")
                 attempt = row["attempt_status"]
                 if attempt not in (None, "success", "failure"):
                     raise ValueError("the attempt status is unknown")
@@ -655,7 +701,7 @@ class TraceStore:
                     CallRow(
                         run_id=run_id,
                         call=record,
-                        step_status=StepStatus(row["step_status"]),
+                        step_status=_step_status(row["step_status"]),
                         attempt_status=attempt,
                     )
                 )
@@ -815,6 +861,11 @@ def _current_version(conn: sqlite3.Connection) -> int:
 
 def _user_version(conn: sqlite3.Connection) -> int:
     return int(conn.execute("PRAGMA user_version").fetchone()[0])
+
+
+def _step_status(value: str | None) -> StepStatus | None:
+    """A call row of the conductor has no step, hence no step status."""
+    return StepStatus(value) if value is not None else None
 
 
 def _rollback(conn: sqlite3.Connection) -> None:

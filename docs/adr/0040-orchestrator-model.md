@@ -1,7 +1,7 @@
 # ADR-0040: Orchestrator model (the conductor)
 
 ## Status
-Proposed (drafted in plan mode 2026-11-04; the four marked user decisions were taken before drafting). No code until the user accepts it.
+Accepted by the user 2026-11-04 (drafted in plan mode; the four marked user decisions were taken before drafting).
 
 ## Date
 2026-11-04
@@ -158,3 +158,43 @@ run with a free model (marker plus env var, skipped in CI).
 A conductor plan runs without validation; a small sample is described as proof that one model is better; a key
 appears in any prompt, record or message; a write step reaches another project; a missing metric is stored as zero;
 a fallback happens without a recorded call; reasoning text is treated as evidence for itself.
+
+## Amendments made during implementation (2026-11-04)
+- **A decision may name a run without a step.** ADR-0039 required `run_id` and `step_id` together. The plan
+  decision belongs to the run, not to a step, so a decision now needs only `run_id`; a `step_id` still needs its
+  run. The store checks the run row in that case. A test of ADR-0039 was changed on purpose.
+- **Decisions are built, then written by `finish_run`.** `prepare_decision()` (split out of `record_decision()`)
+  validates a decision and gives it its id without storing it; `TraceStore.finish_run(..., decisions=)` writes
+  them after the calls, in order, in the run's transaction, so a decision may name a call of this run and a later
+  one may cite an earlier one. A decision that cannot be stored (a cited decision that does not exist yet, a call
+  that was not recorded) rolls the whole finish back and the run stays open. The decisions of a conducted run
+  store no observed commit or branch link (those are read from git by `record_decision` only).
+- **Evidence counts a failed call as a failure.** An attempt's outcome is known per attempt, but a rate-limited
+  call before a switch sits in an attempt that later succeeded. The label counts a call as a success only when the
+  call itself returned a reply and its attempt succeeded; any other call with a known attempt outcome is a failure
+  sample. `models stats` (ADR-0038) is unchanged and still attributes the attempt's outcome to every call in it.
+- **Calls of a refused conductor are not stored.** Conductor calls are written with the run, so when the conductor
+  fails (exit 22) there is no run and its calls are lost. The refusal reasons are printed. A run kind for failed
+  conducting is left for a later ADR.
+- **A step may not be called `_conductor`,** so the call ids of the conductor and of a step cannot collide.
+- **The conductor never sees an unusable entry.** The `models` part of its input lists only entries with no static
+  problem, so a refusal for "cannot be used" happens only when the conductor names an entry it was not offered.
+- **Settings.** `--conduct` loads settings with `provider=catalog` and the conductor entry as `model`; the
+  conductor client comes from `build_model_client(settings, ["conductor"])`, so the entry must list the role
+  `conductor` (added to `AGENT_ROLES`). Models of the steps come from `RoutedClient`, never from `--model`
+  (rejected with `--conduct`).
+- **Tests changed on purpose:** the trace schema pin (7), the role list pin (`conductor`), and the ADR-0039 test
+  that run and step go together.
+
+## Outcome
+Implemented on `feature/extended-roadmap-v1.7` (v1.10.0). Suite 1878 passed, 8 skipped (was 1805, 7); ruff,
+format and mypy clean. Run by hand 2026-11-04 in a scratch directory via `uv run --project`, through the real
+CLI and HTTP transport against a scratch stub OpenAI-compatible server (script in the session scratchpad, not in
+the repo; `tests/fixtures/sample_app`; no real model): `task --conduct --conductor cond` exit 0 (the conductor
+assigned `alpha`, which answered 429; `beta` took over; plan, reason, evidence label and `exploration: off`
+printed; 2 decisions and 3 calls stored); `traces show`, `decisions list` and `models stats` on that database
+exit 0 and show the decisions, the calls and the switch; `--conductor beta` (no role `conductor`) exit 2;
+`--conduct` with `--plan` exit 2; `--explore-rate 0.2 --json` exit 0. Exit 22, fallback exhaustion, exploration
+swaps, schema migration 6 to 7 and rollback of `finish_run` are covered by tests, not by hand. Not run: a real
+model conducting a task (`tests/test_live_conductor.py` is written, opt-in, not run), `--workspace`/`--project`
+by hand (`workspace_summary` has a unit test; the CLI path with a workspace file has none), Linux/macOS.

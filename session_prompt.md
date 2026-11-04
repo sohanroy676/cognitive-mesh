@@ -3,9 +3,14 @@
 Update this file at the end of every session and whenever the user asks for a new-session prompt.
 
 ## Short prompt to paste into a new session
-Continue Cognitive Mesh (extended roadmap, next v1.10.0). Work only on branch `feature/extended-roadmap-v1.7` (do not branch off main); check it out and pull first. Read `session_prompt.md` at the repo root first and follow it. Update it at the end of the session or when I ask for a new prompt.
+Continue Cognitive Mesh (extended roadmap, next v1.11.0). Work only on branch `feature/extended-roadmap-v1.7` (do not branch off main); check it out and pull first. Read `session_prompt.md` at the repo root first and follow it. Update it at the end of the session or when I ask for a new prompt.
 
-## Where we are (end of session 9, 2026-11-04)
+## Where we are (end of session 10, 2026-11-04)
+- v1.10.0 (ADR-0040, accepted): `task --conduct --conductor ENTRY --catalog FILE [--explore-rate R] [--workspace FILE --project NAME]`. Conductor plan validated (plan_from_steps + assignment checks + `writes`), two drafts, exit 22 and nothing stored on failure; `RoutedClient` per-step models with catalog-order fallback (max 2); evidence label `recorded` at 20 known-outcome calls; trace schema 7 (run-level conductor calls, decisions written in `finish_run`); decisions may name a run without a step. Suite 1878 passed, 8 skipped. Committed locally; NOT yet pushed, CI-run or tagged (ask the user; pre-approved on this branch per the branch policy below, but the changelog must be regenerated with `--tag v1.10.0` last).
+- Open from v1.10.0: no real model has conducted a task (`tests/test_live_conductor.py` unrun); conductor calls of a refused plan are lost; `models stats` credits the attempt outcome to every call in an attempt; decisions of conducted runs carry no observed git link; static reachability only; no UI view of assignments.
+- Next: v1.11.0 Cross-project impact analysis (read `docs/extended_roadmap.md`): plan mode, draft ADR-0041 as Proposed, no code until the user accepts. Reuse `workspace` graph, read-only accessor, `CapabilitySpec.writes`, the conductor's `current_project`.
+
+## Where we were (end of session 9, 2026-11-04)
 - v1.9.0 (ADR-0039, accepted): decision records. Trace schema 6 (`decisions`, `decision_citations`, `decision_links`), graph format 7, `decisions record|link|list|show|trace` (exit 21), outcomes schema 3 (a decision id may be the subject), a `decisions` Chroma collection, `recall` returns decisions (`recall_decisions_for`, shared with the UI endpoint). Suite 1805 passed, 7 skipped. Pushed and tagged `v1.9.0` (`af1e252`); CI: branch run 41784754008 (passed), tag run 41785211643 (passed).
 - Open from v1.9.0: no UI view of decisions; not in the `task` context pack; plan drafts not recorded; PR/branch links are never checked against GitHub; no model has written a decision yet (the v1.10.0 conductor will call `decisions.record.record_decision(..., made_by=MadeBy.MODEL)`, which needs a recorded `model_calls` row for `agent_task_id`).
 - Next: v1.10.0 Orchestrator model (read `docs/extended_roadmap.md` v1.10.0): plan mode, draft ADR-0040 as Proposed on this branch, no code until the user accepts it. Every conductor plan is a decision record; routing may use `models stats` records only above a stated sample minimum.
@@ -41,7 +46,7 @@ Continue Cognitive Mesh (extended roadmap, next v1.10.0). Work only on branch `f
 - Large inline Python/heredoc scripts break in the Bash tool here; write scripts to the scratchpad with the Write tool and run them. Edit CRLF files with Python (newline='') or the Edit tool.
 
 ## Start of session
-1. `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3` (expect v1.9.0), `git checkout feature/extended-roadmap-v1.7 && git pull`, `gh auth status` (must be sohanroy676), `gh run list --limit 6`.
+1. `git status`, `git branch -a`, `git tag --sort=-creatordate | head -3` (expect v1.9.0 until v1.10.0 is tagged), `git checkout feature/extended-roadmap-v1.7 && git pull`, `gh auth status` (must be sohanroy676), `gh run list --limit 6`.
 2. Read this file, then `docs/extended_roadmap.md` for the current version, and `memory-bank/activeContext.md` / `progress.md` on demand.
 
 ## Rules

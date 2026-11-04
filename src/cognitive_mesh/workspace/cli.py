@@ -93,6 +93,15 @@ def _resolver(cache: Path) -> Callable[[Project], Path | None]:
     return resolve
 
 
+def load_workspace_graph(workspace: Path, cache: Path | None = None) -> WorkspaceGraph:
+    """The workspace graph of a workspace file (read-only); raises `WorkspaceError`."""
+    with WorkspaceStore.open_existing(workspace) as store:
+        projects = store.projects()
+        links = store.links()
+    resolver = _resolver(cache if cache is not None else workspace.parent / "workspace-cache")
+    return build_workspace_graph(projects, links, resolver)
+
+
 def run(args: argparse.Namespace) -> int:
     try:
         return _dispatch(args)

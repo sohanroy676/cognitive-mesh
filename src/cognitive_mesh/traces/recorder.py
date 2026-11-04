@@ -10,6 +10,7 @@ from pydantic import JsonValue, TypeAdapter
 
 from cognitive_mesh import __version__
 from cognitive_mesh.agents import AgentResult, RecalledContext
+from cognitive_mesh.decisions.models import Decision
 from cognitive_mesh.identity import AppIdentity
 from cognitive_mesh.ingestion import IngestionResult
 from cognitive_mesh.ingestion.secrets import redact_secrets
@@ -119,13 +120,19 @@ class TraceRecorder:
         self._rules[run_id] = rules
         return run_id
 
-    def finish(self, run_id: str, run: TaskRun, calls: Sequence[CallRecord] = ()) -> TraceStatus:
+    def finish(
+        self,
+        run_id: str,
+        run: TaskRun,
+        calls: Sequence[CallRecord] = (),
+        decisions: Sequence[Decision] = (),
+    ) -> TraceStatus:
         rules = self._rules.pop(run_id, set())
         steps = tuple(
             _step_trace(seq, step, run.task_id, rules) for seq, step in enumerate(run.steps)
         )
         status = trace_status(run.status)
-        self._store.finish_run(run_id, status, self._now(), sorted(rules), steps, calls)
+        self._store.finish_run(run_id, status, self._now(), sorted(rules), steps, calls, decisions)
         return status
 
 

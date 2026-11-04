@@ -53,6 +53,7 @@ class CapabilitySpec(_Frozen):
     name: str
     description: str
     uses_model: bool
+    writes: bool = False  # True: the step changes a project; only the current one (ADR-0040)
     input_schema: dict[str, JsonValue]
     output_schema: dict[str, JsonValue]
 

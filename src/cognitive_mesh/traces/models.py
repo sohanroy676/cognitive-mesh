@@ -137,7 +137,7 @@ class CallRow(_Frozen):
 
     run_id: str
     call: CallRecord
-    step_status: StepStatus
+    step_status: StepStatus | None  # None for the conductor's own calls (ADR-0040)
     attempt_status: Literal["success", "failure"] | None = None  # None: no attempt row matches
 
 

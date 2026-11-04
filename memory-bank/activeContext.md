@@ -3,6 +3,8 @@
 <!-- Update this at the end of every session. This is the first thing to read when resuming. -->
 
 ## Current focus
+Session 10 end (2026-11-04): v1.10.0 (ADR-0040, accepted: conductor, per-step model routing with fallback, evidence label at 20 calls, opt-in exploration, trace schema 7, exit 22) is implemented and committed on `feature/extended-roadmap-v1.7`; not pushed or tagged yet (wait for the user's go-ahead; then changelog `--tag v1.10.0` last, push, `gh workflow run CI --ref feature/extended-roadmap-v1.7`, tag the tested commit). Next version: v1.11.0 Cross-project impact analysis (ADR-0041 first, Proposed, wait for acceptance). See `session_prompt.md`.
+
 Session 9 end (2026-11-04): v1.9.0 (ADR-0039 decision records: trace schema 6, graph format 7, `decisions record|link|list|show|trace`, decisions in the vector index and in `recall`, outcomes schema 3) is on `feature/extended-roadmap-v1.7`, pushed and tagged `v1.9.0` (`af1e252`; branch run 41784754008 (passed), tag run 41785211643 (passed)). Still no merge to main. Next version: v1.10.0 Orchestrator model (ADR-0040 first, Proposed, wait for acceptance). See `session_prompt.md`.
 
 Session 8 end (2026-11-04): v1.8.0 (ADR-0038: model catalog, OpenAI-compatible client, model call records, `models list|stats`) is on `feature/extended-roadmap-v1.7`, pushed and tagged `v1.8.0` (`f295b59`; CI ids in `progress.md`). Still no merge to main (user decision: wait until the whole extended roadmap is approved). Next: v1.9.0 Decision records, ADR-0039 first. See `session_prompt.md`.

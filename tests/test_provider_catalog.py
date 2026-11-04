@@ -65,7 +65,7 @@ def test_a_good_catalog_loads_and_reports_remote_and_loopback() -> None:
 
 def test_the_role_list_matches_the_registry() -> None:
     agent_ids = {spec.id for spec in default_registry().specs()}
-    assert agent_ids | {"planner"} == AGENT_ROLES
+    assert agent_ids | {"planner", "conductor"} == AGENT_ROLES
 
 
 @pytest.mark.parametrize(

@@ -89,6 +89,7 @@ def test_a_successful_call_is_recorded_with_tokens_and_latency(tmp_path: Path) -
     assert (call.role, call.task_type) == ("code_explainer", "explain_file")
     assert (call.latency_ms, call.prompt_tokens, call.completion_tokens) == (250, 10, 4)
     assert call.result is CallResult.OK
+    assert row.step_status is not None
     assert (row.step_status.value, row.attempt_status) == ("succeeded", "success")
     assert log.dropped == 0
 

@@ -17,9 +17,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from cognitive_mesh.ingestion.secrets import redact_secrets
 
-# Roles an entry may list: the ids of agents that use a model, plus plan drafting. A test pins the
-# first two to the default registry so this cannot drift.
-AGENT_ROLES = frozenset({"code_explainer", "dependency_analyst", "planner"})
+# Roles an entry may list: the ids of agents that use a model, plan drafting and the conductor
+# (ADR-0040). A test pins the agent ids to the default registry so this cannot drift.
+AGENT_ROLES = frozenset({"code_explainer", "dependency_analyst", "planner", "conductor"})
 MAX_CATALOG_BYTES = 256 * 1024
 MAX_ENTRIES = 200
 
