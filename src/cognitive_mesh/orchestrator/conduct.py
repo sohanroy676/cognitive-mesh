@@ -286,7 +286,10 @@ def _ask(client: ModelClient, payload: str, timeout_s: float) -> ModelResponse:
             )
         )
     except ProviderError as exc:
-        raise ConductorError(f"the conductor's model provider failed ({exc.kind.value})") from None
+        # the provider's own message is fixed text such as "groq returned HTTP 400", never content
+        raise ConductorError(
+            f"the conductor's model provider failed ({exc.kind.value}): {exc}"
+        ) from None
     except Exception:  # noqa: BLE001 - any client bug must become an explicit failure
         raise ConductorError("the conductor's model client raised an error") from None
     if not isinstance(response, ModelResponse) or len(response.text) > MAX_REPLY_CHARS:

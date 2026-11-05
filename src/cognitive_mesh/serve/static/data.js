@@ -13,6 +13,7 @@ async function boot() {
   if (S.overview.collections.length) S.coll = S.overview.collections[0].name;
   const names = Object.keys(S.overview.sources);
   if (names.length) S.src = names[0];
+  if (!S.overview.collections.length && names.length) S.tab = "tables";
   render();
 }
 

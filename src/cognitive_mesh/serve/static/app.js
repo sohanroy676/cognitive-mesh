@@ -79,7 +79,8 @@ function sidebar() {
     list.append(h("li", null,
       h("strong", null, p.name), " ", tag(p.kind), " ",
       p.changeable ? null : tag("read-only", "warn"),
-      h("div", { class: "muted mono" }, cut(p.location, 60))));
+      h("div", { class: "muted mono" }, cut(p.location, 60)),
+      attachForm(p)));
   }
   box.append(list, addProjectForm());
   if (st.graph) box.append(edgeList(st.graph));
@@ -104,6 +105,26 @@ function addProjectForm() {
   return h("form", { class: "stack", onsubmit: (e) => e.preventDefault() },
     h("div", null, h("label", { for: "add-src" }, "Folder or GitHub address"), src),
     h("div", null, h("label", { for: "add-name" }, "Name"), name), go, msg);
+}
+
+// A new folder or GitHub project that belongs to an existing project: it is stored in the
+// workspace database and linked to its parent, so the dependency graph shows it.
+function attachForm(parent) {
+  const id = "att-" + parent.name.replace(/[^A-Za-z0-9_-]/g, "_");
+  const src = h("input", { type: "text", id, placeholder: "folder path or GitHub address" });
+  const msg = h("p", { class: "muted", role: "status" });
+  const go = h("button", { type: "button", onclick: async () => {
+    msg.textContent = "Adding…";
+    try {
+      const r = await post("/api/projects/attach", { parent: parent.name, source: src.value });
+      msg.textContent = "Added " + r.added + " to " + parent.name + ".";
+      await refresh();
+      draw();
+    } catch (err) { msg.textContent = err.message; }
+  } }, "Add to " + parent.name);
+  return h("details", null, h("summary", null, "Add a folder or project to " + parent.name),
+    h("form", { class: "stack", onsubmit: (e) => e.preventDefault() },
+      h("label", { for: id }, "Folder or GitHub address"), src, go, msg));
 }
 
 function edgeList(graph) {

@@ -89,6 +89,7 @@ MAX_DIFF_SHOWN: Final = 100_000
 PERSON: Final = "web user"
 ACTIONS: Final = (
     "projects.add",
+    "projects.attach",
     "projects.link",
     "projects.confirm",
     "chat.send",
@@ -104,6 +105,12 @@ class _Body(BaseModel):
 
 
 class _Add(_Body):
+    source: str = Field(min_length=1, max_length=500)
+    name: str | None = Field(default=None, max_length=100)
+
+
+class _Attach(_Body):
+    parent: str = Field(min_length=1, max_length=200)
     source: str = Field(min_length=1, max_length=500)
     name: str | None = Field(default=None, max_length=100)
 
@@ -177,6 +184,7 @@ class AppApi:
     def routes_post(self) -> dict[str, Handler]:
         return {
             "/api/projects/add": self.projects_add,
+            "/api/projects/attach": self.projects_attach,
             "/api/projects/link": self.projects_link,
             "/api/projects/confirm": self.projects_confirm,
             "/api/chat/send": self.chat_send,
@@ -339,36 +347,61 @@ class AppApi:
 
     # -- projects --------------------------------------------------------------------------
 
+    def _register(self, source: str, name: str | None, parent: str | None = None) -> Any:
+        """Store a folder or GitHub project in the workspace database. With `parent`, also store a
+        declared link parent -> new project, so the new folder appears in the dependency graph."""
+        if looks_like_url(source):
+            url = normalise_github_url(source)
+            owner, repo = parse_github_url(url)
+            cache = self.config.home / "workspace-cache"
+            directory, commit = fetch_github(url, cache)
+            identity = derive_identity(str(directory), declared=f"{owner}/{repo}")
+            kind, location, label = ProjectKind.GITHUB, url, name or repo
+        else:
+            path = Path(source).resolve()
+            if path.is_file():
+                raise WorkspaceError(
+                    "that is a file; add the folder it lives in (files inside a project change "
+                    "only through an approved change)"
+                )
+            if not path.is_dir():
+                raise WorkspaceError("the folder does not exist")
+            identity = derive_identity(str(path))
+            kind, location, commit = ProjectKind.LOCAL, str(path), None
+            label = name or (identity.app_id if identity else path.name)
+        with WorkspaceStore.create(self.config.workspace) as store:
+            project = store.add_project(
+                label,
+                kind,
+                location,
+                commit=commit,
+                app_id=identity.app_id if identity else None,
+                app_id_how=identity.how.value if identity else None,
+            )
+            if parent is not None:
+                store.add_link(
+                    parent, project.name, "part of", f"added to {parent} in the chat", PERSON
+                )
+        return project
+
     def projects_add(self, req: Request) -> Reply:
         body = _parse(_Add, req.body)
-        source = body.source
         try:
-            if looks_like_url(source):
-                url = normalise_github_url(source)
-                owner, repo = parse_github_url(url)
-                cache = self.config.home / "workspace-cache"
-                directory, commit = fetch_github(url, cache)
-                identity = derive_identity(str(directory), declared=f"{owner}/{repo}")
-                kind, location, name = ProjectKind.GITHUB, url, body.name or repo
-            else:
-                path = Path(source).resolve()
-                if not path.is_dir():
-                    raise WorkspaceError("the folder does not exist")
-                identity = derive_identity(str(path))
-                kind, location, commit = ProjectKind.LOCAL, str(path), None
-                name = body.name or (identity.app_id if identity else path.name)
-            with WorkspaceStore.create(self.config.workspace) as store:
-                project = store.add_project(
-                    name,
-                    kind,
-                    location,
-                    commit=commit,
-                    app_id=identity.app_id if identity else None,
-                    app_id_how=identity.how.value if identity else None,
-                )
+            project = self._register(body.source, body.name)
         except (WorkspaceError, FetchError) as exc:
             raise ApiError(400, clean_text(str(exc), 300)) from None
         return 200, {"added": project.name, "kind": project.kind.value, "commit": project.commit}
+
+    def projects_attach(self, req: Request) -> Reply:
+        body = _parse(_Attach, req.body)
+        loaded = self._workspace()
+        if loaded is None or body.parent not in {p.name for p in loaded[0].projects}:
+            raise ApiError(404, "no project has that name")
+        try:
+            project = self._register(body.source, body.name, body.parent)
+        except (WorkspaceError, FetchError) as exc:
+            raise ApiError(400, clean_text(str(exc), 300)) from None
+        return 200, {"added": project.name, "parent": body.parent, "kind": project.kind.value}
 
     def projects_link(self, req: Request) -> Reply:
         body = _parse(_Link, req.body)
@@ -483,7 +516,7 @@ class AppApi:
             task_id = "chat"
             try:
                 conducted = conduct(
-                    text,
+                    _conductor_request(text, mode),
                     inputs,
                     RecordingClient(conductor_client, calls, cfg.conductor),
                     task_id=task_id,
@@ -790,10 +823,12 @@ class AppApi:
             if step.attempts:
                 last = step.attempts[-1]
                 try:
-                    dumped = json.dumps(last.model_dump(mode="json"), default=str)
+                    data = last.model_dump(mode="json")
+                    shown = {"output": data["output"]} if "output" in data else data
+                    dumped = json.dumps(_redacted(shown), default=str)
                 except (TypeError, ValueError):
                     dumped = "(not shown)"
-                line["output"] = clean_text(dumped, 6000)
+                line["output"] = dumped
                 line["basis"] = "model_unverified"
             answers.append(line)
         self.chat.add_event(
@@ -947,6 +982,33 @@ class _Stop(Exception):  # noqa: N818 - control flow inside a worker, not an err
         super().__init__(message)
         self.kind = kind
         self.message = message
+
+
+def _conductor_request(text: str, mode: str) -> str:
+    """What the conductor is asked. A plan may never contain a write step, so in change mode the
+    conductor is told that a separate coder makes the edit afterwards and it must only plan the
+    read-only steps that find the relevant files (the request is still the person's own text)."""
+    if mode != "change":
+        return text
+    wrapped = (
+        "Plan ONLY read-only steps (for example explain_file or dependencies_of) on the files "
+        "this change needs. Do NOT plan a step that edits, writes, proposes or applies a change: "
+        "a separate coder makes the edit after your plan runs. Request: " + text
+    )
+    return wrapped if len(wrapped) <= 2000 else text  # the conductor's own request limit
+
+
+def _redacted(value: Any, depth: int = 0) -> Any:
+    """The same value with every string redacted and cut, so the JSON stays parseable."""
+    if isinstance(value, str):
+        return clean_text(value, 3000)
+    if depth > 6:
+        return "(not shown)"
+    if isinstance(value, dict):
+        return {str(k)[:100]: _redacted(v, depth + 1) for k, v in list(value.items())[:40]}
+    if isinstance(value, list | tuple):
+        return [_redacted(v, depth + 1) for v in list(value)[:40]]
+    return value
 
 
 def _workspace_summary(graph: Any) -> dict[str, object]:

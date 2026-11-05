@@ -77,6 +77,8 @@ class GraphApi:
             raise ApiError(409, str(exc)) from None
 
     def workspace(self, _req: Request) -> Reply:
+        if not self.config.workspace.is_file():  # nothing added yet: an empty graph, not an error
+            return 200, graph_payload({"projects": []})
         graph, _ = self._load()
         return 200, graph_payload(to_json(graph))
 

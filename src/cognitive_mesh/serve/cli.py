@@ -30,7 +30,11 @@ EXIT_OK = 0
 EXIT_CONFIG_ERROR = 2
 EXIT_SERVE_ERROR = 26
 
-COMMON = {"/common.js": "common.js", "/style.css": "style.css"}
+COMMON = {"/common.js": "common.js", "/style.css": "style.css", "/favicon.svg": "favicon.svg"}
+# Without --catalog the chat uses this catalog when it exists: Groq coordinates and also works,
+# the local llama3.2 is a second worker.
+DEFAULT_CATALOG = Path("docs") / "serve-catalog.toml"
+DEFAULT_CONDUCTOR = "groq"
 
 
 @dataclass
@@ -118,14 +122,39 @@ def _make_embedder() -> Any:
     return SentenceTransformerEmbedder()
 
 
+def _model_problems(config: ServeConfig) -> list[str]:
+    """Why a catalog entry cannot be used right now (a missing key or opt-in), one line each."""
+    from cognitive_mesh.config import ConfigError, load_settings
+    from cognitive_mesh.providers import CatalogError, load_catalog
+    from cognitive_mesh.providers.factory import entry_problem
+
+    try:
+        settings = load_settings(
+            provider="catalog", model=config.conductor, model_catalog=config.catalog
+        )
+        assert settings.model_catalog is not None  # noqa: S101 - required with catalog
+        catalog = load_catalog(settings.model_catalog)
+    except (ConfigError, CatalogError) as exc:
+        return [f"the model catalog cannot be used: {exc}"]
+    out = []
+    for entry_id, entry in catalog.models.items():
+        problem = entry_problem(settings, entry)
+        if problem:
+            out.append(f"model {entry_id} is not usable: {problem}")
+    return out
+
+
 def run(args: argparse.Namespace) -> int:
     if (args.catalog is None) != (args.conductor is None):
         print("--catalog and --conductor go together", file=sys.stderr)
         return EXIT_CONFIG_ERROR
+    catalog, conductor = args.catalog, args.conductor
+    if catalog is None and DEFAULT_CATALOG.is_file():
+        catalog, conductor = DEFAULT_CATALOG, DEFAULT_CONDUCTOR
     config = ServeConfig(
         home=args.home,
-        catalog=args.catalog,
-        conductor=args.conductor,
+        catalog=catalog,
+        conductor=conductor,
         app_port=args.app_port,
         graph_port=args.graph_port,
         data_port=args.data_port,
@@ -152,6 +181,10 @@ def run(args: argparse.Namespace) -> int:
         )
     if config.catalog is None:
         print("note: no model is configured, so the chat cannot start a turn", file=sys.stderr)
+    else:
+        print(f"models: {config.catalog} (conductor: {config.conductor})", flush=True)
+        for line in _model_problems(config):
+            print(f"note: {line}", file=sys.stderr, flush=True)
     if not args.no_browser:
         webbrowser.open(servers.app.url())
     try:

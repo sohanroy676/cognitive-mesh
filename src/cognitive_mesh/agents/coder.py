@@ -14,6 +14,7 @@ from cognitive_mesh.agents.base import Agent, AgentFault, Capability, Handled, c
 from cognitive_mesh.agents.code_explainer import prior_context_for_prompt
 from cognitive_mesh.agents.context import PAST_CHANGE_LABEL
 from cognitive_mesh.agents.models import AgentContext, EvidenceRef, FailureKind, ModelInfo
+from cognitive_mesh.change.diffparse import normalise_hunk_counts
 from cognitive_mesh.providers import ModelClient, ModelRequest
 from cognitive_mesh.workspace.access import ReadOnlyProjectError
 
@@ -142,6 +143,7 @@ class Coder(Agent):
             raise AgentFault(
                 FailureKind.MALFORMED_OUTPUT, "the model reply did not match the output contract"
             ) from None
+        output = output.model_copy(update={"diff": normalise_hunk_counts(output.diff)})
         return Handled(
             output, tuple(evidence), ModelInfo(provider=response.provider, model=response.model)
         )

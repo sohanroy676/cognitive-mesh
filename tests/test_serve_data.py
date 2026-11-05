@@ -138,7 +138,7 @@ def test_a_server_without_data_says_so_instead_of_failing(tmp_path: Path) -> Non
         assert ov["sources"] == {} or "trace" not in ov["sources"]
         assert ov["collections"] == [] and ov["index_note"]
         assert data(s, "/api/db/tables?source=trace").status == 404
-        assert get(s.graph, "/api/workspace").status == 409
+        assert get(s.graph, "/api/workspace").json["nodes"] == []  # empty, not an error
 
 
 def test_graph_server_reports_impact_and_refuses_bad_names(filled: Any) -> None:

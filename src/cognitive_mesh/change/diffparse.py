@@ -139,6 +139,63 @@ def _strip_prefix(raw: str, side: str) -> str:
     return text
 
 
+def normalise_hunk_counts(text: str) -> str:
+    """Rewrite the line counts in each hunk header to match the hunk body.
+
+    Models write correct diffs with wrong counts (off by one is common). Only the numbers in
+    `@@ -a,b +c,d @@` change; every body line is kept as written. If anything looks unusual (a
+    body line that is not context, added or removed, or a header that does not parse) the text is
+    returned unchanged and `parse_diff` judges it as before. The result is what gets reviewed,
+    hashed and applied, so a person sees the same text the checks saw.
+    """
+    lines = text.split("\n")
+    out: list[str] = []
+    i, n = 0, len(lines)
+    while i < n:
+        line = lines[i]
+        match = _HUNK.match(line.rstrip("\r")) if line.startswith("@@ ") else None
+        if match is None:
+            out.append(line)
+            i += 1
+            continue
+        j = i + 1
+        old = new = 0
+        while j < n:
+            body = lines[j]
+            if body.startswith(("@@ ", "diff --git ")):
+                break
+            if body.startswith("--- ") and j + 1 < n and lines[j + 1].startswith("+++ "):
+                break
+            mark = body[:1]
+            if mark == "+":
+                new += 1
+            elif mark == "-":
+                old += 1
+            elif mark == " ":
+                old += 1
+                new += 1
+            elif mark == "\\":
+                pass
+            elif body == "" and j == n - 1:  # the empty piece after the final newline
+                break
+            elif body == "":
+                old += 1
+                new += 1
+            else:
+                return text
+            j += 1
+        said_old = int(match.group(2) if match.group(2) is not None else 1)
+        said_new = int(match.group(4) if match.group(4) is not None else 1)
+        if (said_old, said_new) == (old, new):
+            out.append(line)  # already right: keep the header exactly as written
+        else:
+            rest = line.split(" @@", 1)[1] if " @@" in line else ""
+            out.append(f"@@ -{match.group(1)},{old} +{match.group(3)},{new} @@{rest}")
+        out.extend(lines[i + 1 : j])
+        i = j
+    return "\n".join(out)
+
+
 def parse_diff(
     text: str,
     limits: Limits | None = None,

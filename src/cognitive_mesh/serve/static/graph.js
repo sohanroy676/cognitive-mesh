@@ -193,7 +193,10 @@ function render() {
   const { nodes, edges, unresolved, counts } = g.data;
   const left = h("div", { class: "stack" });
   left.append(h("h2", null, nodes.length + " project(s), " + edges.length + " connection(s)"));
-  if (!nodes.length) left.append(h("p", { class: "empty" }, "No projects yet. Add them on the Chat page."));
+  if (!nodes.length) {
+    left.append(h("p", { class: "empty" }, "No projects yet. Add a folder or GitHub address on the ",
+      h("a", { href: g.chatUrl }, "Chat page"), "; it appears here as soon as it is stored."));
+  }
   else {
     const canvas = draw();
     left.append(legend(), canvas);
@@ -207,6 +210,8 @@ function render() {
 }
 
 async function boot() {
+  const m = await meta();
+  g.chatUrl = "http://127.0.0.1:" + m.ports.app + "/?token=" + encodeURIComponent(m.token);
   await topBar("graph", h("button", { type: "button", onclick: load }, "Reload"));
   await load();
 }
