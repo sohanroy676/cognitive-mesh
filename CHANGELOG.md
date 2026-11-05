@@ -10,6 +10,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Fixed
 - **serve:** Empty pages, Groq catalog, attach folders
+- **serve:** List projects at once, analyse in background
 
 ## [2.0.0] - 2026-11-05
 
