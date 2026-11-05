@@ -5,6 +5,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **serve:** Saved file-level dependency graph
+
 ### Documentation
 - Record v2.0.0 CI runs and session 14 handoff
 
