@@ -25,6 +25,7 @@ from cognitive_mesh.serve.config import (
 from cognitive_mesh.serve.data_api import DataApi
 from cognitive_mesh.serve.graph_api import GraphApi
 from cognitive_mesh.serve.http import LocalServer, Reply, Request, new_token
+from cognitive_mesh.serve.ws_cache import WorkspaceGraphCache
 
 EXIT_OK = 0
 EXIT_CONFIG_ERROR = 2
@@ -62,7 +63,10 @@ def build_servers(config: ServeConfig, token: str | None = None) -> Servers:
     def meta(_req: Request) -> Reply:
         return 200, {"token": token, "ports": ports}
 
-    api = AppApi(config, chat)
+    project_graph = WorkspaceGraphCache(
+        config.workspace, config.home / "graph-cache" / "workspace.json"
+    )
+    api = AppApi(config, chat, project_graph)
     servers: list[LocalServer] = []
     try:
         app = LocalServer(
@@ -78,8 +82,13 @@ def build_servers(config: ServeConfig, token: str | None = None) -> Servers:
             port=config.graph_port,
             token=token,
             cookie="cogmesh_graph",
-            pages={"/": "graph.html", "/graph.js": "graph.js", **COMMON},
-            gets={**GraphApi(config).routes(), "/api/meta": meta},
+            pages={
+                "/": "graph.html",
+                "/graph.js": "graph.js",
+                "/filegraph.js": "filegraph.js",
+                **COMMON,
+            },
+            gets={**GraphApi(config, project_graph).routes(), "/api/meta": meta},
         )
         servers.append(graph)
         data = LocalServer(

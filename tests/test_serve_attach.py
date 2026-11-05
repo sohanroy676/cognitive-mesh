@@ -56,7 +56,7 @@ def test_a_project_stays_listed_when_its_files_cannot_be_analysed(
     def boom(_path: Path) -> Any:
         raise WorkspaceError("something in the folder cannot be read")
 
-    monkeypatch.setattr("cognitive_mesh.serve.app_api.load_workspace", boom)
+    monkeypatch.setattr("cognitive_mesh.serve.ws_cache.load_workspace", boom)
     with running(config_for(tmp_path)) as s:
         assert post(s, "/api/projects/add", {"source": str(main), "name": "multi"}).status == 200
         state = call(s.app, "GET", "/api/state", token=TOKEN).json

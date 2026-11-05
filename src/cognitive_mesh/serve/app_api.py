@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import threading
-import time
 from pathlib import Path
 from typing import Any, Final, Literal
 
@@ -64,8 +63,8 @@ from cognitive_mesh.providers.recording import CallLog, RecordingClient
 from cognitive_mesh.providers.routing import RoutedClient
 from cognitive_mesh.serve.chat_store import ChatStore, ChatStoreError, clean_text
 from cognitive_mesh.serve.config import EmbedderHolder, ServeConfig
-from cognitive_mesh.serve.graph_api import graph_payload
 from cognitive_mesh.serve.http import ApiError, Handler, Reply, Request, need, need_int
+from cognitive_mesh.serve.ws_cache import WorkspaceGraphCache
 from cognitive_mesh.traces import (
     TraceRecorder,
     TraceStore,
@@ -87,7 +86,6 @@ from cognitive_mesh.workspace.render import to_json
 from cognitive_mesh.workspace.store import WorkspaceStore
 
 MAX_DIFF_SHOWN: Final = 100_000
-GRAPH_CACHE_S: Final = 30.0
 PERSON: Final = "web user"
 ACTIONS: Final = (
     "projects.add",
@@ -168,13 +166,14 @@ def change_diff(record: ChangeRecord, commit: str | None) -> tuple[str, int]:
 
 
 class AppApi:
-    def __init__(self, config: ServeConfig, chat: ChatStore) -> None:
+    def __init__(
+        self, config: ServeConfig, chat: ChatStore, project_graph: WorkspaceGraphCache
+    ) -> None:
         self.config = config
         self.chat = chat
+        self.project_graph = project_graph
         self.embedder = EmbedderHolder(config.embedder_factory)
         self._threads: list[threading.Thread] = []
-        self._graph_lock = threading.Lock()
-        self._graph_cache: tuple[int, float, dict[str, Any]] | None = None
 
     def routes_get(self) -> dict[str, Handler]:
         return {
@@ -225,35 +224,11 @@ class AppApi:
         except WorkspaceError:
             return []
 
-    def graph(self, _req: Request) -> Reply:
+    def graph(self, req: Request) -> Reply:
         """The dependency graph of the stored projects. Reading every file of every project can
-        take a long time, so this is a separate request from `state` (which must answer at once)
-        and its result is kept for a short while, keyed by the workspace file."""
-        try:
-            stamp = self.config.workspace.stat().st_mtime_ns
-        except OSError:
-            return 200, {"graph": None, "graph_error": None}
-        now = time.monotonic()
-        with self._graph_lock:
-            cached = self._graph_cache
-            if cached is not None and cached[0] == stamp and now - cached[1] < GRAPH_CACHE_S:
-                return 200, cached[2]
-            try:
-                loaded = load_workspace(self.config.workspace)
-                reply: dict[str, Any] = {
-                    "graph": graph_payload(to_json(loaded[0])),
-                    "graph_error": None,
-                }
-            except WorkspaceError as exc:
-                reply = {"graph": None, "graph_error": clean_text(str(exc), 300)}
-            except Exception as exc:  # the project list is shown regardless
-                what = f"({type(exc).__name__})"
-                reply = {
-                    "graph": None,
-                    "graph_error": f"the projects' files could not be analysed {what}",
-                }
-            self._graph_cache = (stamp, now, reply)
-            return 200, reply
+        take a long time, so this is separate from `state` (which must answer at once) and the
+        analysis is kept (memory and disk) until the workspace changes or a refresh is asked."""
+        return 200, self.project_graph.get(refresh=req.params.get("refresh") == "1")
 
     def state(self, _req: Request) -> Reply:
         projects = [

@@ -11,10 +11,12 @@ from typing import Any
 from cognitive_mesh.impact import ImpactError, list_dependents, parse_target
 from cognitive_mesh.impact.render import impact_json
 from cognitive_mesh.serve.config import ServeConfig
+from cognitive_mesh.serve.folder_graph import FolderGraphs, folder_from_text
 from cognitive_mesh.serve.http import ApiError, Handler, Reply, Request, need
 from cognitive_mesh.workspace.cli import load_workspace
-from cognitive_mesh.workspace.models import WorkspaceError
+from cognitive_mesh.workspace.models import ProjectKind, WorkspaceError
 from cognitive_mesh.workspace.render import to_json
+from cognitive_mesh.workspace.store import WorkspaceStore
 
 GROUPS = ("detected", "api", "shared_schemas", "config")
 
@@ -62,11 +64,38 @@ def graph_payload(data: dict[str, Any]) -> dict[str, Any]:
 
 
 class GraphApi:
-    def __init__(self, config: ServeConfig) -> None:
+    def __init__(self, config: ServeConfig, project_graph: Any = None) -> None:
         self.config = config
+        self.project_graph = project_graph  # a ws_cache.WorkspaceGraphCache, shared with the chat
+        self.folders = FolderGraphs(config.home / "graph-cache")
 
     def routes(self) -> dict[str, Handler]:
-        return {"/api/workspace": self.workspace, "/api/workspace/impact": self.impact}
+        return {
+            "/api/workspace": self.workspace,
+            "/api/workspace/impact": self.impact,
+            "/api/folder-graph": self.folder_graph,
+            "/api/folder-graphs": self.folder_graphs,
+        }
+
+    def folder_graph(self, req: Request) -> Reply:
+        folder = folder_from_text(need(req.params, "path", 1100))
+        flag = req.params.get
+        data = self.folders.get(folder, full=flag("limit") != "1", rebuild=flag("rebuild") == "1")
+        return 200, {"data": data}
+
+    def folder_graphs(self, _req: Request) -> Reply:
+        projects: list[dict[str, str]] = []
+        if self.config.workspace.is_file():
+            try:
+                with WorkspaceStore.open_existing(self.config.workspace) as store:
+                    projects = [
+                        {"name": p.name, "folder": p.location}
+                        for p in store.projects()
+                        if p.kind is ProjectKind.LOCAL
+                    ]
+            except WorkspaceError:
+                projects = []
+        return 200, {"saved": self.folders.saved(), "projects": projects}
 
     def _load(self) -> Any:
         if not self.config.workspace.is_file():
@@ -76,11 +105,16 @@ class GraphApi:
         except WorkspaceError as exc:
             raise ApiError(409, str(exc)) from None
 
-    def workspace(self, _req: Request) -> Reply:
+    def workspace(self, req: Request) -> Reply:
         if not self.config.workspace.is_file():  # nothing added yet: an empty graph, not an error
             return 200, graph_payload({"projects": []})
-        graph, _ = self._load()
-        return 200, graph_payload(to_json(graph))
+        if self.project_graph is None:
+            graph, _ = self._load()
+            return 200, graph_payload(to_json(graph))
+        reply = self.project_graph.get(refresh=req.params.get("refresh") == "1")
+        if reply["graph_error"] is not None:
+            raise ApiError(409, reply["graph_error"])
+        return 200, {**reply["graph"], "analysed_at": reply["analysed_at"]}
 
     def impact(self, req: Request) -> Reply:
         project = need(req.params, "project", 200)

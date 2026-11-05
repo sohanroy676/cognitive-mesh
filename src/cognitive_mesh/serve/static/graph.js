@@ -2,7 +2,9 @@
 // declared are dashed and labelled so the two can never be confused.
 "use strict";
 
-const root = document.getElementById("root");
+const main = document.getElementById("root");
+const root = h("div", { class: "pane" }); // the project graph draws into this
+const filePane = h("div", { class: "fg stack" }); // the file and module graph draws into this
 const KIND_COLOURS = ["#1f3a93", "#17745f", "#8a5300", "#7a3b8f", "#a52f2f", "#2b7a9b", "#5c6b00"];
 const W = 900, H = 600;
 const g = { data: null, kinds: new Map(), hidden: new Set(), pick: null, view: { x: 0, y: 0, w: W, h: H } };
@@ -193,6 +195,11 @@ function render() {
   const { nodes, edges, unresolved, counts } = g.data;
   const left = h("div", { class: "stack" });
   left.append(h("h2", null, nodes.length + " project(s), " + edges.length + " connection(s)"));
+  if (g.data.analysed_at) {
+    left.append(h("div", { class: "row" },
+      h("span", { class: "muted" }, "Analysed " + stamp(g.data.analysed_at) + " and saved; switching pages does not read the files again."),
+      h("button", { type: "button", onclick: () => load(true) }, "Re-read the projects' files")));
+  }
   if (!nodes.length) {
     left.append(h("p", { class: "empty" }, "No projects yet. Add a folder or GitHub address on the ",
       h("a", { href: g.chatUrl }, "Chat page"), "; it appears here as soon as it is stored."));
@@ -209,17 +216,155 @@ function render() {
   root.classList.add("split"); root.append(left, side);
 }
 
+function stamp(iso) { return String(iso).slice(0, 19).replace("T", " ") + " UTC"; }
+
+// ---- files and modules: the graph of every file in a typed folder --------------------------------
+// Built from the folder once, saved on the server, and loaded from that file afterwards.
+
+const F = { folder: "", limit: false, saved: [], projects: [], started: false };
+const PINS = "cogmesh.pins.v1";
+const FOLDER_KEY = "cogmesh.graph.folder";
+
+function remembered(key, value) {
+  try {
+    if (value === undefined) return localStorage.getItem(key);
+    localStorage.setItem(key, value);
+  } catch { /* the page works without it */ }
+  return null;
+}
+
+const pinStore = {
+  list() { try { return JSON.parse(remembered(PINS) || "[]"); } catch { return []; } },
+  save(items) { remembered(PINS, JSON.stringify(items.slice(0, 200))); },
+  has(space, id) { return this.list().some((p) => p.space === space && p.id === id); },
+  toggle(entry) {
+    const items = this.list();
+    const at = items.findIndex((p) => p.space === entry.space && p.id === entry.id);
+    if (at >= 0) items.splice(at, 1); else items.push(entry);
+    this.save(items);
+  },
+  remove(space, id) { this.save(this.list().filter((p) => !(p.space === space && p.id === id))); },
+};
+
+const fileCtx = {
+  h,
+  put: (parent, ...kids) => add(parent, kids),
+  reput: (el, ...kids) => add(clear(el), kids),
+  plural: (n, one, many) => n + " " + (n === 1 ? one : many),
+  pins: pinStore,
+  go: (name, params) => {
+    if (name !== "graph") return;
+    F.folder = params.path || F.folder;
+    F.limit = false;
+    fileLoad(false, params.focus || "");
+  },
+};
+const drawFiles = window.CogFileGraph.view(fileCtx);
+
+async function fileBoot() {
+  filePane.append(h("p", { class: "muted" }, "Loading…"));
+  try {
+    const r = await api("/api/folder-graphs");
+    F.saved = r.saved; F.projects = r.projects;
+  } catch { /* the form still works */ }
+  F.folder = remembered(FOLDER_KEY) || (F.projects.length ? F.projects[0].folder : "");
+  fileForm();
+  // Come back to the page: show the saved graph at once, never start a build by itself.
+  if (F.folder && F.saved.some((s) => s.folder.toLowerCase() === F.folder.toLowerCase())) fileLoad(false, "");
+}
+
+let fileOut = null;
+function fileForm() {
+  clear(filePane);
+  const input = h("input", { type: "text", id: "fg-path", size: 56, value: F.folder, list: "fg-folders",
+    placeholder: "A folder, for example E:\\Projects", "aria-label": "Folder to graph" });
+  const options = h("datalist", { id: "fg-folders" });
+  const seen = new Set();
+  for (const p of F.projects) if (!seen.has(p.folder)) { seen.add(p.folder); options.append(h("option", { value: p.folder }, p.name)); }
+  for (const s of F.saved) if (!seen.has(s.folder)) { seen.add(s.folder); options.append(h("option", { value: s.folder })); }
+  const full = h("input", { type: "checkbox", id: "fg-full", checked: F.limit });
+  const go = (rebuild) => { F.folder = input.value.trim(); F.limit = full.checked; remembered(FOLDER_KEY, F.folder); fileLoad(rebuild, ""); };
+  filePane.append(
+    h("h2", null, "Files and modules"),
+    h("p", { class: "muted" }, "Type a folder that holds one or more projects. Every Python, JavaScript and TypeScript file in it becomes a node, and an arrow from A to B means A imports or depends on B. Nothing is run. The graph is built the first time and saved; after that it is loaded from the saved file."),
+    h("form", { class: "stack", onsubmit: (e) => { e.preventDefault(); go(false); } },
+      h("label", { for: "fg-path" }, "Folder"), input, options,
+      h("label", null, full, " Show only the first 300 nodes (faster to draw)"),
+      h("div", { class: "row" },
+        h("button", { type: "submit", class: "primary" }, "Show graph"),
+        h("button", { type: "button", id: "fg-rebuild", onclick: () => go(true) }, "Re-read the folder"))));
+  if (F.saved.length) {
+    const list = h("ul", { class: "stack saved" });
+    for (const s of F.saved.slice(0, 12)) {
+      list.append(h("li", null, h("button", { type: "button", class: "link", onclick: () => { input.value = s.folder; go(false); } }, s.folder),
+        " ", h("span", { class: "muted" }, s.nodes + " nodes, " + s.edges + " edges, saved " + stamp(s.built_at))));
+    }
+    filePane.append(h("details", null, h("summary", null, "Saved graphs (" + F.saved.length + ")"), list));
+  }
+  fileOut = h("div", { class: "stack", "aria-live": "polite" });
+  filePane.append(fileOut);
+}
+
+async function fileLoad(rebuild, focus) {
+  if (!fileOut) return;
+  remembered(FOLDER_KEY, F.folder);
+  const started = Date.now();
+  const wait = h("p", { class: "muted", role: "status" });
+  const tick = () => { wait.textContent = (rebuild ? "Reading every file in the folder" : "Loading the graph") + " (" + Math.round((Date.now() - started) / 1000) + " s). The first read of a large folder can take several seconds."; };
+  tick();
+  clear(fileOut).append(wait);
+  const timer = setInterval(tick, 1000);
+  try {
+    const reply = await api("/api/folder-graph", { path: F.folder, limit: F.limit ? "1" : "", rebuild: rebuild ? "1" : "" });
+    clearInterval(timer);
+    clear(fileOut);
+    const src = reply.data.source || {};
+    fileOut.append(h("p", { class: "notice" }, src.kind === "saved"
+      ? "Loaded from the saved graph built " + stamp(src.built_at) + " (the folder was not read again). If its files changed, choose Re-read the folder."
+      : "Built from the folder just now" + (src.saved === false ? " (it could not be saved, so the next request reads the folder again)." : " and saved; the next visit loads it from the saved file.")));
+    drawFiles(fileOut, reply.data, F.folder, focus);
+    try { const r = await api("/api/folder-graphs"); F.saved = r.saved; } catch { /* keep the old list */ }
+  } catch (err) {
+    clearInterval(timer);
+    showError(clear(fileOut), err);
+  }
+}
+
+// ---- the two views --------------------------------------------------------------------------------
+
+function showMode(mode) {
+  filePane.hidden = mode !== "files";
+  root.hidden = mode !== "projects";
+  for (const b of document.querySelectorAll("[data-mode]")) b.setAttribute("aria-pressed", b.dataset.mode === mode ? "true" : "false");
+  if (b_mode.last !== mode) remembered("cogmesh.graph.mode", mode);
+  b_mode.last = mode;
+  if (mode === "projects" && !g.data && !g.loading) load(false);
+  if (mode === "files" && !F.started) { F.started = true; fileBoot(); }
+}
+const b_mode = { last: null };
+
 async function boot() {
   const m = await meta();
   g.chatUrl = "http://127.0.0.1:" + m.ports.app + "/?token=" + encodeURIComponent(m.token);
-  await topBar("graph", h("button", { type: "button", onclick: load }, "Reload"));
-  await load();
+  await topBar("graph");
+  const tab = (mode, label) => h("button", { type: "button", "data-mode": mode, onclick: () => showMode(mode) }, label);
+  main.append(
+    h("div", { class: "row", role: "group", "aria-label": "Which graph" },
+      tab("files", "Files and modules"), tab("projects", "Projects and their links")),
+    filePane, root);
+  showMode(remembered("cogmesh.graph.mode") === "projects" ? "projects" : "files");
 }
 
-async function load() {
-  clear(root).append(h("p", { class: "muted", role: "status" }, "Reading the projects' files… large projects can take a while."));
-  try { g.data = await api("/api/workspace"); g.pick = null; g.kinds = new Map(); g.pos = null; g.fitted = false; render(); }
-  catch (err) { clear(root); showError(root, err); }
+async function load(refresh) {
+  g.loading = true;
+  clear(root).append(h("p", { class: "muted", role: "status" }, refresh
+    ? "Reading the projects' files again… large projects can take a while."
+    : "Loading the projects' graph… the first analysis of large projects can take a while."));
+  try {
+    g.data = await api("/api/workspace", { refresh: refresh ? "1" : "" });
+    g.pick = null; g.kinds = new Map(); g.pos = null; g.fitted = false; render();
+  } catch (err) { clear(root); showError(root, err); }
+  finally { g.loading = false; }
 }
 
-boot().catch((err) => { clear(root); showError(root, err); });
+boot().catch((err) => { clear(main); showError(main, err); });
