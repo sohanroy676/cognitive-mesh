@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from pathlib import Path
 from typing import Any, Final, Literal
 
@@ -86,6 +87,7 @@ from cognitive_mesh.workspace.render import to_json
 from cognitive_mesh.workspace.store import WorkspaceStore
 
 MAX_DIFF_SHOWN: Final = 100_000
+GRAPH_CACHE_S: Final = 30.0
 PERSON: Final = "web user"
 ACTIONS: Final = (
     "projects.add",
@@ -171,10 +173,13 @@ class AppApi:
         self.chat = chat
         self.embedder = EmbedderHolder(config.embedder_factory)
         self._threads: list[threading.Thread] = []
+        self._graph_lock = threading.Lock()
+        self._graph_cache: tuple[int, float, dict[str, Any]] | None = None
 
     def routes_get(self) -> dict[str, Handler]:
         return {
             "/api/state": self.state,
+            "/api/graph": self.graph,
             "/api/sessions": self.sessions,
             "/api/session": self.session,
             "/api/turn": self.turn,
@@ -209,23 +214,59 @@ class AppApi:
         except WorkspaceError:
             return None
 
+    def _stored_projects(self) -> list[Any]:
+        """The projects in the workspace database, without analysing their files. A project the
+        analysis cannot read must still be listed, or it looks as if adding it failed."""
+        if not self.config.workspace.is_file():
+            return []
+        try:
+            with WorkspaceStore.open_existing(self.config.workspace) as store:
+                return list(store.projects())
+        except WorkspaceError:
+            return []
+
+    def graph(self, _req: Request) -> Reply:
+        """The dependency graph of the stored projects. Reading every file of every project can
+        take a long time, so this is a separate request from `state` (which must answer at once)
+        and its result is kept for a short while, keyed by the workspace file."""
+        try:
+            stamp = self.config.workspace.stat().st_mtime_ns
+        except OSError:
+            return 200, {"graph": None, "graph_error": None}
+        now = time.monotonic()
+        with self._graph_lock:
+            cached = self._graph_cache
+            if cached is not None and cached[0] == stamp and now - cached[1] < GRAPH_CACHE_S:
+                return 200, cached[2]
+            try:
+                loaded = load_workspace(self.config.workspace)
+                reply: dict[str, Any] = {
+                    "graph": graph_payload(to_json(loaded[0])),
+                    "graph_error": None,
+                }
+            except WorkspaceError as exc:
+                reply = {"graph": None, "graph_error": clean_text(str(exc), 300)}
+            except Exception as exc:  # the project list is shown regardless
+                what = f"({type(exc).__name__})"
+                reply = {
+                    "graph": None,
+                    "graph_error": f"the projects' files could not be analysed {what}",
+                }
+            self._graph_cache = (stamp, now, reply)
+            return 200, reply
+
     def state(self, _req: Request) -> Reply:
-        loaded = self._workspace()
-        graph = graph_payload(to_json(loaded[0])) if loaded else None
-        projects = []
-        if loaded:
-            for p in loaded[0].projects:
-                projects.append(
-                    {
-                        "name": p.name,
-                        "kind": p.kind.value,
-                        "location": p.location,
-                        "changeable": p.kind is ProjectKind.LOCAL,
-                    }
-                )
+        projects = [
+            {
+                "name": p.name,
+                "kind": p.kind.value,
+                "location": p.location,
+                "changeable": p.kind is ProjectKind.LOCAL,
+            }
+            for p in self._stored_projects()
+        ]
         return 200, {
             "projects": projects,
-            "graph": graph,
             "model": {
                 "configured": self.config.catalog is not None and self.config.conductor is not None,
                 "conductor": self.config.conductor,
@@ -394,8 +435,7 @@ class AppApi:
 
     def projects_attach(self, req: Request) -> Reply:
         body = _parse(_Attach, req.body)
-        loaded = self._workspace()
-        if loaded is None or body.parent not in {p.name for p in loaded[0].projects}:
+        if body.parent not in {p.name for p in self._stored_projects()}:
             raise ApiError(404, "no project has that name")
         try:
             project = self._register(body.source, body.name, body.parent)
@@ -414,10 +454,10 @@ class AppApi:
 
     def projects_confirm(self, req: Request) -> Reply:
         body = _parse(_Confirm, req.body)
-        loaded = self._workspace()
-        if loaded is None:
+        stored = self._stored_projects()
+        if not stored:
             raise ApiError(409, "add projects first")
-        match = [p for p in loaded[0].projects if p.name == body.project]
+        match = [p for p in stored if p.name == body.project]
         if not match:
             raise ApiError(404, "no project has that name")
         if match[0].kind is not ProjectKind.LOCAL:

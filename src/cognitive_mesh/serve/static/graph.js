@@ -217,6 +217,7 @@ async function boot() {
 }
 
 async function load() {
+  clear(root).append(h("p", { class: "muted", role: "status" }, "Reading the projects' files… large projects can take a while."));
   try { g.data = await api("/api/workspace"); g.pick = null; g.kinds = new Map(); g.pos = null; g.fitted = false; render(); }
   catch (err) { clear(root); showError(root, err); }
 }

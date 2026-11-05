@@ -22,10 +22,45 @@ async function boot() {
     if (all.sessions.length) await openSession(all.sessions[0].id, true);
   }
   draw();
+  loadGraph();
 }
 
 async function refresh() {
   view.state = await api("/api/state");
+}
+
+// The dependency analysis reads every file of every project and can take a long time, so the
+// project list is drawn first and this section fills in when the analysis answers.
+function paintEdges() {
+  const box = view.edgeBox;
+  if (!box) return;
+  clear(box);
+  if (!view.state.projects.length) return;
+  if (view.graphError) {
+    box.append(h("p", { class: "notice", role: "alert" },
+      "The projects are saved, but their files could not be analysed: " + view.graphError));
+  } else if (view.graph) {
+    box.append(edgeList(view.graph));
+  } else {
+    box.append(h("p", { class: "muted" }, "Reading the projects' files to find dependencies… you can keep working."));
+  }
+}
+
+async function loadGraph() {
+  view.graph = null;
+  view.graphError = null;
+  paintEdges();
+  const seq = (view.graphSeq = (view.graphSeq || 0) + 1);
+  try {
+    const r = await api("/api/graph");
+    if (seq !== view.graphSeq) return;
+    view.graph = r.graph;
+    view.graphError = r.graph_error;
+  } catch (err) {
+    if (seq !== view.graphSeq) return;
+    view.graphError = err.message;
+  }
+  paintEdges();
 }
 
 async function openSession(id, quiet) {
@@ -83,7 +118,9 @@ function sidebar() {
       attachForm(p)));
   }
   box.append(list, addProjectForm());
-  if (st.graph) box.append(edgeList(st.graph));
+  view.edgeBox = h("div", { class: "stack", "aria-live": "polite" });
+  box.append(view.edgeBox);
+  paintEdges();
   if (st.projects.length >= 2) box.append(linkForm(st.projects));
   box.append(startForm());
   return box;
@@ -100,6 +137,7 @@ function addProjectForm() {
       msg.textContent = "Added " + r.added + ".";
       await refresh();
       draw();
+      loadGraph();
     } catch (err) { msg.textContent = err.message; }
   } }, "Add project");
   return h("form", { class: "stack", onsubmit: (e) => e.preventDefault() },
@@ -120,6 +158,7 @@ function attachForm(parent) {
       msg.textContent = "Added " + r.added + " to " + parent.name + ".";
       await refresh();
       draw();
+      loadGraph();
     } catch (err) { msg.textContent = err.message; }
   } }, "Add to " + parent.name);
   return h("details", null, h("summary", null, "Add a folder or project to " + parent.name),
@@ -159,6 +198,7 @@ function linkForm(projects) {
       await post("/api/projects/link", { source: from.value, target: to.value, kind: kind.value, note: note.value });
       await refresh();
       draw();
+      loadGraph();
     } catch (err) { msg.textContent = err.message; }
   } }, "Declare link");
   return h("details", null, h("summary", null, "Declare a dependency we cannot see"),

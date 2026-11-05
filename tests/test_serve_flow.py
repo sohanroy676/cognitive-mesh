@@ -65,7 +65,7 @@ def body_for(req: dict[str, Any], **extra: Any) -> dict[str, Any]:
 def test_onboarding_shows_detected_and_declared_edges_apart(tmp_path: Path) -> None:
     with running(config_for(tmp_path)) as s:
         onboard(s, tmp_path)
-        graph = get(s.app, "/api/state").json["graph"]
+        graph = get(s.app, "/api/graph").json["graph"]
         detected = [e for e in graph["edges"] if not e["declared"]]
         assert any(e["source"] == "web" and e["target"] == "api" for e in detected)
         r = post(

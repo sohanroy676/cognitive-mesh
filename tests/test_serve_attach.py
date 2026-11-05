@@ -3,6 +3,9 @@
 from pathlib import Path
 from typing import Any
 
+import pytest
+
+from cognitive_mesh.workspace.models import WorkspaceError
 from serve_support import TOKEN, call, config_for, running
 
 
@@ -43,6 +46,26 @@ def test_attach_stores_the_folder_and_links_it_to_its_parent(tmp_path: Path) -> 
     with running(config) as again:  # a new process sees the same projects: they are in the database
         state = call(again.app, "GET", "/api/state", token=TOKEN).json
         assert {p["name"] for p in state["projects"]} == {"main", "extra"}
+
+
+def test_a_project_stays_listed_when_its_files_cannot_be_analysed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    main = make_folder(tmp_path / "main", "main")
+
+    def boom(_path: Path) -> Any:
+        raise WorkspaceError("something in the folder cannot be read")
+
+    monkeypatch.setattr("cognitive_mesh.serve.app_api.load_workspace", boom)
+    with running(config_for(tmp_path)) as s:
+        assert post(s, "/api/projects/add", {"source": str(main), "name": "multi"}).status == 200
+        state = call(s.app, "GET", "/api/state", token=TOKEN).json
+        assert [p["name"] for p in state["projects"]] == ["multi"]
+        analysed = call(s.app, "GET", "/api/graph", token=TOKEN).json
+        assert analysed["graph"] is None and "cannot be read" in analysed["graph_error"]
+        assert post(s, "/api/projects/confirm", {"project": "multi"}).status == 200
+        again = post(s, "/api/projects/add", {"source": str(main), "name": "multi"})
+        assert again.status == 400 and "already" in again.json["error"]
 
 
 def test_attach_refuses_unknown_parent_missing_folder_and_files(tmp_path: Path) -> None:
