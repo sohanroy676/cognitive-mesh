@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog. Generated from Conventional Commits by git-cliff; do not hand-edit. Regenerate with `uv run git-cliff -o CHANGELOG.md`.
 
+## [Unreleased]
+
+### Documentation
+- Record v2.0.0 CI runs and session 14 handoff
+
+### Fixed
+- **serve:** Empty pages, Groq catalog, attach folders
+
 ## [2.0.0] - 2026-11-05
 
 ### Added
