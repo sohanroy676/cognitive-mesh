@@ -3,7 +3,7 @@
 <!-- Update this at the end of every session. This is the first thing to read when resuming. -->
 
 ## Current focus
-Session 15 end (2026-11-06): released as v2.0.1 on `feature/extended-roadmap-v1.7` (patch: web app fixes, saved file-level and project dependency graphs in `graph-cache/`, README rewrite, `docs/FEATURES.md`); no merge to main. Run steps are in the README; hand-off and the next-session prompt are in `session_prompt.md`.
+Session 15 end (2026-11-06): released as v2.0.1 (tag on `2284846`; CI branch run 42250932066 and tag run 42251943107 passed) on `feature/extended-roadmap-v1.7` (patch: web app fixes, saved file-level and project dependency graphs in `graph-cache/`, README rewrite, `docs/FEATURES.md`); no merge to main. Run steps are in the README; hand-off and the next-session prompt are in `session_prompt.md`.
 
 Session 15 (2026-11-05): bug fixes on `feature/extended-roadmap-v1.7` after v2.0.0: empty Graph/Data states, `docs/serve-catalog.toml` (Groq conductor and worker, local llama3.2), `projects.attach`, change-mode conductor prompt, hunk-count repair, readable answer blocks. Real Groq run through the UI end to end (question and change with approval request). Details in `session_prompt.md`.
 
