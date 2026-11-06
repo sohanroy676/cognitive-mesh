@@ -151,3 +151,17 @@ Details and limits: `docs/adr/0005-ingestion-scope-and-exclusions.md`,
   a few documents: the opt-in live test kept a related claim and dropped "zebra quantum pastry" once.
   Not verified: very large traces, concurrent sessions, macOS, a fresh clone.
 - Ingested files are treated as data and are never executed.
+
+## After v2.0.0: web app fixes (session 15, 2026-11-05/06; on `feature/extended-roadmap-v1.7`)
+
+Not a roadmap version. Implemented and tested (suite parts: serve, diff, folder graph; related tests 134 passed):
+
+- Graph and Data pages open on a fresh home (empty graph instead of an error; Data starts on Tables when there is no index).
+- `docs/serve-catalog.toml` (Groq conductor and worker, local llama3.2) is used by `serve` when `--catalog` is not given; start-up lists unusable models.
+- `projects.attach`: a folder or GitHub address added to an existing project is stored in the workspace database and linked to its parent by a declared `part of` edge. A single file is refused.
+- `/api/state` lists stored projects at once; the dependency analysis is `/api/graph`, kept in memory and in `graph-cache/workspace.json` until the workspace changes or a refresh is asked.
+- The Graph page's "Files and modules" view is the file-level graph of the read-only UI: a typed folder is read once, saved in `graph-cache/` and loaded from there afterwards; only "Re-read the folder" reads it again. Full graph by default (cut view above 3,000 nodes).
+- Change mode: the conductor is told not to plan write steps; diffs whose hunk counts are wrong are repaired before the strict parser (`change.diffparse.normalise_hunk_counts`).
+- Run for real in Edge (Playwright, page text only): add project, attach folder, question and small change with real Groq (diff and approval request shown), `E:\Projects` file graph (1,319 nodes, 4,261 edges; first read 64 s, saved graph about 1 s).
+- Not run: approve / pull request clicks with a real model and GitHub, llama3.2 as a chosen worker, browsers other than Edge, macOS and Linux.
+

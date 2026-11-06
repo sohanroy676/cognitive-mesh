@@ -1,256 +1,234 @@
 # Cognitive Mesh
 
 [![CI](https://github.com/sohanroy676/cognitive-mesh/actions/workflows/ci.yml/badge.svg)](https://github.com/sohanroy676/cognitive-mesh/actions/workflows/ci.yml)
+![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
 
-**Memory for AI agents that can show its evidence.**
+**Application-aware AI agents with a memory that can show its evidence.**
 
-Cognitive Mesh reads an application's code and configuration, runs small specialised agents over it, and
-keeps a **traceable memory of what happened**: every step an agent took, what it produced, and which version of
-the code it looked at. Later tasks can recall that experience. Every remembered claim comes with the records that
-support it and the records that contradict it, so you can check a claim instead of taking it on trust.
+Cognitive Mesh reads the code and configuration of one or more projects, plans work with a *conductor* model,
+runs small specialised agents over the projects, and keeps a **traceable memory of what happened**: every step,
+what it produced, which model made it, and which version of the code it looked at. Later tasks can recall that
+experience, and every remembered claim comes with the records that support it and the records that contradict it.
 
-## Why
+> **Memory is evidence, not truth.** Similarity, repetition and a model's confidence never count as proof. Raw
+> records stay separate from claims, conflicts are shown instead of settled quietly, and a claim's status is
+> computed for one code version when you look at it, never stored as a verdict.
 
-AI agents forget between sessions. When they do remember, they rarely say *why* they believe something, and they
-often repeat an earlier answer as if repetition made it true. Cognitive Mesh is built on one rule: **memory is
-evidence, not truth.** Similarity, repetition and a model's confidence never count as proof. Raw records stay
-separate from claims, conflicts are shown instead of resolved quietly, and what a claim means is computed for one
-code version, never stored as a verdict.
+## Contents
 
-## Status
+[Features](#features) · [Quick start](#quick-start) · [Run the web app](#run-the-web-app) ·
+[Command line](#command-line) · [Configuration](#configuration) · [How it works](#how-it-works) ·
+[Project layout](#project-layout) · [Development](#development) · [Status and limitations](#status-and-limitations) ·
+[Documentation](#documentation)
 
-Early development. Everything described below runs and is tested. Releases up to v1.6.0 (workspace of related projects and manifest-evidenced cross-project package edges, `cognitive-mesh workspace`; v1.5.0 is the local
-read-only web UI) are on `main`. There is no model-quality
-claim here: what a model does with recalled context is unverified. The detailed record of what each version added
-and what it does not do is in [docs/STATUS.md](docs/STATUS.md).
+## Features
 
-## What it does
-
-- **Reads an application.** Ingests a local folder (source, manifests, lockfiles, docs) without ever running its
-  code, and redacts secret-looking text before anything is stored.
-- **Builds a dependency graph** of Python and JavaScript/TypeScript imports and declared packages. Every edge
-  carries its evidence (file, line, rule); anything it cannot resolve is listed as unresolved, never guessed.
-  Output as text, JSON, Mermaid or a self-contained HTML page.
-- **Runs agents from a plan.** A JSON plan is validated and run step by step with retries and explicit failures.
-  Two agent roles exist: a deterministic dependency analyst and a code explainer that uses a model (Ollama or Groq).
-- **Records every run** in SQLite, with secrets redacted and a note of which model, if any, made each step.
-- **Searches past steps by meaning** (sentence embeddings in a local ChromaDB index).
-- **Turns analysis into claims.** An experience graph links runs, steps and claims such as "`cart.py` depends on
-  `pricing.py`". A claim's status (`validated`, `supported`, `stale`, `conflicting`, and a few more) is worked out
-  when you look at it, from the evidence for it, the evidence against it, people's reviews and recorded outcomes.
-- **Recalls past experience for a new task** (`recall`, `task`), with the supporting and contradicting records
-  listed next to each claim.
-- **Runs a local web app (v2.0.0)**: a chat that takes the projects that belong together, shows the
-  dependencies found between them, plans each prompt with a conductor model that picks a catalog model per step, reads
-  the other projects, makes a small change only if it breaks nothing they use, and waits for your approval. A
-  separate dependency-graph page and a separate data browser (the whole vector index and every SQLite store) sit on
-  their own ports. See [Run the web app](#run-the-web-app-v200).
-- **Shows all of it in a local, read-only web UI**: every recorded step and what it stored, claims explained in
-  plain sentences, run history for any module or claim, and an interactive dependency graph you can zoom, pin
-  and load from a saved file.
+- **Reads applications without running them.** Local folders and public GitHub repositories (source, manifests,
+  lockfiles, docs); secret-looking text is redacted before anything is stored.
+- **Dependency graphs.** File-level graph of Python and JavaScript/TypeScript imports and declared packages, and a
+  project-level graph across related repositories (package, API route, shared schema and config links). Every edge
+  carries its evidence (file, line, rule); what cannot be resolved is listed as unresolved, never guessed.
+- **Agents and a conductor.** A JSON plan is validated and run step by step with retries and explicit failures. A
+  conductor model drafts the plan and picks a model per step from a catalog (Groq, local Ollama, any
+  OpenAI-compatible endpoint), with the reason shown and a fallback if a model is rate-limited.
+- **Small, reviewable changes.** A coder model drafts a diff of at most 3 files and 100 lines in a separate git
+  worktree and branch; a contract check refuses it if it breaks something another project uses; nothing is pushed
+  or merged without your approval of exactly that diff.
+- **Persistent, evidence-aware memory.** Every run is recorded in SQLite; past steps are searchable by meaning
+  (ChromaDB + sentence embeddings); an experience graph turns them into claims with supporting and contradicting
+  records; recall puts those into a new task with each claim's status.
+- **Local web app.** Chat, dependency graph and data browser on three local ports, described below.
+- **Local read-only UI** (`ui`) for browsing recorded runs, claims and graphs.
 
 ## Quick start
 
-You need [git](https://git-scm.com/) and [uv](https://docs.astral.sh/uv/) (it installs and manages Python 3.12
-for you; on Windows: `winget install --id=astral-sh.uv -e`). Development and day-to-day use have been on Windows;
-CI runs on Ubuntu with Python 3.12. macOS has not been tried.
+Requirements: [git](https://git-scm.com/) and [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 for you;
+Windows: `winget install --id=astral-sh.uv -e`). Development has been on Windows 11; CI runs on Ubuntu. macOS has
+not been tried.
 
 ```bash
 git clone https://github.com/sohanroy676/cognitive-mesh.git
 cd cognitive-mesh
-uv sync
-uv run pytest          # the full suite takes a few minutes; it needs no model download or API key
+git checkout feature/extended-roadmap-v1.7     # the branch that holds the web app (see Status)
+uv sync                                        # large the first time: PyTorch and ChromaDB
+uv run pytest                                  # a few minutes; needs no model or API key
 ```
 
-The first `uv sync` is large: it installs PyTorch and ChromaDB for semantic search.
-
-## Try it (no model, no API key)
-
-These commands use a tiny sample app that ships with the repository. The database files they create are
-git-ignored.
+Try it with no model and no key, on a sample app that ships with the repository:
 
 ```bash
-# 1. The dependency graph of the sample app
 uv run cognitive-mesh graph tests/fixtures/dep_app
-
-# 2. Run a small plan against it and record the run
 uv run cognitive-mesh run tests/fixtures/plans/ok.json --root tests/fixtures/dep_app --trace-db traces.sqlite3
-uv run cognitive-mesh traces list --db traces.sqlite3
-
-# 3. Turn the recorded runs into claims, and look at them
 uv run cognitive-mesh experience build --db traces.sqlite3 --graph graph.sqlite3
-uv run cognitive-mesh experience claims --db traces.sqlite3 --graph graph.sqlite3 --root tests/fixtures/dep_app
-
-# 4. Open the web UI (it prints a link with a private token; open that link)
 uv run cognitive-mesh ui --db traces.sqlite3 --graph graph.sqlite3 --root tests/fixtures/dep_app
 ```
 
-### Explore real data that ships in the repo
+`data/agent-experiences/` is a real experience database (five Claude agents each added a small feature to a
+different project and logged what they read, decided, changed and checked); open it with
+`uv run cognitive-mesh ui --db data/agent-experiences/traces.sqlite3 --graph data/agent-experiences/graph.sqlite3`.
 
-`data/agent-experiences/` is a real experience database: five Claude agents each added a small feature to a
-different project and logged what they read, decided, changed and checked, including the checks that failed.
+## Run the web app
 
-```bash
-uv run cognitive-mesh ui --db data/agent-experiences/traces.sqlite3 --graph data/agent-experiences/graph.sqlite3
+`cognitive-mesh serve` starts three servers on `127.0.0.1` only, with one access token per start. Run it **from the
+repository root**.
+
+### 1. One-time setup
+
+1. `uv sync` (see Quick start).
+2. **Groq (coordinator, and a worker).** Put your key in a file named `.env` in the repository root (it is
+   git-ignored; copy `.env.example` as a start) and allow remote content, because file contents are sent to Groq:
+   ```
+   GROQ_API_KEY=your-key
+   COGMESH_ALLOW_REMOTE_CONTENT=true
+   COGMESH_ALLOW_TRAINING_USE=true
+   ```
+3. **Local model (optional second worker).** Install [Ollama](https://ollama.com), then `ollama pull llama3.2` and
+   keep `ollama serve` running (the desktop app does this for you).
+4. The model catalog is [`docs/serve-catalog.toml`](docs/serve-catalog.toml): entry `groq`
+   (`openai/gpt-oss-120b`, all roles) and entry `local-llama` (llama3.2). Edit it to change models; it never holds
+   a key. Check the Groq model name against what your account lists.
+
+### 2. Start it
+
+```powershell
+# Windows PowerShell; home = the folder where everything is stored (workspace, traces, graphs, index, chat)
+uv run cognitive-mesh serve --home E:\work\cogmesh-testing\home
 ```
 
-Open **Experiences**, then **Read it** on any row. In the **Dependency graph** tab, type
-`data/reference-graphs/projects-graph.json` to open a saved graph of the five projects in a fraction of a second.
-See [data/README.md](data/README.md).
-
-## Run the web app (v2.0.0)
-
-One command starts three local servers (127.0.0.1 only, one access token per start, printed as three URLs):
-
 ```bash
-uv run cognitive-mesh serve --home my-mesh --catalog catalog.toml --conductor ENTRY
+# macOS / Linux
+uv run cognitive-mesh serve --home ~/cogmesh-home
 ```
 
-| Port | Page | Can it write? |
-|------|------|---------------|
-| 8770 | **Chat**: add projects, confirm the dependencies, ask for a small change or a question, review the plan, the impact check and the diff, then approve, revise or reject | Yes, but only the listed actions, each behind an approval request tied to the diff you were shown (used once, expires, dead after a restart) |
-| 8771 | **Dependency graph**: the workspace graph with evidence for every line; detected edges are solid, ones you declared are dashed; "who depends on this?" for a target | No |
-| 8772 | **Data**: the whole vector index (paged, search by meaning, nearest records, a 2-D map) and every table of the trace, workspace, chat, outcomes and graph files, with filter, sort and a full-row view | No (read-only on purpose: these are evidence records) |
+It prints three links, each with the token. Open them (keep this terminal running; stop with `Ctrl+C`):
 
-How a prompt is handled: the conductor (a model from your catalog) plans read-only steps and chooses a model for
-each, with its reason shown; other projects in the workspace are only ever read. In **Make a small change** mode the
-coder then drafts a diff of at most 3 files and 100 lines in a separate git worktree and branch, the contract check
-refuses it if it breaks something another project uses, and the declared check runs only if you started the server
-with `--allow-unisolated-checks` (it runs with your rights, not isolated). Nothing is pushed unless you approve and
-then confirm "open a pull request", which also needs `GITHUB_TOKEN` and `COGMESH_ALLOW_REMOTE_CONTENT=true`. Every
-turn records its plan, decisions with their reasoning, model calls and your verdict; the **Trace** box under a turn
-and the Data page lead to them. Model-written text is always labelled unverified and shown as plain text.
+| Port | Page | What it is | Writes? |
+|------|------|------------|---------|
+| 8770 | **Chat** | add projects, ask for a small change or a question, review the plan and diff, approve / revise / reject | only through approved actions |
+| 8771 | **Dependency graph** | *Files and modules*: every file of a folder as a node, saved after the first read. *Projects and their links*: the graph across your projects | no |
+| 8772 | **Data** | the whole vector index (search by meaning, nearest records, 2-D map) and every SQLite table, with filter, sort, full-row view | no |
 
-Without `--catalog` and `--conductor` the servers still start and you can add projects and browse the graph and the
-data; the chat just cannot start a turn. The `--home` folder holds every file (workspace, traces, index, graph, chat,
-worktrees). Only a **local folder** can be changed; a GitHub project is read-only.
+Without `--catalog`, the server uses `docs/serve-catalog.toml` with `groq` as conductor if that file exists; it
+prints which models are unusable (for example a missing key) at start-up. Use `--catalog FILE --conductor ENTRY` to
+choose others, `--app-port/--graph-port/--data-port` to change ports, and `--no-browser` to skip opening one.
 
-What has been run: the three pages in headless Edge and the HTTP flow (plan, draft, impact, approve, replay refused,
-reject, revise, restart) with scripted models and a fake embedder, and `serve` itself with no model. **Not yet run:**
-a real model (local or free-tier), a real GitHub push or pull request, clicking the approval buttons in a browser,
-and browsers other than Edge. See [ADR-0044](docs/adr/0044-local-api-server-and-chat.md).
+### 3. Use it
 
-## Use a model (optional)
+1. **Chat → Projects.** Enter a local folder (or a GitHub address) and *Add project*. It is stored in the
+   workspace database in `--home` and is still there after a restart. Use *Add a folder or project to X* under a
+   project to attach more folders; they are linked to it and appear in the graph. (Files are added by their folder.)
+2. Choose the project to change and **Confirm dependencies and start**. Other projects are only ever read.
+3. Choose **Only answer a question** or **Make a small change**, write the prompt and **Send**. Groq plans the
+   steps and chooses a model for each; the plan, the reasons, the answers and (for a change) the diff, the contract
+   check and the check result are shown. Model-written text is labelled unverified and shown as plain text.
+4. For a change, **Approve**, **Revise** (with a note) or **Reject**. A change needs the project to be a git
+   repository. Pushing and opening a pull request is a second, separate confirmation and needs `GITHUB_TOKEN` in
+   `.env`. The project's check command runs only if you start the server with `--allow-unisolated-checks`; it then
+   runs with your rights and is not isolated.
+5. **Dependency graph.** Type a folder such as `E:\Projects` and *Show graph*. The first read of a large folder
+   takes a while; after that it is loaded from the saved graph (also after a restart). *Re-read the folder* reads
+   the files again. Use *Find* and zoom on large graphs; hover a node for its neighbours and the evidence.
+6. **Data.** Browse what the app stored; nothing here can be edited.
 
-Copy `.env.example` to `.env` and set a provider. Nothing is read from the environment unless a plan has a step
-that needs a model.
+If it will not start: `cannot listen on the ports` means a port is in use (stop the other server or pass other
+ports); `models: ... not usable` lines name the missing key or opt-in.
+
+## Command line
+
+Everything the web app uses is also available as commands, for example `graph`, `run`, `task`, `plan`, `recall`,
+`memory`, `experience`, `workspace`, `change`, `decisions`, `models`, `eval`, `ui` and `serve`.
+Run `uv run cognitive-mesh --help`. Options and exit codes are listed in [docs/COMMANDS.md](docs/COMMANDS.md);
+version-by-version feature notes (catalog, decisions, conducted tasks, cross-project impact, small changes,
+evaluation) are in [docs/FEATURES.md](docs/FEATURES.md).
+
+## Configuration
+
+Settings come from the environment, then an ignored `.env` in the working directory. Keys are never read from
+anywhere else and never committed.
 
 | Variable | Meaning |
 |---|---|
-| `COGMESH_PROVIDER` | `ollama` (local; default model `llama3.2`), `groq`, or `catalog` (a model from your catalog file) |
-| `COGMESH_OLLAMA_BASE_URL`, `COGMESH_OLLAMA_MODEL` | where Ollama runs and which model it uses |
-| `GROQ_API_KEY`, `COGMESH_GROQ_MODEL` | Groq credentials and model |
-| `COGMESH_ALLOW_REMOTE_CONTENT` | must be `true` for Groq: file contents leave your machine |
-| `COGMESH_MODEL_CATALOG`, `COGMESH_MODEL` | with `catalog`: the catalog file and the entry id to use (also `--catalog FILE` and `--model ID` on `run`, `task` and `plan`) |
-| `COGMESH_ALLOW_TRAINING_USE` | must be `true` for catalog entries that declare `data_use` `may_train` or `unknown` |
-| `COGMESH_MODEL_TIMEOUT_S`, `COGMESH_LOG_LEVEL` | timeout (seconds) and log level |
-
-```bash
-uv run cognitive-mesh run tests/fixtures/plans/needs_model.json --root tests/fixtures/sample_app
-```
-
-A catalog (v1.8.0, [ADR-0038](docs/adr/0038-model-catalog-and-call-records.md); example in
-[docs/model-catalog.example.toml](docs/model-catalog.example.toml)) lists models behind an OpenAI-compatible
-endpoint or Ollama. It never holds a key, only the name of the variable that does. A remote entry needs
-`COGMESH_ALLOW_REMOTE_CONTENT=true`, and a free tier whose `data_use` you declared `may_train` or `unknown`
-also needs `COGMESH_ALLOW_TRAINING_USE=true`; `data_use` is your statement, not checked. Each model call is
-recorded with the run (latency, tokens when the provider reports them, result kind; never prompt or reply
-text): `cognitive-mesh models stats --db FILE` shows counts per model, role and task type and does not rank
-models. Request shapes for Gemini, OpenRouter and Mistral are from their documentation and have not been run
-against the real services.
-
-Decisions (v1.9.0, [ADR-0039](docs/adr/0039-decision-records.md)) are records of what was decided, the options, the reasoning and the evidence cited: `cognitive-mesh decisions record` stores one (a cited file keeps its hash), `decisions trace --pr ORG/REPO#N` goes from a pull request back to the decisions and their evidence, and a status (`stale` when a cited file changed, `validated` only by a recorded outcome for the current code) is computed each time. Reasoning is what its author wrote, never evidence for itself; nothing writes a decision on its own yet.
-
-Conducted tasks (v1.10.0, [ADR-0040](docs/adr/0040-orchestrator-model.md)): `cognitive-mesh task REQUEST --conduct --conductor ENTRY --catalog FILE ...` lets a conductor model draft the plan and choose a catalog model for each model step. Its plan is data: it is validated before anything runs (an unusable plan exits 22 and nothing runs), every assignment shows a count-based evidence label (`recorded` from 20 calls with a known outcome, otherwise `insufficient_evidence`; nothing is called better), a rate-limited or unavailable model hands over to the next eligible catalog entries, and the plan, each assignment and every call are recorded, with the conductor's reasons stored as `model_unverified` decisions. `--explore-rate` is off by default. Only a scratch stub server has conducted a task so far; no real model has.
-
-Cross-project impact (v1.11.0, [ADR-0041](docs/adr/0041-cross-project-impact-analysis.md)): `cognitive-mesh workspace impact PROJECT --target T --workspace FILE` lists every other workspace project and location that depends on a file, route, table, environment variable, package or exported name of the current project, with the evidence on both sides; what may depend on it but cannot be resolved (a computed URL, a whole-module import) is listed apart as `unknown`. `workspace contract-diff PROJECT [--base REF]` compares the project's working tree with a git ref (a read-only `git archive`; nothing is checked out or written) and labels each difference that other projects use as `breaking`, `compatible` or `unknown`, where `unknown` is never counted as a pass. `run` and `task` accept `--workspace FILE --project NAME`, so the `dependents_of` capability and the model-backed `reader` role can see the other projects, read-only (only the named project may ever be written). Only the contracts the extractors can read are compared (routes, typed columns, JSON Schema properties, configuration names, package version and exports); request and response bodies are not. The reader has not been run with a real model.
-
-Showing improvement (v1.13.0, [ADR-0043](docs/adr/0043-showing-improvement.md)): `cognitive-mesh eval run TASKSET.toml --out DIR --model ID --catalog FILE [--repeats N] [--allow-unisolated-checks]` runs each task of a small task set through the change pipeline twice, memory off and memory on, with the same model; the memory-on arm sees only its own earlier tasks. `eval report DIR [--json]` prints counts for both arms, lists every aborted or unfinished item and says `too few paired tasks to conclude anything` below 20 pairs. It shows nothing about improvement at this scale: it is the tool for measuring it later. Checks run with your privileges and are not isolated.
-
-Small changes (v1.12.0, [ADR-0042](docs/adr/0042-small-change-agent.md)): `cognitive-mesh change propose REQUEST --root DIR --workspace FILE --project NAME --db FILE --outcomes FILE --worktrees DIR --file PATH ...` asks a coder model for a small unified diff of the current project only (default limit 3 files and 100 changed lines). The diff is judged by our own parser first (plain relative paths inside the project, no renames, deletions, binaries, modes or secrets files, nothing in another workspace project), applied in a separate git worktree on a new `cogmesh/change-ID` branch (the checked-out branch and working tree are never touched, repository hooks never run), and held against the v1.11.0 contract diff: a change that breaks something another project uses is refused and sent back, up to two revisions. The project's check command is the one a person declared with `workspace set-check PROJECT -- COMMAND ARG...` (never read from the repository); it runs only with `--allow-unisolated-checks`, in a reduced environment with a timeout and a process-tree kill, and its exit code is stored as a `check` outcome labelled `env_only`: this is **not** isolation, the command runs with your rights and a raw socket still works. `change approve ID --by NAME` records a person's approval of exactly one commit and diff; `change pr ID --root DIR` then pushes the branch (never forced) and opens a pull request with a `GITHUB_TOKEN` and `COGMESH_ALLOW_REMOTE_CONTENT=true`. Nothing is pushed without those two steps and nothing is merged by the tool. The diff, its summary and its reasoning are a model's words (`model_unverified`); only a recorded check validates, and only for that command. No real model has written a diff and no pull request has been opened on github.com yet.
-
-Keys come only from the environment or an ignored `.env`; never commit one. Every command, option and exit code is
-listed in [docs/COMMANDS.md](docs/COMMANDS.md).
+| `GROQ_API_KEY` | Groq credential (also the key variable named in the catalog entry `groq`) |
+| `COGMESH_ALLOW_REMOTE_CONTENT` | must be `true` to use any remote model: file contents leave your machine |
+| `COGMESH_ALLOW_TRAINING_USE` | must be `true` for catalog entries whose `data_use` is `may_train` or `unknown` |
+| `COGMESH_PROVIDER` | `ollama`, `groq` or `catalog` for the single-model commands (`run`, `task`, `plan`) |
+| `COGMESH_OLLAMA_BASE_URL`, `COGMESH_OLLAMA_MODEL` | where Ollama runs and which model (default `llama3.2`) |
+| `COGMESH_MODEL_CATALOG`, `COGMESH_MODEL` | catalog file and entry for `COGMESH_PROVIDER=catalog` |
+| `COGMESH_MODEL_TIMEOUT_S`, `COGMESH_LOG_LEVEL` | timeout in seconds and log level |
+| `GITHUB_TOKEN` | only for opening a pull request (`change pr`, and the chat's pull-request step) |
 
 ## How it works
 
 ```
-  your code --> ingestion --> dependency graph
-                                    |
-  JSON plan --> orchestrator --> agents  <--  model provider (Ollama / Groq)
-                    |
-                    v
-          trace store (SQLite): raw, redacted records of every run
-                    |
-        +-----------+-------------+
-        v                         v
-  memory index (ChromaDB)     experience graph (SQLite + NetworkX)
-  search past steps           claims linked to the runs behind them
-  by meaning                  status computed when viewed, never stored
-        +-----------+-------------+
-                    v
-         recall / task context  -->  local web UI
+ projects (folders / GitHub) --> ingestion --> dependency graphs (file level, project level)
+                                                     |
+ request --> conductor model --> plan --> agents  <--+-- model catalog (Groq / Ollama / OpenAI-compatible)
+                                            |
+                                            v
+              trace store (SQLite): raw, redacted records of every run, decision and model call
+                                            |
+                     +----------------------+----------------------+
+                     v                                             v
+          vector index (ChromaDB)                      experience graph (SQLite + NetworkX)
+          past steps, searchable by meaning            claims linked to the runs behind them
+                     +----------------------+----------------------+
+                                            v
+                         recall --> next task, web app, read-only UI
 ```
 
-## Principles
-
-- **Memory preserves provenance and conflicts.** A claim keeps the records on both sides; a conflict is shown, not
-  settled by a vote.
-- **Similarity, repetition and model confidence are not proof**, and ten runs by one analyzer count as one source.
-- **Application files, retrieved memories and model output are data, never instructions.** Nothing from an
-  analysed folder is executed, and the web UI writes server text into the page as text only.
-- **Raw records stay distinguishable from knowledge.** Failed steps and model-written output are marked as raw
-  records and are never promoted by being stored.
-- **Documentation separates what exists from what is planned.** A roadmap entry is not evidence that a feature
-  exists.
+Principles: memory preserves provenance and conflicts; application files, retrieved memories and model output are
+data, never instructions; raw records are never promoted to knowledge by being stored; documentation separates
+what exists from what is planned. Decisions are recorded as ADRs in [docs/adr](docs/adr).
 
 ## Project layout
 
 | Path | What is in it |
 |---|---|
-| `src/cognitive_mesh/` | the package: `ingestion/`, `graph/`, `agents/`, `orchestrator/`, `providers/`, `traces/`, `memory/`, `experience/`, `retrieval/`, `ui/`, plus `cli.py` and `workflow.py` |
+| `src/cognitive_mesh/` | the package: `ingestion/`, `graph/`, `workspace/`, `agents/`, `orchestrator/`, `providers/`, `traces/`, `memory/`, `experience/`, `retrieval/`, `impact/`, `change/`, `evaluate/`, `serve/` (web app), `ui/` (read-only UI) |
 | `tests/` | the pytest suite; sample apps and plans in `tests/fixtures/` |
+| `docs/` | [STATUS](docs/STATUS.md), [COMMANDS](docs/COMMANDS.md), [FEATURES](docs/FEATURES.md), the roadmaps, `serve-catalog.toml` and the ADRs in `docs/adr/` |
 | `data/` | committed reference data: a real agent experience database and a saved dependency graph |
-| `docs/` | [STATUS](docs/STATUS.md), [COMMANDS](docs/COMMANDS.md), the [detailed roadmap](docs/DETAILED_ROADMAP.md) and the architecture decision records in `docs/adr/` |
-| `memory-bank/` | the project record kept for contributors and agents (brief, architecture, tech stack, progress) |
-| `ROADMAP.md` | the version plan |
+| `memory-bank/`, `session_prompt.md` | the project record and hand-off notes for contributors and coding agents |
 
 ## Development
 
 ```bash
-uv run pytest                 # tests
+uv run pytest                 # tests (the full suite takes about 10 minutes)
 uv run ruff check .           # lint
 uv run ruff format --check .  # formatting (drop --check to apply)
 uv run mypy                   # strict type checking
 ```
 
 - Work on a branch (`feature/…`, `fix/…`, `docs/…`, `chore/…`); never commit to `main`.
-- Commits follow [Conventional Commits](https://www.conventionalcommits.org/), and the changelog is generated
-  with `uv run git-cliff -o CHANGELOG.md` as the last commit of a branch.
-- A significant or hard-to-reverse decision gets an ADR in `docs/adr/` (copy `adr-template.md`) before any code.
+- Conventional Commits; regenerate the changelog with `uv run git-cliff -o CHANGELOG.md` as the last commit.
+- A significant or hard-to-reverse decision gets an ADR in `docs/adr/` before any code.
 - New behaviour needs tests, including failure cases and persistence across sessions.
 - CI (GitHub Actions) runs install, lint, format, types, tests, a changelog check and a secret scan.
 
-Instructions for contributors and coding agents are in [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md).
+Contributor and agent instructions: [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md).
 
-## Limitations
+## Status and limitations
 
-- It does not decide what is true, detect every hallucination, resolve every contradiction, or guarantee that
-  agents agree. It records evidence and disagreement so a person can judge.
-- Analysis is static: imports and declarations are read, never executed. Dynamic imports and unusual build setups are
-  reported as unresolved.
-- Text a model wrote is stored as unverified. The recorded steps of the agents in `data/agent-experiences/` are
-  their own account of their work.
-- The web UI (`ui`) and the graph and data servers of `serve` are local only and never write; the chat server of
-  `serve` writes only through approved actions. All listen on `127.0.0.1` and need a per-start token.
-- Only local folders can be analysed; there is no hosted service.
+Early development; everything described here runs and is tested, but model quality is not claimed. All work after
+v1.6.0 (workspace, impact analysis, model catalog and routing, conductor, small changes, evaluation, web app) lives
+on the branch `feature/extended-roadmap-v1.7` (tagged up to `v2.0.0`) and has not been merged to `main`.
 
-The full list, version by version, is in [docs/STATUS.md](docs/STATUS.md).
+- It does not decide what is true or detect every hallucination; it records evidence and disagreement.
+- Analysis is static; dynamic imports and unusual build setups are reported as unresolved.
+- Text a model wrote is stored as unverified.
+- **Not yet verified:** approving a change and opening a pull request with a real model and real GitHub from the
+  browser; llama3.2 as a worker (the conductor has so far chosen Groq, because the local model has no recorded
+  results); browsers other than Edge; macOS and Linux for the web app. A saved dependency graph is not refreshed
+  automatically.
+- Servers listen on `127.0.0.1` only; there is no hosted service. Project checks are not isolated.
+
+Version-by-version limitations: [docs/STATUS.md](docs/STATUS.md).
 
 ## Documentation
 
-[Status by version](docs/STATUS.md) · [Commands and exit codes](docs/COMMANDS.md) · [Roadmap](ROADMAP.md) ·
-[Detailed roadmap](docs/DETAILED_ROADMAP.md) · [Decisions (ADRs)](docs/adr) · [Reference data](data/README.md)
+[Status](docs/STATUS.md) · [Commands and exit codes](docs/COMMANDS.md) · [Feature notes](docs/FEATURES.md) ·
+[Roadmap](ROADMAP.md) · [Extended roadmap](docs/extended_roadmap.md) · [Decisions (ADRs)](docs/adr) ·
+[Reference data](data/README.md)
 
 ## License
 

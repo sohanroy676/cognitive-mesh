@@ -3,6 +3,8 @@
 <!-- Update this at the end of every session. This is the first thing to read when resuming. -->
 
 ## Current focus
+Session 15 end (2026-11-06): released as v2.0.1 on `feature/extended-roadmap-v1.7` (patch: web app fixes, saved file-level and project dependency graphs in `graph-cache/`, README rewrite, `docs/FEATURES.md`); no merge to main. Run steps are in the README; hand-off and the next-session prompt are in `session_prompt.md`.
+
 Session 15 (2026-11-05): bug fixes on `feature/extended-roadmap-v1.7` after v2.0.0: empty Graph/Data states, `docs/serve-catalog.toml` (Groq conductor and worker, local llama3.2), `projects.attach`, change-mode conductor prompt, hunk-count repair, readable answer blocks. Real Groq run through the UI end to end (question and change with approval request). Details in `session_prompt.md`.
 
 Session 14 (2026-11-04): v2.0.0 (ADR-0044, accepted with the user's answers) implemented on `feature/extended-roadmap-v1.7`, pushed and tagged `v2.0.0` on `cfdff45`; CI: branch run 42061583488 (passed), tag run 42062272353 (passed): `cognitive-mesh serve` runs chat (8770, the only writing server), dependency graph (8771) and data browser (8772, whole vector index and SQLite stores, read-only, 2-D map). See `progress.md` and `session_prompt.md`. Open: real model never used through the chat, no real GitHub push, approval buttons only tested over HTTP, only Edge looked at, `review.add`/`outcome.add` not built, coder chosen by catalog order not evidence. Next session: bug fixes and changes on the user's request; v2.1.0 or Phase F only when the user says so.
