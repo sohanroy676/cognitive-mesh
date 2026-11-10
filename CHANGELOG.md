@@ -5,6 +5,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ## [Unreleased]
 
+### Added
+- **serve:** Answer questions, show agent results, project picker, Gemini
+
 ### Documentation
 - Record v2.0.1 CI runs
 

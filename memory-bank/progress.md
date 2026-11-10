@@ -174,6 +174,8 @@
 - v0.1.0 closeout — 2026-10-16. Merged to main, pushed, tagged `v0.1.0`; GitHub Actions CI on main (run 38942568274) passed. ROADMAP.md updated.
 - v0.1.0 Project Foundation (branch `feature/v0.1.0-project-foundation`) — 2026-10-16. uv + ruff/mypy/pytest, pydantic-settings config, minimal CLI, 20 passing tests, CI rewritten, ADRs 0002-0004. All DETAILED_ROADMAP v0.1.0 Test/Expected items verified locally and from a fresh clone. Later merged and pushed (see closeout above).
 
+- Branch `demo-Web-app` (off `feature/extended-roadmap-v1.7`), 2026-11-10: demo-readiness fixes. (1) `gemini` catalog entry (`GEMINI_API_KEY`, `gemini-2.5-flash`, all roles) in `docs/serve-catalog.toml`. (2) Chat: ask mode now ends with an answer (`agents/answerer.py`, ADR-0044 amendment), each agent's inputs, model, attempts, output or failure message are shown. (3) Graph page: always-visible project picker with the stored projects and their repo sub-folders. Tests: `tests/test_serve_answer.py`, folder-graph additions; full suite 2195 passed, 8 skipped (the flaky `test_eval_run.py` passes alone). Checked in Edge with Playwright: picker switching (TOR, onboarding-coordinator) works; a real Groq ask turn showed per-agent results but the answer step hit Groq `rate_limited`. Not run: a real Gemini call (key not yet in `.env`), a successful real answer.
+
 ## In progress
 
 - Nothing in flight at handoff 2026-10-17. v0.1.0 to v1.0.0 are merged, pushed and tagged. All old local branches are kept (never deleted by the agent).

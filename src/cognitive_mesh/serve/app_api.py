@@ -883,7 +883,6 @@ class AppApi:
                 turn_id, "answer_failed", {"message": "no usable model has the explainer role"}
             )
             return
-        entry = usable[0]
         paths = [
             str(s.inputs.get(k))
             for s in steps
@@ -896,38 +895,34 @@ class AppApi:
                 findings.append(
                     f"{line['step_id']}: " + clean_text(summaryof(str(line["output"])), 600)
                 )
-        calls = CallLog()
-        agent = Answerer(
-            RecordingClient(self._client(entry, catalog), calls, entry),
-            timeout_s=settings.model_timeout_s,
+        task = AgentTask(
+            task_id="chat.answer",
+            capability="answer_question",
+            inputs={"question": text, "paths": paths[:8], "findings": findings[:20]},
         )
-        result = agent.run(
-            AgentTask(
-                task_id="chat.answer",
-                capability="answer_question",
-                inputs={"question": text, "paths": paths[:8], "findings": findings[:20]},
-            ),
-            AgentContext(ingestion=ingestion),
-        )
-        if isinstance(result, AgentSuccess):
-            raw_cited = result.output.get("cited_paths")
-            cited = [str(p) for p in raw_cited] if isinstance(raw_cited, list) else []
-            self.chat.add_event(
-                turn_id,
-                "answer",
-                {
-                    "text": clean_text(str(result.output.get("answer", "")), 6000),
-                    "cited_paths": cited,
-                    "model": entry,
-                    "basis": "model_unverified",
-                },
+        failures: list[str] = []
+        for entry in usable[:3]:  # the next usable model is tried when one fails or is limited
+            agent = Answerer(
+                RecordingClient(self._client(entry, catalog), CallLog(), entry),
+                timeout_s=settings.model_timeout_s,
             )
-        else:
-            self.chat.add_event(
-                turn_id,
-                "answer_failed",
-                {"message": f"{entry}: {result.message}", "kind": result.kind.value},
-            )
+            result = agent.run(task, AgentContext(ingestion=ingestion))
+            if isinstance(result, AgentSuccess):
+                raw_cited = result.output.get("cited_paths")
+                cited = [str(p) for p in raw_cited] if isinstance(raw_cited, list) else []
+                self.chat.add_event(
+                    turn_id,
+                    "answer",
+                    {
+                        "text": clean_text(str(result.output.get("answer", "")), 6000),
+                        "cited_paths": cited,
+                        "model": entry,
+                        "basis": "model_unverified",
+                    },
+                )
+                return
+            failures.append(f"{entry}: {result.message}")
+        self.chat.add_event(turn_id, "answer_failed", {"message": "; ".join(failures)})
 
     # -- approvals ---------------------------------------------------------------------------
 

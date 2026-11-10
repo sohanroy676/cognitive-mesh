@@ -313,9 +313,7 @@ function renderEvent(turn, ev, open) {
     case "draft":
       return { line: li("Draft " + d.draft_no + ": " + d.outcome, d.outcome === "applied" ? "ok" : ""),
         block: (d.summary && d.summary !== "no summary was recorded")
-          ? said("Draft " + d.draft_no + " by " + d.model + ": " + d.summary + (d.reasoning ? "
-
-" + d.reasoning : ""), "what the coder said it did (not verified)")
+          ? said("Draft " + d.draft_no + " by " + d.model + ": " + d.summary + (d.reasoning ? "\n\n" + d.reasoning : ""), "what the coder said it did (not verified)")
           : null };
     case "answer": return { top: answerTop(d) };
     case "answer_failed": return { top: h("div", { class: "notice", role: "alert" }, "No answer was produced. " + d.message) };
@@ -365,7 +363,7 @@ function answerBlock(d) {
         s.attempts > 1 ? " " + s.attempts + " attempts" : null),
       target ? h("div", { class: "muted mono" }, "input: " + target) : null,
       s.failure ? h("div", { class: "notice" }, "Failed: " + s.failure + (s.failure_message ? " — " + s.failure_message : "")) : null,
-      s.output ? said(outputText(s), "written by a model, not verified") : null));
+      (s.output && s.status === "succeeded") ? said(outputText(s), "written by a model, not verified") : null));
   }
   return box;
 }
@@ -375,14 +373,10 @@ function outputText(s) {
   try { o = JSON.parse(s.output).output; } catch { return s.output; }
   if (!o || typeof o !== "object") return s.output;
   if (typeof o.summary === "string") {
-    return o.summary + (Array.isArray(o.symbols) && o.symbols.length ? "
-
-Symbols: " + o.symbols.join(", ") : "");
+    return o.summary + (Array.isArray(o.symbols) && o.symbols.length ? "\n\nSymbols: " + o.symbols.join(", ") : "");
   }
   if (Array.isArray(o.summaries)) {
-    return o.summaries.map((x) => x.project + ": " + x.summary).join("
-
-");
+    return o.summaries.map((x) => x.project + ": " + x.summary).join("\n\n");
   }
   return JSON.stringify(o, null, 2);
 }

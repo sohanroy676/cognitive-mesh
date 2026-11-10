@@ -69,7 +69,7 @@ def test_a_citation_that_was_not_provided_is_not_shown_as_an_answer(tmp_path: Pa
     kinds = [e["kind"] for e in events]
     assert "answer" not in kinds and "answer_failed" in kinds and "done" in kinds
     failed = next(e["data"] for e in events if e["kind"] == "answer_failed")
-    assert failed["kind"] == "malformed_output"
+    assert "cited a file that was not provided" in failed["message"]
 
 
 def test_a_model_that_does_not_return_json_fails_the_answer_not_the_turn(tmp_path: Path) -> None:
@@ -78,3 +78,46 @@ def test_a_model_that_does_not_return_json_fails_the_answer_not_the_turn(tmp_pat
         "answer_failed",
         "done",
     ]
+
+
+def test_the_next_model_answers_when_the_first_is_limited(tmp_path: Path) -> None:
+    from cognitive_mesh.providers import ProviderError, ProviderErrorKind
+
+    class Limited(AnswerWorker):
+        def complete(self, request: ModelRequest) -> ModelResponse:
+            if "answer one question" in request.system:
+                raise ProviderError(ProviderErrorKind.RATE_LIMITED, "limited")
+            return super().complete(request)
+
+    models = Models(reply(ANALYSIS_STEPS, ANALYSIS_ASSIGN, "read one file"))
+    models.worker = Limited("")
+    second = AnswerWorker(json.dumps({"answer": "second model", "cited_paths": []}))
+    catalog_extra = SECOND_ENTRY
+    config = config_for(tmp_path, models)
+    assert config.catalog is not None
+    config.catalog.write_text(config.catalog.read_text(encoding="utf-8") + catalog_extra)
+    original = models.__call__
+
+    def route(entry_id: str) -> Any:
+        return second if entry_id == "second" else original(entry_id)
+
+    object.__setattr__(config, "client_factory", route)
+    with running(config) as s:
+        session = onboard(s, tmp_path)
+        turn = send(s, session, "what does app.py do", mode="ask")
+        assert wait_for(lambda: status_of(s, turn) == "done")
+        events = get(s.app, f"/api/turn?id={turn}").json["events"]
+    answer = next(e["data"] for e in events if e["kind"] == "answer")
+    assert answer["text"] == "second model" and answer["model"] == "second"
+
+
+SECOND_ENTRY = """
+[models.second]
+wire = "ollama"
+base_url = "http://localhost:11434"
+model = "llama3.2"
+context_tokens = 8192
+tier = "free"
+data_use = "no_training"
+roles = ["code_explainer"]
+"""
