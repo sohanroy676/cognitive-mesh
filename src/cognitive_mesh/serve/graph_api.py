@@ -6,7 +6,8 @@ reload. Detected and declared edges are never merged: every edge says which it i
 
 from __future__ import annotations
 
-from typing import Any
+from pathlib import Path
+from typing import Any, Final
 
 from cognitive_mesh.impact import ImpactError, list_dependents, parse_target
 from cognitive_mesh.impact.render import impact_json
@@ -17,6 +18,45 @@ from cognitive_mesh.workspace.cli import load_workspace
 from cognitive_mesh.workspace.models import ProjectKind, WorkspaceError
 from cognitive_mesh.workspace.render import to_json
 from cognitive_mesh.workspace.store import WorkspaceStore
+
+PROJECT_MARKERS: Final = (
+    ".git",
+    "pyproject.toml",
+    "setup.py",
+    "requirements.txt",
+    "package.json",
+    "pom.xml",
+    "go.mod",
+    "Cargo.toml",
+)
+SKIPPED_FOLDERS: Final = frozenset({"node_modules", "venv", "__pycache__", "dist", "build"})
+MAX_CHILDREN: Final = 50
+
+
+def project_folders(root: str) -> list[dict[str, str]]:
+    """The immediate sub-folders of a stored project that look like projects of their own (they
+    hold a repository or a manifest). Hidden and dependency folders are skipped, links are not
+    followed, and at most MAX_CHILDREN are returned. A folder that cannot be read gives none."""
+    out: list[dict[str, str]] = []
+    try:
+        entries = sorted(Path(root).iterdir(), key=lambda p: p.name.lower())
+    except OSError:
+        return out
+    for entry in entries:
+        if len(out) >= MAX_CHILDREN:
+            break
+        name = entry.name
+        if name.startswith(".") or name in SKIPPED_FOLDERS:
+            continue
+        try:
+            if entry.is_symlink() or not entry.is_dir():
+                continue
+            if any((entry / marker).exists() for marker in PROJECT_MARKERS):
+                out.append({"name": name, "folder": str(entry)})
+        except OSError:
+            continue
+    return out
+
 
 GROUPS = ("detected", "api", "shared_schemas", "config")
 
@@ -84,12 +124,16 @@ class GraphApi:
         return 200, {"data": data}
 
     def folder_graphs(self, _req: Request) -> Reply:
-        projects: list[dict[str, str]] = []
+        projects: list[dict[str, Any]] = []
         if self.config.workspace.is_file():
             try:
                 with WorkspaceStore.open_existing(self.config.workspace) as store:
                     projects = [
-                        {"name": p.name, "folder": p.location}
+                        {
+                            "name": p.name,
+                            "folder": p.location,
+                            "children": project_folders(p.location),
+                        }
                         for p in store.projects()
                         if p.kind is ProjectKind.LOCAL
                     ]

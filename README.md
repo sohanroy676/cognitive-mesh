@@ -79,6 +79,7 @@ repository root**.
    git-ignored; copy `.env.example` as a start) and allow remote content, because file contents are sent to Groq:
    ```
    GROQ_API_KEY=your-key
+   GEMINI_API_KEY=your-gemini-key   # optional second remote worker (entry `gemini`)
    COGMESH_ALLOW_REMOTE_CONTENT=true
    COGMESH_ALLOW_TRAINING_USE=true
    ```
@@ -148,6 +149,7 @@ anywhere else and never committed.
 
 | Variable | Meaning |
 |---|---|
+| `GEMINI_API_KEY` | Gemini credential (key variable of the catalog entry `gemini`) |
 | `GROQ_API_KEY` | Groq credential (also the key variable named in the catalog entry `groq`) |
 | `COGMESH_ALLOW_REMOTE_CONTENT` | must be `true` to use any remote model: file contents leave your machine |
 | `COGMESH_ALLOW_TRAINING_USE` | must be `true` for catalog entries whose `data_use` is `may_train` or `unknown` |

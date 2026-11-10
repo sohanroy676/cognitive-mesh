@@ -279,12 +279,15 @@ function turnCard(turn) {
   const body = h("div", { class: "body" });
   const open = new Set(turn.approvals.map((a) => a.id));
   const events = h("ul", { class: "events" });
+  const tops = [];
   for (const ev of turn.events) {
     const node = renderEvent(turn, ev, open);
+    if (node.top) tops.push(node.top);
     if (node.block) body.append(node.block);
     if (node.line) events.append(node.line);
   }
   if (events.children.length) body.prepend(events);
+  body.prepend(...tops);
   if (turn.status === "interrupted") {
     body.append(h("p", { class: "notice" }, "The server stopped before this turn finished. Nothing was pushed."));
   }
@@ -308,7 +311,14 @@ function renderEvent(turn, ev, open) {
         ? "Memory offered to the coder: " + d.claims + " claim(s), " + d.past_changes + " earlier change(s)."
         : "The coder was not given earlier experience.") };
     case "draft":
-      return { line: li("Draft " + d.draft_no + ": " + d.outcome, d.outcome === "applied" ? "ok" : "") };
+      return { line: li("Draft " + d.draft_no + ": " + d.outcome, d.outcome === "applied" ? "ok" : ""),
+        block: (d.summary && d.summary !== "no summary was recorded")
+          ? said("Draft " + d.draft_no + " by " + d.model + ": " + d.summary + (d.reasoning ? "
+
+" + d.reasoning : ""), "what the coder said it did (not verified)")
+          : null };
+    case "answer": return { top: answerTop(d) };
+    case "answer_failed": return { top: h("div", { class: "notice", role: "alert" }, "No answer was produced. " + d.message) };
     case "change_event":
       return { line: li(d.kind + (d.detail ? ": " + d.detail : ""), /refused|failed/.test(d.kind + d.detail) ? "bad" : "") };
     case "approval_request": return { block: approvalBlock(turn, d, open.has(d.approval_id)) };
@@ -336,22 +346,45 @@ function planBlock(d) {
     d.reasoning ? said(d.reasoning, "the conductor's reasoning (written by a model, not verified)") : null);
 }
 
+function answerTop(d) {
+  return h("div", { class: "stack panel" }, h("h3", null, "Answer"),
+    said(d.text, "written by " + d.model + ", not verified"),
+    d.cited_paths && d.cited_paths.length
+      ? h("p", { class: "muted" }, "Files it cites: " + d.cited_paths.join(", ")) : null);
+}
+
 function answerBlock(d) {
-  const box = h("div", { class: "stack" }, h("h3", null, "What the agents read and found (" + d.status + ")"));
+  const box = h("div", { class: "stack" }, h("h3", null, "What each agent did (" + d.status + ")"));
   for (const s of d.steps) {
-    box.append(h("div", null, tag(s.status, s.status === "succeeded" ? "ok" : "bad"), " ",
-      h("span", { class: "mono" }, s.step_id + " · " + s.capability), s.failure ? " " + s.failure : null,
-      s.output ? said(summaryOf(s.output), "written by a model, not verified") : null));
+    const target = s.inputs && Object.keys(s.inputs).length
+      ? Object.entries(s.inputs).map(([k, v]) => k + " = " + (typeof v === "string" ? v : JSON.stringify(v))).join(", ") : "";
+    box.append(h("div", { class: "stack" },
+      h("div", null, tag(s.status, s.status === "succeeded" ? "ok" : "bad"), " ",
+        h("span", { class: "mono" }, s.step_id + " · " + s.capability),
+        s.model ? " " : null, s.model ? tag(s.model) : null,
+        s.attempts > 1 ? " " + s.attempts + " attempts" : null),
+      target ? h("div", { class: "muted mono" }, "input: " + target) : null,
+      s.failure ? h("div", { class: "notice" }, "Failed: " + s.failure + (s.failure_message ? " — " + s.failure_message : "")) : null,
+      s.output ? said(outputText(s), "written by a model, not verified") : null));
   }
   return box;
 }
 
-function summaryOf(raw) {
-  try {
-    const o = JSON.parse(raw).output;
-    if (o && typeof o.summary === "string") return o.summary;
-  } catch { /* not JSON: show it as text */ }
-  return raw;
+function outputText(s) {
+  let o = null;
+  try { o = JSON.parse(s.output).output; } catch { return s.output; }
+  if (!o || typeof o !== "object") return s.output;
+  if (typeof o.summary === "string") {
+    return o.summary + (Array.isArray(o.symbols) && o.symbols.length ? "
+
+Symbols: " + o.symbols.join(", ") : "");
+  }
+  if (Array.isArray(o.summaries)) {
+    return o.summaries.map((x) => x.project + ": " + x.summary).join("
+
+");
+  }
+  return JSON.stringify(o, null, 2);
 }
 
 function prLink(url) {

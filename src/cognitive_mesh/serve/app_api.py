@@ -17,7 +17,8 @@ from typing import Any, Final, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from cognitive_mesh import workflow
-from cognitive_mesh.agents import AgentContext, default_registry
+from cognitive_mesh.agents import AgentContext, AgentSuccess, AgentTask, default_registry
+from cognitive_mesh.agents.answerer import Answerer
 from cognitive_mesh.agents.context import PastChange, RecalledContext
 from cognitive_mesh.change.cli import approve_change, open_pull_request
 from cognitive_mesh.change.errors import ChangeError
@@ -568,7 +569,7 @@ class AppApi:
                     "basis": "model_unverified",
                 },
             )
-            self._run_plan(
+            answers = self._run_plan(
                 turn_id,
                 text,
                 conducted,
@@ -585,6 +586,7 @@ class AppApi:
                 evidence,
             )
             if mode == "ask":
+                self._answer(turn_id, text, steps, answers, ingestion, catalog, settings)
                 self.chat.add_event(turn_id, "done", {"kind": "question"})
             else:
                 known = {f.ref.path for f in ingestion.files}
@@ -694,6 +696,7 @@ class AppApi:
         )
         change_id = result.change.change_id
         for d in result.drafts:
+            d_summary, d_reasoning = _draft_text(store, d.decision_id)
             self.chat.add_event(
                 turn_id,
                 "draft",
@@ -704,6 +707,8 @@ class AppApi:
                     "change_id": change_id,
                     "decision_id": d.decision_id,
                     "model": entry,
+                    "summary": d_summary,
+                    "reasoning": d_reasoning,
                 },
             )
         found = next((ev for rec, ev in store.read_changes() if rec.change_id == change_id), [])
@@ -780,7 +785,7 @@ class AppApi:
         calls: CallLog,
         roles: dict[str, str],
         evidence: EvidenceTable,
-    ) -> None:
+    ) -> list[dict[str, Any]]:
         cfg = self.config
         recalled = None
         steps = conducted.plan.plan.steps
@@ -827,16 +832,24 @@ class AppApi:
         )
         recorder.finish(run_id, run, calls.records, decisions)
         answers = []
+        plan_inputs = {s.step_id: s.inputs for s in steps}
         for step in run.steps:
             line: dict[str, Any] = {
                 "step_id": step.step_id,
                 "capability": step.capability,
                 "status": step.status.value,
+                "inputs": _redacted(plan_inputs.get(step.step_id, {})),
+                "attempts": len(step.attempts),
             }
             if step.failure_kind:
                 line["failure"] = step.failure_kind
             if step.attempts:
                 last = step.attempts[-1]
+                model = getattr(last, "model", None)
+                if model is not None:
+                    line["model"] = f"{model.provider}/{model.model}"
+                if getattr(last, "status", "") == "failure":
+                    line["failure_message"] = clean_text(str(getattr(last, "message", "")), 300)
                 try:
                     data = last.model_dump(mode="json")
                     shown = {"output": data["output"]} if "output" in data else data
@@ -849,6 +862,72 @@ class AppApi:
         self.chat.add_event(
             turn_id, "analysis", {"run_id": run_id, "status": run.status.value, "steps": answers}
         )
+        return answers
+
+    def _answer(
+        self,
+        turn_id: int,
+        text: str,
+        steps: Any,
+        answers: list[dict[str, Any]],
+        ingestion: Any,
+        catalog: Any,
+        settings: Any,
+    ) -> None:
+        """The answer to the person's question. The conductor only plans file reads, so one more
+        model call, chosen by code (first usable entry with the code_explainer role), reads the
+        files those steps looked at and the findings and answers the question itself."""
+        usable = eligible_entries(catalog, "code_explainer", lambda e: entry_problem(settings, e))
+        if not usable:
+            self.chat.add_event(
+                turn_id, "answer_failed", {"message": "no usable model has the explainer role"}
+            )
+            return
+        entry = usable[0]
+        paths = [
+            str(s.inputs.get(k))
+            for s in steps
+            for k in ("path", "node_id")
+            if isinstance(s.inputs.get(k), str)
+        ]
+        findings = []
+        for line in answers:
+            if line["status"] == "succeeded" and line.get("output"):
+                findings.append(
+                    f"{line['step_id']}: " + clean_text(summaryof(str(line["output"])), 600)
+                )
+        calls = CallLog()
+        agent = Answerer(
+            RecordingClient(self._client(entry, catalog), calls, entry),
+            timeout_s=settings.model_timeout_s,
+        )
+        result = agent.run(
+            AgentTask(
+                task_id="chat.answer",
+                capability="answer_question",
+                inputs={"question": text, "paths": paths[:8], "findings": findings[:20]},
+            ),
+            AgentContext(ingestion=ingestion),
+        )
+        if isinstance(result, AgentSuccess):
+            raw_cited = result.output.get("cited_paths")
+            cited = [str(p) for p in raw_cited] if isinstance(raw_cited, list) else []
+            self.chat.add_event(
+                turn_id,
+                "answer",
+                {
+                    "text": clean_text(str(result.output.get("answer", "")), 6000),
+                    "cited_paths": cited,
+                    "model": entry,
+                    "basis": "model_unverified",
+                },
+            )
+        else:
+            self.chat.add_event(
+                turn_id,
+                "answer_failed",
+                {"message": f"{entry}: {result.message}", "kind": result.kind.value},
+            )
 
     # -- approvals ---------------------------------------------------------------------------
 
@@ -1030,6 +1109,19 @@ def _workspace_summary(graph: Any) -> dict[str, object]:
     from cognitive_mesh.orchestrator.conduct import workspace_summary
 
     return workspace_summary(to_json(graph))
+
+
+def summaryof(raw: str) -> str:
+    """The `summary` of a stored step output if it has one, else the text itself."""
+    try:
+        out = json.loads(raw).get("output")
+        if isinstance(out, dict):
+            if isinstance(out.get("summary"), str):
+                return str(out["summary"])
+            return json.dumps(out)
+    except (ValueError, AttributeError):
+        pass
+    return raw
 
 
 def _draft_text(store: TraceStore, decision_id: str | None) -> tuple[str, str]:

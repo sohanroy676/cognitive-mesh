@@ -16,6 +16,16 @@ tier = "free"
 data_use = "unknown"
 roles = ["conductor", "planner", "coder", "code_explainer", "dependency_analyst", "reader"]
 
+[models.gemini]
+wire = "openai_compatible"
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+model = "gemini-2.5-flash"
+api_key_env = "GEMINI_API_KEY"
+context_tokens = 1048576
+tier = "free"
+data_use = "may_train"
+roles = ["conductor", "planner", "coder", "code_explainer", "dependency_analyst", "reader"]
+
 [models.local-llama]
 wire = "ollama"
 base_url = "http://localhost:11434"

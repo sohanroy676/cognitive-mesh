@@ -273,25 +273,52 @@ async function fileBoot() {
   if (F.folder && F.saved.some((s) => s.folder.toLowerCase() === F.folder.toLowerCase())) fileLoad(false, "");
 }
 
+// Every stored project and the project-like folders inside it, always visible; one click shows
+// that folder's graph (built the first time, then loaded from the saved file).
+function chooser(input, go, savedFor) {
+  const box = h("div", { class: "stack", role: "group", "aria-label": "Choose a project" },
+    h("h3", null, "Choose a project"));
+  if (!F.projects.length) {
+    box.append(h("p", { class: "muted" }, "No projects are stored yet. Add one on the Chat page, or type a folder below."));
+    return box;
+  }
+  const item = (label, folder, indent) => {
+    const saved = savedFor(folder);
+    const current = F.folder.toLowerCase() === folder.toLowerCase();
+    const b = h("button", { type: "button", "aria-pressed": current ? "true" : "false",
+      title: folder, onclick: () => { input.value = folder; go(false); } }, label);
+    const row = h("div", { class: "row" }, b,
+      saved ? tag("saved", "ok") : tag("not read yet"),
+      h("span", { class: "muted mono" }, cut(folder, 60)));
+    row.style.marginLeft = indent ? "1.5rem" : "0";
+    return row;
+  };
+  for (const p of F.projects) {
+    box.append(item(p.name + " (whole folder)", p.folder, false));
+    for (const c of p.children || []) box.append(item(c.name, c.folder, true));
+  }
+  return box;
+}
+
 let fileOut = null;
 function fileForm() {
   clear(filePane);
-  const input = h("input", { type: "text", id: "fg-path", size: 56, value: F.folder, list: "fg-folders",
+  const input = h("input", { type: "text", id: "fg-path", size: 56, value: F.folder,
     placeholder: "A folder, for example E:\\Projects", "aria-label": "Folder to graph" });
-  const options = h("datalist", { id: "fg-folders" });
-  const seen = new Set();
-  for (const p of F.projects) if (!seen.has(p.folder)) { seen.add(p.folder); options.append(h("option", { value: p.folder }, p.name)); }
-  for (const s of F.saved) if (!seen.has(s.folder)) { seen.add(s.folder); options.append(h("option", { value: s.folder })); }
+  F.redraw = () => { const next = chooser(input, go, savedFor); F.pick.replaceWith(next); F.pick = next; };
+  const savedFor = (folder) => F.saved.find((s) => s.folder.toLowerCase() === folder.toLowerCase());
   const full = h("input", { type: "checkbox", id: "fg-full", checked: F.limit });
   const go = (rebuild) => { F.folder = input.value.trim(); F.limit = full.checked; remembered(FOLDER_KEY, F.folder); fileLoad(rebuild, ""); };
   filePane.append(
     h("h2", null, "Files and modules"),
     h("p", { class: "muted" }, "Type a folder that holds one or more projects. Every Python, JavaScript and TypeScript file in it becomes a node, and an arrow from A to B means A imports or depends on B. Nothing is run. The graph is built the first time and saved; after that it is loaded from the saved file."),
+    (F.pick = chooser(input, go, savedFor)),
     h("form", { class: "stack", onsubmit: (e) => { e.preventDefault(); go(false); } },
-      h("label", { for: "fg-path" }, "Folder"), input, options,
+      h("label", { for: "fg-path" }, "Folder"), input,
       h("label", null, full, " Show only the first 300 nodes (faster to draw)"),
       h("div", { class: "row" },
         h("button", { type: "submit", class: "primary" }, "Show graph"),
+        h("button", { type: "button", onclick: () => { input.value = ""; input.focus(); } }, "Clear"),
         h("button", { type: "button", id: "fg-rebuild", onclick: () => go(true) }, "Re-read the folder"))));
   if (F.saved.length) {
     const list = h("ul", { class: "stack saved" });
@@ -299,7 +326,7 @@ function fileForm() {
       list.append(h("li", null, h("button", { type: "button", class: "link", onclick: () => { input.value = s.folder; go(false); } }, s.folder),
         " ", h("span", { class: "muted" }, s.nodes + " nodes, " + s.edges + " edges, saved " + stamp(s.built_at))));
     }
-    filePane.append(h("details", null, h("summary", null, "Saved graphs (" + F.saved.length + ")"), list));
+    filePane.append(h("details", { open: true }, h("summary", null, "Saved graphs (" + F.saved.length + ")"), list));
   }
   fileOut = h("div", { class: "stack", "aria-live": "polite" });
   filePane.append(fileOut);
@@ -324,6 +351,7 @@ async function fileLoad(rebuild, focus) {
       : "Built from the folder just now" + (src.saved === false ? " (it could not be saved, so the next request reads the folder again)." : " and saved; the next visit loads it from the saved file.")));
     drawFiles(fileOut, reply.data, F.folder, focus);
     try { const r = await api("/api/folder-graphs"); F.saved = r.saved; } catch { /* keep the old list */ }
+    if (F.redraw) F.redraw();
   } catch (err) {
     clearInterval(timer);
     showError(clear(fileOut), err);

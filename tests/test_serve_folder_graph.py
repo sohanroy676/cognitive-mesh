@@ -95,3 +95,40 @@ def test_project_graph_is_kept_between_requests(
         assert again["from_cache"] is True and again["graph"]["nodes"]
         graph_page = call(s.graph, "GET", "/api/workspace", token=TOKEN)
         assert graph_page.status == 200 and graph_page.json["nodes"]
+
+
+def test_the_picker_lists_project_folders_inside_a_stored_project(tmp_path: Path) -> None:
+    from cognitive_mesh.serve.graph_api import MAX_CHILDREN, project_folders
+
+    root = tmp_path / "all"
+    (root / "api" / ".git").mkdir(parents=True)
+    (root / "web").mkdir()
+    (root / "web" / "package.json").write_text("{}", encoding="utf-8")
+    (root / "notes").mkdir()  # no marker: not a project
+    (root / "node_modules" / "x").mkdir(parents=True)
+    (root / "node_modules" / "package.json").write_text("{}", encoding="utf-8")
+    (root / ".hidden").mkdir()
+    (root / ".hidden" / "package.json").write_text("{}", encoding="utf-8")
+    (root / "file.txt").write_text("x", encoding="utf-8")
+    assert [c["name"] for c in project_folders(str(root))] == ["api", "web"]
+    assert project_folders(str(tmp_path / "missing")) == []
+    many = tmp_path / "many"
+    for i in range(MAX_CHILDREN + 5):
+        (many / f"p{i:03d}").mkdir(parents=True)
+        (many / f"p{i:03d}" / "go.mod").write_text("", encoding="utf-8")
+    assert len(project_folders(str(many))) == MAX_CHILDREN
+
+
+def test_the_folder_list_endpoint_returns_children(tmp_path: Path) -> None:
+    from cognitive_mesh.workspace.models import ProjectKind
+    from cognitive_mesh.workspace.store import WorkspaceStore
+
+    root = tmp_path / "all"
+    (root / "api" / ".git").mkdir(parents=True)
+    config = config_for(tmp_path / "home")
+    config.home.mkdir(parents=True, exist_ok=True)
+    with WorkspaceStore.create(config.workspace) as store:
+        store.add_project("all", ProjectKind.LOCAL, str(root), commit=None)
+    with running(config) as s:
+        row = call(s.graph, "GET", "/api/folder-graphs", token=TOKEN).json["projects"][0]
+    assert row["name"] == "all" and [c["name"] for c in row["children"]] == ["api"]
