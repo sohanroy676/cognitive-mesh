@@ -211,3 +211,16 @@ svg text { font-family: var(--sans); fill: var(--ink); }
 .fg button.link { border: 0; background: none; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
 .fg ul.saved { list-style: none; margin: 0; padding: 0; }
 @media (max-width: 960px) { .fg .graph-wrap { grid-template-columns: minmax(0, 1fr); } .fg .stage { height: 60vh; } }
+
+/* readable turns: one card per agent with its task, input and output */
+.agent { border: 1px solid var(--rule); border-radius: 8px; padding: .7rem .8rem; background: var(--paper); }
+.agent + .agent { margin-top: .6rem; }
+.agent .num { display: inline-grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%;
+  background: var(--ink); color: var(--paper); font-size: .8rem; font-weight: 700; }
+dl.io { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: .4rem .8rem; margin: .4rem 0; }
+dl.io dt { color: var(--ink-2); font-weight: 600; }
+dl.io dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 600px) { dl.io { grid-template-columns: minmax(0, 1fr); } }
+ul.plain, ol.plain { margin: 0; padding-left: 1.2rem; }
+.result { border-left: 4px solid var(--ok); }
+.turn details > summary { cursor: pointer; color: var(--ink-2); }

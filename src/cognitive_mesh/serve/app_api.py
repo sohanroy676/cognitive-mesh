@@ -56,6 +56,8 @@ from cognitive_mesh.orchestrator.planner import plan_task
 from cognitive_mesh.orchestrator.routing_evidence import EvidenceTable
 from cognitive_mesh.providers import (
     CatalogError,
+    ModelRequest,
+    ModelResponse,
     ProviderError,
     load_catalog,
 )
@@ -634,7 +636,7 @@ class AppApi:
         usable = eligible_entries(catalog, "coder", lambda e: entry_problem(settings, e))
         if not usable:
             raise _Stop("failed", "no usable catalog entry has the coder role")
-        entry = usable[0]
+        coders = usable[:3]
         wanted = [str(s.inputs.get("path") or "") for s in steps]
         wanted += [str(f) for s in steps for f in (s.inputs.get("files") or ())]
         files = tuple(dict.fromkeys(p for p in wanted if p in known))[:3]
@@ -642,10 +644,11 @@ class AppApi:
             turn_id,
             "coder",
             {
-                "model": entry,
+                "model": ", ".join(coders),
                 "files": list(files),
-                "why": "the first usable catalog entry with the coder role; the conductor "
-                "does not plan writes",
+                "why": "the usable catalog entries with the coder role, in catalog order (the "
+                "conductor does not plan writes); drafts alternate between them and a model "
+                "that fails is replaced by the next",
             },
         )
         recalled: RecalledContext | None = None
@@ -670,10 +673,10 @@ class AppApi:
         )
 
         def factory(calls: CallLog) -> Any:
-            client = self._client(entry, catalog)
-            return default_registry(
-                RecordingClient(client, calls, entry), model_timeout_s=settings.model_timeout_s
+            rotating = RotatingClient(
+                [RecordingClient(self._client(e, catalog), calls, e) for e in coders]
             )
+            return default_registry(rotating, model_timeout_s=settings.model_timeout_s)
 
         with WorkspaceStore.open_existing(cfg.workspace) as ws:
             check = ws.check_command(project)
@@ -706,7 +709,7 @@ class AppApi:
                     "run_id": d.run_id,
                     "change_id": change_id,
                     "decision_id": d.decision_id,
-                    "model": entry,
+                    "model": ", ".join(coders),
                     "summary": d_summary,
                     "reasoning": d_reasoning,
                 },
@@ -1064,6 +1067,30 @@ class AppApi:
             {"kind": "change", "pr_url": url, "already_open": already, "change_id": body.change_id},
         )
         return 200, {"pr_url": url, "turn": turn_id}
+
+
+class RotatingClient:
+    """Several model clients as one. Each call starts at the next client, so the drafts of one
+    change alternate between models, and a call whose model fails with a provider error goes to
+    the next one; the last error is raised when all fail."""
+
+    def __init__(self, clients: list[Any]) -> None:
+        self._clients = clients
+        self._next = 0
+        self.provider = clients[0].provider
+        self.model = clients[0].model
+
+    def complete(self, request: ModelRequest) -> ModelResponse:
+        start = self._next % len(self._clients)
+        self._next += 1
+        last: ProviderError | None = None
+        for i in range(len(self._clients)):
+            try:
+                return self._clients[(start + i) % len(self._clients)].complete(request)  # type: ignore[no-any-return]
+            except ProviderError as exc:
+                last = exc
+        assert last is not None  # noqa: S101 - at least one client
+        raise last
 
 
 class _Stop(Exception):  # noqa: N818 - control flow inside a worker, not an error type

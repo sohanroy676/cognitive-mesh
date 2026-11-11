@@ -13,6 +13,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Fixed
 - **serve:** Answer fallback models, hide failure dump; docs
+- **serve:** Use gemini-3.5-flash, record verification
 
 ## [2.0.1] - 2026-11-06
 

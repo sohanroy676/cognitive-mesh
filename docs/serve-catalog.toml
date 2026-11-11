@@ -1,20 +1,12 @@
 # Model catalog for `cognitive-mesh serve` (ADR-0038 format, no keys in this file).
-# Groq coordinates (the conductor) and can also work; the local llama3.2 is a second worker.
+# Groq coordinates (the conductor) and can also work; Gemini is listed first, so it writes the first
+# coder drafts (Groq tends to emit hunks without line numbers, which are refused); the local llama3.2
+# is a third worker.
 # GROQ_API_KEY comes from the environment or the ignored .env. Groq is a remote service, so start
 # the server with COGMESH_ALLOW_REMOTE_CONTENT=true; data_use is YOUR statement, not verified.
 #
 #   COGMESH_ALLOW_REMOTE_CONTENT=true COGMESH_ALLOW_TRAINING_USE=true \
 #     uv run cognitive-mesh serve --home cogmesh-home --catalog docs/serve-catalog.toml --conductor groq
-
-[models.groq]
-wire = "openai_compatible"
-base_url = "https://api.groq.com/openai/v1"
-model = "openai/gpt-oss-120b"
-api_key_env = "GROQ_API_KEY"
-context_tokens = 131072
-tier = "free"
-data_use = "unknown"
-roles = ["conductor", "planner", "coder", "code_explainer", "dependency_analyst", "reader"]
 
 [models.gemini]
 wire = "openai_compatible"
@@ -24,6 +16,17 @@ api_key_env = "GEMINI_API_KEY"
 context_tokens = 1048576
 tier = "free"
 data_use = "may_train"
+reasoning_effort = "low"  # without it Gemini thinks for over 30 s and the call times out
+roles = ["conductor", "planner", "coder", "code_explainer", "dependency_analyst", "reader"]
+
+[models.groq]
+wire = "openai_compatible"
+base_url = "https://api.groq.com/openai/v1"
+model = "openai/gpt-oss-120b"
+api_key_env = "GROQ_API_KEY"
+context_tokens = 131072
+tier = "free"
+data_use = "unknown"
 roles = ["conductor", "planner", "coder", "code_explainer", "dependency_analyst", "reader"]
 
 [models.local-llama]
