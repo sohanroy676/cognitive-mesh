@@ -133,6 +133,17 @@ def build_model_client(
         return GroqClient(
             settings.groq_api_key, settings.groq_model, settings.groq_reasoning_effort
         )
+    if settings.provider == "deepseek":
+        key = read_key("DEEPSEEK_API_KEY")
+        if not settings.allow_remote_content:
+            raise ConfigError(
+                "COGMESH_PROVIDER=deepseek sends file contents to DeepSeek's servers; "
+                "set COGMESH_ALLOW_REMOTE_CONTENT=true to allow it"
+            )
+        model = settings.model or "deepseek-chat"
+        return OpenAICompatClient(
+            "deepseek", "https://api.deepseek.com", model, key
+        )
     if settings.provider == "catalog":
         return _catalog_client(settings, roles, warn)
     raise ConfigError(f"COGMESH_PROVIDER={settings.provider}: no client is implemented for it")
