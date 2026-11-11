@@ -19,7 +19,7 @@ roles = ["conductor", "planner", "coder", "code_explainer", "dependency_analyst"
 [models.gemini]
 wire = "openai_compatible"
 base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
-model = "gemini-2.5-flash"
+model = "gemini-3.5-flash"
 api_key_env = "GEMINI_API_KEY"
 context_tokens = 1048576
 tier = "free"

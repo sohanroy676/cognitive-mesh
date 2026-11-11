@@ -11,6 +11,9 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 ### Documentation
 - Record v2.0.1 CI runs
 
+### Fixed
+- **serve:** Answer fallback models, hide failure dump; docs
+
 ## [2.0.1] - 2026-11-06
 
 ### Added
