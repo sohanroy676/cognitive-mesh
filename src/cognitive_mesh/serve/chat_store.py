@@ -211,9 +211,13 @@ class ChatStore:
         with self._lock:
             rows = self._conn.execute(
                 "SELECT s.id, s.project, s.created_at, (SELECT count(*) FROM turns t "
-                "WHERE t.session_id = s.id) FROM sessions s ORDER BY s.id DESC LIMIT 50"
+                "WHERE t.session_id = s.id), (SELECT t.text FROM turns t WHERE t.session_id = s.id "
+                "ORDER BY t.id LIMIT 1) FROM sessions s ORDER BY s.id DESC LIMIT 50"
             ).fetchall()
-        return [{"id": r[0], "project": r[1], "created_at": r[2], "turns": r[3]} for r in rows]
+        return [
+            {"id": r[0], "project": r[1], "created_at": r[2], "turns": r[3], "first": r[4] or ""}
+            for r in rows
+        ]
 
     # -- approvals -------------------------------------------------------------------------
 

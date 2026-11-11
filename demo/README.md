@@ -6,6 +6,7 @@ needs no model, key or internet connection once the project is installed.
 | File | What it is |
 |---|---|
 | `discount-example.json` | A recorded run: "add a `Discount` class to the shop cart". It holds the plan, what each agent did, the coder's drafts, the diff and the contract check. |
+| `deepseek-example.json` | A second recorded run, on the Cognitive Mesh project itself: "add DeepSeek to the model catalog" (a catalog entry in `docs/serve-catalog.toml` and a `DEEPSEEK_API_KEY=` placeholder in `.env.example`). |
 | `shop-api/` | The small sample project the run was made on (a cart and a pricing function, plus its check `check_shop.py`). |
 | `make_shop_api.py` | Turns `shop-api/` into a git repository anywhere you choose (optionally with a GitHub `origin`). |
 | `check_github.py` | Checks that everything a real push and pull request needs is in place. |
@@ -26,15 +27,17 @@ uv sync
 Start the app with the recording:
 
 ```bash
-uv run cognitive-mesh serve --home demo-home --replay demo/discount-example.json
+uv run cognitive-mesh serve --home demo-home \n  --replay demo/discount-example.json --replay demo/deepseek-example.json
 ```
 
 Open the **chat** link it prints (keep the terminal running). The page shows the recorded turn,
-labelled "Recorded example":
+labelled "Recorded example" (the newest recording is open; the other is under the session list,
+which you reach by opening an earlier session):
 
 - the plan, with a plain-words task, input, output and model for every agent,
 - the coder's drafts (two were refused, one applied), and
-- the diff that adds `Discount` to `shop/cart.py` and lets `Cart` use it.
+- the diff that adds `Discount` to `shop/cart.py` and lets `Cart` use it, or, in the DeepSeek
+  recording, the diff that adds a `deepseek` entry to the catalog.
 
 The approval buttons are off in a recording; nothing calls a model. The **Dependency graph** and
 **Data** links work as usual. Startup notes about missing API keys can be ignored in this mode.

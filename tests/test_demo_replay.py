@@ -24,12 +24,13 @@ def script(name: str) -> ModuleType:
     return module
 
 
-def test_the_recording_is_valid_and_holds_no_machine_text() -> None:
-    recording = load_recording(DEMO / "discount-example.json")
+@pytest.mark.parametrize("name", ["discount-example.json", "deepseek-example.json"])
+def test_each_recording_is_valid_and_holds_no_machine_text_or_key(name: str) -> None:
+    recording = load_recording(DEMO / name)
     kinds = [e.kind for e in recording.events]
     assert recording.mode == "change" and "plan" in kinds and "approval_request" in kinds
-    text = (DEMO / "discount-example.json").read_text(encoding="utf-8")
-    for local in ("mpran", "cogmesh-testing", "E:\\\\", "C:\\\\"):
+    text = (DEMO / name).read_text(encoding="utf-8")
+    for local in ("mpran", "cogmesh-testing", "E:\\\\", "C:\\\\", "gsk_", "AIza", "sk-"):
         assert local not in text
 
 
@@ -51,9 +52,13 @@ def test_the_app_serves_the_recording_without_a_model(tmp_path: Path) -> None:
     recording = load_recording(DEMO / "discount-example.json")
     with running(config_for(tmp_path, catalog=None, conductor=None)) as s:
         turn_id = seed_replay(s.chat, recording)
+        second = load_recording(DEMO / "deepseek-example.json")
+        seed_replay(s.chat, second)
         sessions = call(s.app, "GET", "/api/sessions", token=TOKEN).json["sessions"]
+        assert [x["first"] for x in sessions] == [second.request, recording.request]
+        sessions = [x for x in sessions if x["first"] == recording.request]
         got = call(s.app, "GET", f"/api/session?id={sessions[0]['id']}", token=TOKEN).json
-        assert got["turns"][0]["id"] == turn_id and got["turns"][0]["approvals"] == []
+        assert got["turns"][0]["id"] == turn_id and got["turns"][0]["approvals"] == []  # noqa: E501
         refused = call(
             s.app,
             "POST",

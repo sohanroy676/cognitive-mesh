@@ -127,9 +127,10 @@ def add_parser(sub: Any) -> None:
     p.add_argument(
         "--replay",
         type=Path,
+        action="append",
         default=None,
         metavar="FILE",
-        help="show a recorded turn (see demo/); it needs no model, key or internet",
+        help="show a recorded turn (see demo/); repeat for several; needs no model or key",
     )
 
 
@@ -186,14 +187,14 @@ def run(args: argparse.Namespace) -> int:
     except ChatStoreError as exc:
         print(f"chat file: {exc}", file=sys.stderr)
         return EXIT_SERVE_ERROR
-    if args.replay is not None:
+    for recording in args.replay or []:
         try:
-            seed_replay(servers.chat, load_recording(args.replay))
+            seed_replay(servers.chat, load_recording(recording))
         except (ReplayError, ChatStoreError) as exc:
             servers.close()
             print(f"--replay: {exc}", file=sys.stderr)
             return EXIT_CONFIG_ERROR
-        print(f"replay: {args.replay} is in the chat as a recorded example", flush=True)
+        print(f"replay: {recording} is in the chat as a recorded example", flush=True)
     for server in (servers.graph, servers.data):
         threading.Thread(target=server.serve_forever, daemon=True).start()
     print(f"chat   {servers.app.url()}", flush=True)

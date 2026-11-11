@@ -180,6 +180,8 @@
 
 - 2026-11-11 (demo): `demo/` folder (recorded Discount turn, sample `shop-api`, `make_shop_api.py`, `check_github.py`, `export_turn.py`, README), `serve --replay FILE` (`serve/replay.py`), `tests/test_demo_replay.py`. The web PR action refuses unless the latest check passed, so a live PR demo needs `workspace set-check` and `serve --allow-unisolated-checks` (verified: check_passed). Not run: a real push or pull request (the user still has to create the demo repo and `GITHUB_TOKEN`), the replay on another computer.
 
+- 2026-11-11 (DeepSeek example): through the chat, project `cognitive-mesh` (E:\Projects\cognitive-mesh) in change mode, with real Groq/Gemini: "add DeepSeek to our multi-agent orchestration" produced, on draft 2, a correct diff (`[models.deepseek]` in `docs/serve-catalog.toml` after gemini, `DEEPSEEK_API_KEY=` in `.env.example`); saved as `demo/deepseek-example.json` (turn not approved, so nothing was committed to the project; the change branch exists in the home's worktrees). The DeepSeek entry itself is NOT yet in the repo catalog and was never called (no DeepSeek key). `--replay` can be repeated; the chat sidebar now lists conversations (`/api/sessions` returns `first`). Browser-checked: both recordings open and switch.
+
 ## In progress
 
 - Nothing in flight at handoff 2026-10-17. v0.1.0 to v1.0.0 are merged, pushed and tagged. All old local branches are kept (never deleted by the agent).

@@ -2,7 +2,7 @@
 "use strict";
 
 const root = document.getElementById("root");
-const view = { state: null, session: null, turns: [], sig: new Map(), timer: null };
+const view = { state: null, session: null, turns: [], sessionList: [], sig: new Map(), timer: null };
 
 function store(key, value) {
   try {
@@ -15,6 +15,7 @@ function store(key, value) {
 async function boot() {
   await topBar("chat");
   await refresh();
+  await refreshSessions();
   const saved = Number(store("cogmesh.session"));
   if (saved) await openSession(saved, true);
   if (view.session === null) {
@@ -27,6 +28,10 @@ async function boot() {
 
 async function refresh() {
   view.state = await api("/api/state");
+}
+
+async function refreshSessions() {
+  try { view.sessionList = (await api("/api/sessions")).sessions; } catch { /* keep the old list */ }
 }
 
 // The dependency analysis reads every file of every project and can take a long time, so the
@@ -117,12 +122,28 @@ function sidebar() {
       h("div", { class: "muted mono" }, cut(p.location, 60)),
       attachForm(p)));
   }
-  box.append(list, addProjectForm());
+  box.append(list, addProjectForm(), sessionsPanel());
   view.edgeBox = h("div", { class: "stack", "aria-live": "polite" });
   box.append(view.edgeBox);
   paintEdges();
   if (st.projects.length >= 2) box.append(linkForm(st.projects));
   box.append(startForm());
+  return box;
+}
+
+// Every conversation (including recorded examples), newest first; one click opens it.
+function sessionsPanel() {
+  const box = h("div", { class: "stack", role: "group", "aria-label": "Conversations" }, h("h3", null, "Conversations"));
+  if (!view.sessionList.length) {
+    box.append(h("p", { class: "muted" }, "None yet."));
+    return box;
+  }
+  for (const s of view.sessionList.slice(0, 12)) {
+    const current = s.id === view.session;
+    box.append(h("button", { type: "button", "aria-pressed": current ? "true" : "false", title: s.first,
+      onclick: async () => { await openSession(s.id, true); draw(); } },
+      cut(s.first || "(no prompt yet)", 46), " ", tag(s.project)));
+  }
   return box;
 }
 
@@ -218,6 +239,7 @@ function startForm() {
   const go = h("button", { type: "button", class: "primary", onclick: async () => {
     try {
       const r = await post("/api/projects/confirm", { project: pick.value });
+      await refreshSessions();
       await openSession(r.session);
       draw();
     } catch (err) { msg.textContent = err.message; }

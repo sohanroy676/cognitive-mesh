@@ -224,3 +224,4 @@ dl.io dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 ul.plain, ol.plain { margin: 0; padding-left: 1.2rem; }
 .result { border-left: 4px solid var(--ok); }
 .turn details > summary { cursor: pointer; color: var(--ink-2); }
+button[aria-pressed="true"] { border-color: var(--accent); background: var(--sunk); font-weight: 600; }
