@@ -7,6 +7,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 
 ### Added
 - **serve:** Answer questions, show agent results, project picker, Gemini
+- **serve:** Readable agent cards, coder model rotation, Gemini first
 
 ### Documentation
 - Record v2.0.1 CI runs

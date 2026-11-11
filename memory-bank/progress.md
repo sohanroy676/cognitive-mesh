@@ -178,6 +178,8 @@
 
 - 2026-11-11 (later): chat turns redrawn as an Answer / "Needs your decision" / per-agent cards (task, input, output, model, why) / collapsed Timeline; closed approvals collapsed. Coder drafts now alternate between the usable coder models and a failing model is replaced by the next (`RotatingClient`). Catalog: Gemini listed first with `reasoning_effort = "low"` (default thinking takes over 30 s and times out); Groq emits hunks without line numbers (`@@`), which the diff parser refuses. A bigger change (new `Discount` class and `Cart` use) reached an approval request on draft 1 via Gemini; not approved. Seen once: Groq conductor `HTTP 400` (not investigated). Suite 2199 passed.
 
+- 2026-11-11 (demo): `demo/` folder (recorded Discount turn, sample `shop-api`, `make_shop_api.py`, `check_github.py`, `export_turn.py`, README), `serve --replay FILE` (`serve/replay.py`), `tests/test_demo_replay.py`. The web PR action refuses unless the latest check passed, so a live PR demo needs `workspace set-check` and `serve --allow-unisolated-checks` (verified: check_passed). Not run: a real push or pull request (the user still has to create the demo repo and `GITHUB_TOKEN`), the replay on another computer.
+
 ## In progress
 
 - Nothing in flight at handoff 2026-10-17. v0.1.0 to v1.0.0 are merged, pushed and tagged. All old local branches are kept (never deleted by the agent).

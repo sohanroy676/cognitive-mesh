@@ -131,6 +131,9 @@ choose others, `--app-port/--graph-port/--data-port` to change ports, and `--no-
    the files again. Use *Find* and zoom on large graphs; hover a node for its neighbours and the evidence.
 6. **Data.** Browse what the app stored; nothing here can be edited.
 
+To present from another computer (a recorded example that needs no keys, plus how to run it live and send a
+pull request), see [`demo/README.md`](demo/README.md).
+
 If it will not start: `cannot listen on the ports` means a port is in use (stop the other server or pass other
 ports); `models: ... not usable` lines name the missing key or opt-in.
 

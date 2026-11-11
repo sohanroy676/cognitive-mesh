@@ -25,6 +25,7 @@ from cognitive_mesh.serve.config import (
 from cognitive_mesh.serve.data_api import DataApi
 from cognitive_mesh.serve.graph_api import GraphApi
 from cognitive_mesh.serve.http import LocalServer, Reply, Request, new_token
+from cognitive_mesh.serve.replay import ReplayError, load_recording, seed_replay
 from cognitive_mesh.serve.ws_cache import WorkspaceGraphCache
 
 EXIT_OK = 0
@@ -123,6 +124,13 @@ def add_parser(sub: Any) -> None:
         help="run a project's declared check command; it runs with your privileges, NOT isolated",
     )
     p.add_argument("--no-browser", action="store_true", help="do not open the chat page")
+    p.add_argument(
+        "--replay",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="show a recorded turn (see demo/); it needs no model, key or internet",
+    )
 
 
 def _make_embedder() -> Any:
@@ -178,6 +186,14 @@ def run(args: argparse.Namespace) -> int:
     except ChatStoreError as exc:
         print(f"chat file: {exc}", file=sys.stderr)
         return EXIT_SERVE_ERROR
+    if args.replay is not None:
+        try:
+            seed_replay(servers.chat, load_recording(args.replay))
+        except (ReplayError, ChatStoreError) as exc:
+            servers.close()
+            print(f"--replay: {exc}", file=sys.stderr)
+            return EXIT_CONFIG_ERROR
+        print(f"replay: {args.replay} is in the chat as a recorded example", flush=True)
     for server in (servers.graph, servers.data):
         threading.Thread(target=server.serve_forever, daemon=True).start()
     print(f"chat   {servers.app.url()}", flush=True)

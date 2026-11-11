@@ -15,6 +15,8 @@ Continue Cognitive Mesh. v2.0.0 (local web app, `cognitive-mesh serve`) is pushe
 
 - Later 2026-11-11: readable turn cards, coder model rotation, Gemini first in the catalog (see `progress.md`). Open: Groq conductor `HTTP 400` seen once; Groq coder diffs with bare `@@` are refused.
 
+- Demo kit (2026-11-11): see `demo/README.md`. Next for the user: create an empty GitHub repo for `shop-api`, a fine-grained token (Contents + Pull requests write) in `.env` as `GITHUB_TOKEN`, run `demo/check_github.py --online`, then a live PR run. The branch `demo-Web-app` is not pushed; the other computer needs it (push needs the user's approval) or a copy of the folder.
+
 ## Handoff (end of session 15, 2026-11-06)
 - Release: v2.0.1 (patch on top of v2.0.0: web app fixes, saved dependency graphs, README rewrite) on `feature/extended-roadmap-v1.7`; pushed and tagged `v2.0.1` on `2284846`; CI: branch run 42250932066 (passed), tag run 42251943107 (passed). Still no merge to main (user decision: wait until the whole extended roadmap is approved).
 - To run the web app: see the README section "Run the web app". Short form, from the repo root: put `GROQ_API_KEY`, `COGMESH_ALLOW_REMOTE_CONTENT=true`, `COGMESH_ALLOW_TRAINING_USE=true` in the ignored `.env`, start Ollama (`ollama pull llama3.2`), then `uv run cognitive-mesh serve --home E:\Projects\cogmesh-testing\home` and open the three printed links (8770 chat, 8771 graph, 8772 data).
