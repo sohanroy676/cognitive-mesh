@@ -116,7 +116,9 @@ def test_a_capture_notes_replies_and_errors_and_passes_them_on() -> None:
         def complete(self, req: ModelRequest) -> ModelResponse:
             if self.fail:
                 raise ProviderError(ProviderErrorKind.TIMEOUT)
-            return ModelResponse(provider="pv", model="m", text="hello")
+            return ModelResponse(
+                provider="pv", model="m", text="hello", prompt_tokens=11, completion_tokens=3
+            )
 
     inner = Inner()
     sink: list[dict[str, Any]] = []
@@ -128,6 +130,8 @@ def test_a_capture_notes_replies_and_errors_and_passes_them_on() -> None:
         client.complete(ask)
     assert [n.get("text") or n.get("error") for n in sink] == ["hello", "timeout"]
     assert {n["role"] for n in sink} == {"coder"} and sink[0]["entry"] == "entry"
+    assert (sink[0]["prompt_tokens"], sink[0]["completion_tokens"]) == (11, 3)
+    assert all(isinstance(n["latency_ms"], int) for n in sink)  # the failure took time too
 
 
 @pytest.mark.parametrize("content", ["not json", "{}", json.dumps({"title": "t"})])
@@ -163,7 +167,10 @@ def test_a_recorded_turn_replays_as_a_real_one_with_working_buttons(tmp_path: Pa
         request=note["request"],
         mode=note["mode"],
         conductor=note["conductor"],
-        replies=[Reply(**r) for r in note["replies"]],
+        replies=[
+            Reply(**{**r, "latency_ms": 1234, "prompt_tokens": 55, "completion_tokens": 7})
+            for r in note["replies"]
+        ],
         source=base / "r.json",
     )
 
@@ -192,6 +199,12 @@ def test_a_recorded_turn_replays_as_a_real_one_with_working_buttons(tmp_path: Pa
 
         trace = get(s.app, f"/api/trace?turn={turn}").json  # the trace is real, not copied
         assert trace["decisions"] and trace["calls"] and trace["changes"]
+        for made in trace["calls"]:  # what the real calls took and used is shown, not 0 and ?
+            assert (made["latency_ms"], made["prompt_tokens"], made["completion_tokens"]) == (
+                1234,
+                55,
+                7,
+            )
 
         refused = post(s, "/api/chat/send", {"session": sessions[0]["id"], "text": "another one"})
         assert refused.status == 409 and "recorded requests" in refused.json["error"]

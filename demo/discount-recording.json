@@ -19,7 +19,10 @@
    "entry": "groq",
    "provider": "groq",
    "model": "openai/gpt-oss-120b",
-   "text": "{\n  \"steps\": [\n    {\n      \"step_id\": \"explain_cart\",\n      \"capability\": \"explain_file\",\n      \"inputs\": {\n        \"path\": \"shop/cart.py\"\n      }\n    },\n    {\n      \"step_id\": \"explain_pricing\",\n      \"capability\": \"explain_file\",\n      \"inputs\": {\n        \"path\": \"shop/pricing.py\"\n      }\n    },\n    {\n      \"step_id\": \"explain_check\",\n      \"capability\": \"explain_file\",\n      \"inputs\": {\n        \"path\": \"check_shop.py\"\n      }\n    },\n    {\n      \"step_id\": \"deps_cart\",\n      \"capability\": \"dependencies_of\",\n      \"inputs\": {\n        \"node_id\": \"module:shop/cart.py\"\n      },\n      \"depends_on\": [\n        \"explain_cart\"\n      ]\n    },\n    {\n      \"step_id\": \"deps_pricing\",\n      \"capability\": \"dependencies_of\",\n      \"inputs\": {\n        \"node_id\": \"module:shop/pricing.py\"\n      },\n      \"depends_on\": [\n        \"explain_pricing\"\n      ]\n    },\n    {\n      \"step_id\": \"deps_check\",\n      \"capability\": \"dependencies_of\",\n      \"inputs\": {\n        \"node_id\": \"module:check_shop.py\"\n      },\n      \"depends_on\": [\n        \"explain_check\"\n      ]\n    }\n  ],\n  \"assignments\": {\n    \"explain_cart\": {\n      \"model\": \"groq\",\n      \"reason\": \"explain_file requires a model; groq entry selected (insufficient evidence).\"\n    },\n    \"explain_pricing\": {\n      \"model\": \"groq\",\n      \"reason\": \"explain_file requires a model; groq entry selected (insufficient evidence).\"\n    },\n    \"explain_check\": {\n      \"model\": \"groq\",\n      \"reason\": \"explain_file requires a model; groq entry selected (insufficient evidence).\"\n    }\n  },\n  \"reasoning\": \"The request concerns adding discount\u2011code handling, which likely touches cart, pricing, and the test script. Read\u2011only steps explain those files and retrieve their dependency graphs to understand where discount logic would be integrated, without proposing any edits.\"\n}"
+   "text": "{\n  \"steps\": [\n    {\n      \"step_id\": \"explain_cart\",\n      \"capability\": \"explain_file\",\n      \"inputs\": {\n        \"path\": \"shop/cart.py\"\n      }\n    },\n    {\n      \"step_id\": \"explain_pricing\",\n      \"capability\": \"explain_file\",\n      \"inputs\": {\n        \"path\": \"shop/pricing.py\"\n      }\n    },\n    {\n      \"step_id\": \"explain_check\",\n      \"capability\": \"explain_file\",\n      \"inputs\": {\n        \"path\": \"check_shop.py\"\n      }\n    },\n    {\n      \"step_id\": \"deps_cart\",\n      \"capability\": \"dependencies_of\",\n      \"inputs\": {\n        \"node_id\": \"module:shop/cart.py\"\n      },\n      \"depends_on\": [\n        \"explain_cart\"\n      ]\n    },\n    {\n      \"step_id\": \"deps_pricing\",\n      \"capability\": \"dependencies_of\",\n      \"inputs\": {\n        \"node_id\": \"module:shop/pricing.py\"\n      },\n      \"depends_on\": [\n        \"explain_pricing\"\n      ]\n    },\n    {\n      \"step_id\": \"deps_check\",\n      \"capability\": \"dependencies_of\",\n      \"inputs\": {\n        \"node_id\": \"module:check_shop.py\"\n      },\n      \"depends_on\": [\n        \"explain_check\"\n      ]\n    }\n  ],\n  \"assignments\": {\n    \"explain_cart\": {\n      \"model\": \"groq\",\n      \"reason\": \"explain_file requires a model; groq entry selected (insufficient evidence).\"\n    },\n    \"explain_pricing\": {\n      \"model\": \"groq\",\n      \"reason\": \"explain_file requires a model; groq entry selected (insufficient evidence).\"\n    },\n    \"explain_check\": {\n      \"model\": \"groq\",\n      \"reason\": \"explain_file requires a model; groq entry selected (insufficient evidence).\"\n    }\n  },\n  \"reasoning\": \"The request concerns adding discount\u2011code handling, which likely touches cart, pricing, and the test script. Read\u2011only steps explain those files and retrieve their dependency graphs to understand where discount logic would be integrated, without proposing any edits.\"\n}",
+   "latency_ms": 2360,
+   "prompt_tokens": 2828,
+   "completion_tokens": 931
   },
   {
    "role": "explainer",
@@ -27,7 +30,10 @@
    "entry": "groq",
    "provider": "groq",
    "model": "openai/gpt-oss-120b",
-   "text": "{\"summary\":\"This file defines a simple Cart class for a shopping application. The Cart stores items as (name, price, quantity) tuples, provides an add method to append items, and a total method that delegates to the imported total function from shop.pricing to compute the cart's total cost.\",\"symbols\":[\"Cart\"]}"
+   "text": "{\"summary\":\"This file defines a simple Cart class for a shopping application. The Cart stores items as (name, price, quantity) tuples, provides an add method to append items, and a total method that delegates to the imported total function from shop.pricing to compute the cart's total cost.\",\"symbols\":[\"Cart\"]}",
+   "latency_ms": 890,
+   "prompt_tokens": 519,
+   "completion_tokens": 208
   },
   {
    "role": "explainer",
@@ -35,7 +41,10 @@
    "entry": "groq",
    "provider": "groq",
    "model": "openai/gpt-oss-120b",
-   "text": "{\"summary\":\"Defines a function total that computes the total cost of a list of items, where each item is a tuple of (name, price, quantity). It returns the sum of price multiplied by quantity for all items.\",\"symbols\":[\"total\"]}"
+   "text": "{\"summary\":\"Defines a function total that computes the total cost of a list of items, where each item is a tuple of (name, price, quantity). It returns the sum of price multiplied by quantity for all items.\",\"symbols\":[\"total\"]}",
+   "latency_ms": 735,
+   "prompt_tokens": 456,
+   "completion_tokens": 120
   },
   {
    "role": "explainer",
@@ -43,7 +52,10 @@
    "entry": "groq",
    "provider": "groq",
    "model": "openai/gpt-oss-120b",
-   "text": "{\"summary\":\"A simple self\u2011test script that imports Cart, creates a Cart instance, adds a pen (price\u202f2\u202f\u00d7\u202f3) and a book (price\u202f10), checks that the total equals 16 and that a fresh Cart totals 0, exits with an error if the check fails, otherwise prints a success message, and runs this test when executed as a script.\",\"symbols\":[\"main\"]}"
+   "text": "{\"summary\":\"A simple self\u2011test script that imports Cart, creates a Cart instance, adds a pen (price\u202f2\u202f\u00d7\u202f3) and a book (price\u202f10), checks that the total equals 16 and that a fresh Cart totals 0, exits with an error if the check fails, otherwise prints a success message, and runs this test when executed as a script.\",\"symbols\":[\"main\"]}",
+   "latency_ms": 1328,
+   "prompt_tokens": 564,
+   "completion_tokens": 319
   },
   {
    "role": "coder",
@@ -51,7 +63,10 @@
    "entry": "gemini",
    "provider": "gemini",
    "model": "gemini-3.5-flash",
-   "text": "{\n  \"reasoning\": \"Add `apply_discount` method to `Cart` and support discount codes in `total` pricing calculation.\",\n  \"summary\": \"Allow applying discount codes to Cart and adjust total calculation in shop pricing.\",\n  \"diff\": \"diff --git a/shop/cart.py b/shop/cart.py\\n--- a/shop/cart.py\\n+++ b/shop/cart.py\\n@@ -3,9 +3,13 @@\\n class Cart:\\n     def __init__(self) -> None:\\n         self.items: list[tuple[str, float, int]] = []\\n+        self.discount_code: str | None = None\\n \\n     def add(self, name: str, price: float, qty: int = 1) -> None:\\n         self.items.append((name, price, qty))\\n \\n+    def apply_discount(self, code: str) -> None:\\n+        self.discount_code = code\\n+\\n     def total(self) -> float:\\n-        return total(self.items)\\n+        return total(self.items, self.discount_code)\\ndiff --git a/shop/pricing.py b/shop/pricing.py\\n--- a/shop/pricing.py\\n+++ b/shop/pricing.py\\n@@ -1,2 +1,12 @@\\n-def total(items: list[tuple[str, float, int]]) -> float:\\n-    return sum(price * qty for _, price, qty in items)\\n+DISCOUNTS = {\\n+    \\\"SAVE10\\\": 0.10,\\n+    \\\"SAVE20\\\": 0.20,\\n+    \\\"HALF\\\": 0.50,\\n+}\\n+\\n+\\n+def total(items: list[tuple[str, float, int]], discount_code: str | None = None) -> float:\\n+    subtotal = sum(price * qty for _, price, qty in items)\\n+    if discount_code and discount_code.upper() in DISCOUNTS:\\n+        subtotal *= (1 - DISCOUNTS[discount_code.upper()])\\n+    return subtotal\\ndiff --git a/check_shop.py b/check_shop.py\\n--- a/check_shop.py\\n+++ b/check_shop.py\\n@@ -8,6 +8,9 @@\\n     cart.add(\\\"book\\\", 10.0)\\n     if cart.total() != 16.0 or Cart().total() != 0:\\n         raise SystemExit(f\\\"wrong total: {cart.total()}\\\")\\n+    cart.apply_discount(\\\"SAVE10\\\")\\n+    if cart.total() != 14.4:\\n+        raise SystemExit(f\\\"wrong total after discount: {cart.total()}\\\")\\n     print(\\\"shop-api check passed\\\")\\n \\n \\n\"\n}"
+   "text": "{\n  \"reasoning\": \"Add `apply_discount` method to `Cart` and support discount codes in `total` pricing calculation.\",\n  \"summary\": \"Allow applying discount codes to Cart and adjust total calculation in shop pricing.\",\n  \"diff\": \"diff --git a/shop/cart.py b/shop/cart.py\\n--- a/shop/cart.py\\n+++ b/shop/cart.py\\n@@ -3,9 +3,13 @@\\n class Cart:\\n     def __init__(self) -> None:\\n         self.items: list[tuple[str, float, int]] = []\\n+        self.discount_code: str | None = None\\n \\n     def add(self, name: str, price: float, qty: int = 1) -> None:\\n         self.items.append((name, price, qty))\\n \\n+    def apply_discount(self, code: str) -> None:\\n+        self.discount_code = code\\n+\\n     def total(self) -> float:\\n-        return total(self.items)\\n+        return total(self.items, self.discount_code)\\ndiff --git a/shop/pricing.py b/shop/pricing.py\\n--- a/shop/pricing.py\\n+++ b/shop/pricing.py\\n@@ -1,2 +1,12 @@\\n-def total(items: list[tuple[str, float, int]]) -> float:\\n-    return sum(price * qty for _, price, qty in items)\\n+DISCOUNTS = {\\n+    \\\"SAVE10\\\": 0.10,\\n+    \\\"SAVE20\\\": 0.20,\\n+    \\\"HALF\\\": 0.50,\\n+}\\n+\\n+\\n+def total(items: list[tuple[str, float, int]], discount_code: str | None = None) -> float:\\n+    subtotal = sum(price * qty for _, price, qty in items)\\n+    if discount_code and discount_code.upper() in DISCOUNTS:\\n+        subtotal *= (1 - DISCOUNTS[discount_code.upper()])\\n+    return subtotal\\ndiff --git a/check_shop.py b/check_shop.py\\n--- a/check_shop.py\\n+++ b/check_shop.py\\n@@ -8,6 +8,9 @@\\n     cart.add(\\\"book\\\", 10.0)\\n     if cart.total() != 16.0 or Cart().total() != 0:\\n         raise SystemExit(f\\\"wrong total: {cart.total()}\\\")\\n+    cart.apply_discount(\\\"SAVE10\\\")\\n+    if cart.total() != 14.4:\\n+        raise SystemExit(f\\\"wrong total after discount: {cart.total()}\\\")\\n     print(\\\"shop-api check passed\\\")\\n \\n \\n\"\n}",
+   "latency_ms": 12250,
+   "prompt_tokens": 682,
+   "completion_tokens": 676
   }
  ]
 }

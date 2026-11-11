@@ -571,11 +571,15 @@ function renderTrace(out, t) {
     out.append(h("h3", null, "Model calls"));
     const body = h("tbody");
     for (const c of t.calls) {
-      body.append(h("tr", null, h("td", null, c.entry_id || c.model || ""), h("td", null, c.result || c.outcome || ""),
-        h("td", null, c.latency_ms ?? ""), h("td", null, (c.prompt_tokens ?? "?") + " / " + (c.completion_tokens ?? "?"))));
+      const known = c.prompt_tokens !== null && c.prompt_tokens !== undefined;
+      body.append(h("tr", null, h("td", null, (c.role || "").replace("_", " ")),
+        h("td", null, (c.entry_id || c.provider) + " · " + c.model),
+        h("td", null, c.result ? tag(c.result, c.result === "ok" ? "ok" : "bad") : ""),
+        h("td", null, c.latency_ms === null || c.latency_ms === undefined ? "–" : c.latency_ms + " ms"),
+        h("td", null, known ? c.prompt_tokens + " in / " + (c.completion_tokens ?? "?") + " out" : "not reported")));
     }
     out.append(h("div", { class: "scroll" }, h("table", null,
-      h("thead", null, h("tr", null, h("th", null, "Model"), h("th", null, "Result"), h("th", null, "ms"), h("th", null, "tokens in/out"))), body)));
+      h("thead", null, h("tr", null, h("th", null, "Agent"), h("th", null, "Model"), h("th", null, "Result"), h("th", null, "Time"), h("th", null, "Tokens"))), body)));
   }
   out.append(h("p", { class: "muted" }, "Browse every record on the Data page."));
 }

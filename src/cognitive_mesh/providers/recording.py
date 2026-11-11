@@ -174,4 +174,9 @@ class RecordingClient:
         return response
 
     def _elapsed_ms(self, start: float) -> int:
+        # A demo replays recorded replies: the call took no time now, so it reports the time the
+        # recorded call took (the client says so; a real client has no such attribute).
+        recorded = getattr(self._inner, "replayed_latency_ms", None)
+        if isinstance(recorded, int):
+            return max(0, recorded)
         return max(0, round((self._clock() - start) * 1000))

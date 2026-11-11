@@ -97,6 +97,31 @@ This sends the branch and its diff to GitHub, so it is a separate, deliberate st
    says why if it is refused: no token, origin not on github.com, token cannot see the repository, or
    no check passed for the approved commit.
 
+## 3b. A pull request to your own Cognitive Mesh repository (the DeepSeek chat)
+
+The `cognitive-mesh` chat works on this very checkout, whose `origin` is
+`https://github.com/sohanroy676/cognitive-mesh.git`. What has to be true before **Push branch and open
+pull request** can work:
+
+1. **Token.** A fine-grained personal access token limited to that one repository, with *Contents: Read
+   and write* and *Pull requests: Read and write*. Put it in `.env` as `GITHUB_TOKEN=...`, and start the
+   server with `COGMESH_ALLOW_REMOTE_CONTENT=true` (the diff goes to GitHub).
+2. **A base branch on GitHub.** The pull request targets the branch the checkout is on (`demo-Web-app`),
+   and GitHub does not have it yet. Push it first, yourself or with my help after you approve:
+   `git push -u origin demo-Web-app`. (Or check out `main` and use that as the base.)
+3. **A passing check.** The page refuses the pull request unless a check passed for the approved commit.
+   The DeepSeek recording declares `python -m compileall -q src` (a syntax check) for the project, so start
+   the server with `--allow-unisolated-checks`. The check runs on your computer, not isolated.
+4. Run `uv run python demo/check_github.py . --online`, then start the demo, open the DeepSeek chat,
+   **Approve**, and press the pull request button. The branch `cogmesh/change-...` is pushed and a
+   pull request is opened from it into `demo-Web-app`. Nothing is merged.
+
+**Read this before you show it.** The recorded DeepSeek diff is a partial change (see "About the DeepSeek
+recording" below): it would put an unreachable branch into `providers/factory.py`. If the pull request is
+meant to show a *working* DeepSeek feature, run the request live with your keys instead, and use **Revise**
+with a note such as *"COGMESH_PROVIDER only accepts groq, ollama or catalog; add DeepSeek as a catalog
+entry instead"*, then approve the better draft. Revise needs a real model, so it does not work in demo mode.
+
 ## 4. Make a new recording
 
 ```bash

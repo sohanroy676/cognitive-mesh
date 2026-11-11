@@ -85,6 +85,10 @@ class Reply(BaseModel):
     model: str | None = Field(default=None, max_length=200)
     text: str | None = Field(default=None, max_length=200_000)
     error: str | None = Field(default=None, max_length=40)
+    # What the real call took and used, shown in the trace of a replayed chat (None = unknown).
+    latency_ms: int | None = Field(default=None, ge=0, le=3_600_000)
+    prompt_tokens: int | None = Field(default=None, ge=0)
+    completion_tokens: int | None = Field(default=None, ge=0)
 
 
 class Recording(BaseModel):
@@ -121,10 +125,12 @@ class ReplayClient:
         self._models = models
         self.provider = provider
         self.model = model
+        self.replayed_latency_ms: int | None = None  # read by RecordingClient
 
     def complete(self, request: ModelRequest) -> ModelResponse:
         role, key = classify(request)
         reply = self._models.take(role, key)
+        self.replayed_latency_ms = reply.latency_ms if reply is not None else None
         if reply is None:
             raise ProviderError(ProviderErrorKind.UNAVAILABLE, "no recorded reply left")
         if reply.error is not None:
@@ -137,6 +143,8 @@ class ReplayClient:
             provider=reply.provider or self.provider,
             model=reply.model or self.model,
             text=reply.text or "",
+            prompt_tokens=reply.prompt_tokens,
+            completion_tokens=reply.completion_tokens,
         )
 
 
@@ -221,13 +229,23 @@ class CaptureClient:
     def complete(self, request: ModelRequest) -> ModelResponse:
         role, key = classify(request)
         note: dict[str, Any] = {"role": role, "key": key, "entry": self._entry}
+        start = time.monotonic()
         try:
             response = self._inner.complete(request)
         except ProviderError as exc:
+            note["latency_ms"] = round((time.monotonic() - start) * 1000)
             self._sink.append({**note, "error": exc.kind.value})
             raise
+        note["latency_ms"] = round((time.monotonic() - start) * 1000)
         self._sink.append(
-            {**note, "provider": response.provider, "model": response.model, "text": response.text}
+            {
+                **note,
+                "provider": response.provider,
+                "model": response.model,
+                "text": response.text,
+                "prompt_tokens": response.prompt_tokens,
+                "completion_tokens": response.completion_tokens,
+            }
         )
         return response
 
