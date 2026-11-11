@@ -62,7 +62,10 @@ SYSTEM_PROMPT = (
     "where ENTRY_ID is one of the entries listed for that capability. "
     '"reasoning": a short text on why this plan. When the evidence of an entry is '
     f"'insufficient_evidence' (fewer than {SAMPLE_MINIMUM} recorded calls with a known outcome), "
-    "say so; do not claim that a model is better. A file's node id is 'module:' plus its path. "
+    "say so; do not claim that a model is better. A source-code file (Python, JavaScript or "
+    "TypeScript) has the node id 'module:' plus its path; other files (configuration, "
+    "documentation, .env, TOML, JSON) are not modules and have no dependency node, so plan "
+    "dependencies_of only for source-code files. "
     "If the JSON has 'previous_rejection', your last reply was rejected for that reason; reply "
     f"with a corrected one. At most {MAX_STEPS} steps. Steps shape example (names are "
     f"placeholders): {EXAMPLE_REPLY}"

@@ -1,0 +1,96 @@
+{
+ "title": "Add DeepSeek as a model",
+ "project": {
+  "name": "cognitive-mesh",
+  "sample": null,
+  "checkout": true,
+  "check": null
+ },
+ "request": "Add DeepSeek as another model our multi-agent orchestration can use. The key will come from the environment, like the other providers.",
+ "mode": "change",
+ "conductor": "groq",
+ "replies": [
+  {
+   "role": "conductor",
+   "key": "",
+   "entry": "groq",
+   "provider": "groq",
+   "model": "openai/gpt-oss-120b",
+   "text": "{\n  \"steps\": [\n    {\n      \"step_id\": \"explain_catalog\",\n      \"capability\": \"explain_file\",\n      \"inputs\": { \"path\": \"src/cognitive_mesh/providers/catalog.py\" }\n    },\n    {\n      \"step_id\": \"deps_catalog\",\n      \"capability\": \"dependencies_of\",\n      \"inputs\": { \"node_id\": \"module:src/cognitive_mesh/providers/catalog.py\" },\n      \"depends_on\": [\"explain_catalog\"]\n    },\n    {\n      \"step_id\": \"explain_base\",\n      \"capability\": \"explain_file\",\n      \"inputs\": { \"path\": \"src/cognitive_mesh/providers/base.py\" }\n    },\n    {\n      \"step_id\": \"deps_base\",\n      \"capability\": \"dependencies_of\",\n      \"inputs\": { \"node_id\": \"module:src/cognitive_mesh/providers/base.py\" },\n      \"depends_on\": [\"explain_base\"]\n    },\n    {\n      \"step_id\": \"explain_factory\",\n      \"capability\": \"explain_file\",\n      \"inputs\": { \"path\": \"src/cognitive_mesh/providers/factory.py\" }\n    },\n    {\n      \"step_id\": \"deps_factory\",\n      \"capability\": \"dependencies_of\",\n      \"inputs\": { \"node_id\": \"module:src/cognitive_mesh/providers/factory.py\" },\n      \"depends_on\": [\"explain_factory\"]\n    },\n    {\n      \"step_id\": \"explain_groq\",\n      \"capability\": \"explain_file\",\n      \"inputs\": { \"path\": \"src/cognitive_mesh/providers/groq.py\" }\n    },\n    {\n      \"step_id\": \"deps_groq\",\n      \"capability\": \"dependencies_of\",\n      \"inputs\": { \"node_id\": \"module:src/cognitive_mesh/providers/groq.py\" },\n      \"depends_on\": [\"explain_groq\"]\n    },\n    {\n      \"step_id\": \"explain_ollama\",\n      \"capability\": \"explain_file\",\n      \"inputs\": { \"path\": \"src/cognitive_mesh/providers/ollama.py\" }\n    },\n    {\n      \"step_id\": \"deps_ollama\",\n      \"capability\": \"dependencies_of\",\n      \"inputs\": { \"node_id\": \"module:src/cognitive_mesh/providers/ollama.py\" },\n      \"depends_on\": [\"explain_ollama\"]\n    },\n    {\n      \"step_id\": \"explain_openai\",\n      \"capability\": \"explain_file\",\n      \"inputs\": { \"path\": \"src/cognitive_mesh/providers/openai_compat.py\" }\n    },\n    {\n      \"step_id\": \"deps_openai\",\n      \"capability\": \"dependencies_of\",\n      \"inputs\": { \"node_id\": \"module:src/cognitive_mesh/providers/openai_compat.py\" },\n      \"depends_on\": [\"explain_openai\"]\n    }\n  ],\n  \"assignments\": {\n    \"explain_catalog\": { \"model\": \"groq\", \"reason\": \"insufficient evidence (calls 11) for model entry 'groq'\" },\n    \"explain_base\": { \"model\": \"groq\", \"reason\": \"insufficient evidence (calls 11) for model entry 'groq'\" },\n    \"explain_factory\": { \"model\": \"groq\", \"reason\": \"insufficient evidence (calls 11) for model entry 'groq'\" },\n    \"explain_groq\": { \"model\": \"groq\", \"reason\": \"insufficient evidence (calls 11) for model entry 'groq'\" },\n    \"explain_ollama\": { \"model\": \"groq\", \"reason\": \"insufficient evidence (calls 11) for model entry 'groq'\" },\n    \"explain_openai\": { \"model\": \"groq\", \"reason\": \"insufficient evidence (calls 11) for model entry 'groq'\" }\n  },\n  \"reasoning\": \"Explain and list dependencies of all provider modules that define the model catalog and provider implementations. This read\u2011only information lets the later coder see where a new DeepSeek provider could be added without making any changes.\"\n}"
+  },
+  {
+   "role": "explainer",
+   "key": "src/cognitive_mesh/providers/catalog.py",
+   "entry": "groq",
+   "error": "rate_limited"
+  },
+  {
+   "role": "explainer",
+   "key": "src/cognitive_mesh/providers/catalog.py",
+   "entry": "gemini",
+   "provider": "gemini",
+   "model": "gemini-3.8-flash",
+   "text": "{\n  \"summary\": \"Implements the model catalog (ADR-0038) by defining data structures and validators for LLM configurations loaded from TOML files, enforcing strict constraints on URLs, roles, environment variable naming, and secret redacting.\",\n  \"symbols\": [\n    \"AGENT_ROLES\",\n    \"MAX_CATALOG_BYTES\",\n    \"MAX_ENTRIES\",\n    \"_ENTRY_ID\",\n    \"_MODEL_NAME\",\n    \"_KEY_ENV\",\n    \"_LOOPBACK_NAMES\",\n    \"_HOST\",\n    \"CatalogError\",\n    \"is_loopback_host\",\n    \"CatalogEntry\",\n    \"CatalogEntry.wire\",\n    \"CatalogEntry.base_url\",\n    \"CatalogEntry.model\",\n    \"CatalogEntry.api_key_env\",\n    \"CatalogEntry.context_tokens\",\n    \"CatalogEntry.tier\",\n    \"CatalogEntry.data_use\",\n    \"CatalogEntry.roles\",\n    \"CatalogEntry.json_mode\",\n    \"CatalogEntry.max_tokens_field\",\n    \"CatalogEntry.reasoning_effort\",\n    \"CatalogEntry._check_model\",\n    \"CatalogEntry._check_key_env\",\n    \"CatalogEntry._check_roles\",\n    \"CatalogEntry._check_url_and_key\",\n    \"CatalogEntry.host\",\n    \"CatalogEntry.remote\",\n    \"Catalog\",\n    \"Catalog.models\",\n    \"Catalog.get\",\n    \"Catalog.key_env_hosts\",\n    \"_strings\",\n    \"parse_catalog\",\n    \"load_catalog\"\n  ]\n}"
+  },
+  {
+   "role": "explainer",
+   "key": "src/cognitive_mesh/providers/base.py",
+   "entry": "groq",
+   "provider": "groq",
+   "model": "openai/gpt-oss-120b",
+   "text": "{\"summary\":\"Defines the core provider interface for model interactions. Includes a ProviderErrorKind enum for categorizing errors, a ProviderError exception with retryable flag, immutable Pydantic models ModelRequest and ModelResponse describing request parameters and responses, a frozen base class _Frozen, a set of retryable error kinds, and a ModelClient protocol specifying required attributes and a complete method.\",\"symbols\":[\"ProviderErrorKind\",\"_RETRYABLE\",\"ProviderError\",\"_Frozen\",\"ModelRequest\",\"ModelResponse\",\"ModelClient\"]}"
+  },
+  {
+   "role": "explainer",
+   "key": "src/cognitive_mesh/providers/factory.py",
+   "entry": "groq",
+   "error": "rate_limited"
+  },
+  {
+   "role": "explainer",
+   "key": "src/cognitive_mesh/providers/factory.py",
+   "entry": "gemini",
+   "provider": "gemini",
+   "model": "gemini-3.8-flash",
+   "text": "{\n  \"summary\": \"Factory module for instantiating ModelClient instances (OllamaClient, GroqClient, OpenAICompatClient) from configuration and catalog definitions without making network calls, while enforcing permission opt-ins (remote content, training use) and API key requirements.\",\n  \"symbols\": [\n    \"_stderr_warning\",\n    \"catalog_entry_id\",\n    \"read_key\",\n    \"_catalog_client\",\n    \"_require_opt_ins\",\n    \"remote_warning\",\n    \"entry_problem\",\n    \"build_entry_client\",\n    \"build_model_client\"\n  ]\n}"
+  },
+  {
+   "role": "explainer",
+   "key": "src/cognitive_mesh/providers/groq.py",
+   "entry": "groq",
+   "provider": "groq",
+   "model": "openai/gpt-oss-120b",
+   "text": "{\"summary\":\"This module implements a GroqClient that wraps calls to the Groq chat completions endpoint. It constructs a JSON payload with model, system and user messages, optional response format and reasoning effort, and sends it via an HttpTransport (default StdlibTransport). Errors from transport or HTTP status are mapped to provider-specific errors. The JSON response is parsed with parse_chat_reply and returned as a ModelResponse, with token counts redacted for privacy.\", \"symbols\":[\"GROQ_URL\",\"MAX_COMPLETION_TOKENS\",\"_BODY_SLACK\",\"_ESCAPE_FACTOR\",\"_REASONING_MARKERS\",\"GroqClient\"]}"
+  },
+  {
+   "role": "explainer",
+   "key": "src/cognitive_mesh/providers/ollama.py",
+   "entry": "groq",
+   "error": "rate_limited"
+  },
+  {
+   "role": "explainer",
+   "key": "src/cognitive_mesh/providers/ollama.py",
+   "entry": "gemini",
+   "provider": "gemini",
+   "model": "gemini-3.8-flash",
+   "text": "{\n  \"summary\": \"Implements OllamaClient for interacting with Ollama's /api/chat endpoint using HTTP transport, parsing JSON chat responses, and standardizing errors into ProviderError exceptions.\",\n  \"symbols\": [\n    \"_HEADERS\",\n    \"_BODY_SLACK\",\n    \"_ESCAPE_FACTOR\",\n    \"_bad\",\n    \"_parse_reply\",\n    \"OllamaClient\",\n    \"OllamaClient.provider\",\n    \"OllamaClient.__init__\",\n    \"OllamaClient.complete\"\n  ]\n}"
+  },
+  {
+   "role": "explainer",
+   "key": "src/cognitive_mesh/providers/openai_compat.py",
+   "entry": "groq",
+   "provider": "groq",
+   "model": "openai/gpt-oss-120b",
+   "text": "{\"summary\":\"This module implements a generic OpenAI\u2011compatible chat client. It defines constants for token limits and payload size handling, a type alias for the max\u2011tokens field, and the OpenAICompatClient class, which builds request payloads, sets appropriate headers (including optional API key), sends HTTP POST requests via a transport, handles transport and status errors, parses the response, and returns a ModelResponse. The client supports optional JSON response format and reasoning effort settings, and enforces limits on output size.\",\"symbols\":[\"DEFAULT_MAX_COMPLETION_TOKENS\",\"_BODY_SLACK\",\"_ESCAPE_FACTOR\",\"MaxTokensField\",\"OpenAICompatClient\"]}"
+  },
+  {
+   "role": "coder",
+   "key": "",
+   "entry": "gemini",
+   "provider": "gemini",
+   "model": "gemini-3.8-flash",
+   "text": "{\n  \"diff\": \"--- a/src/cognitive_mesh/providers/factory.py\\n+++ b/src/cognitive_mesh/providers/factory.py\\n@@ -113,6 +113,17 @@\\n         return GroqClient(\\n             settings.groq_api_key, settings.groq_model, settings.groq_reasoning_effort\\n         )\\n+    if settings.provider == \\\"deepseek\\\":\\n+        key = read_key(\\\"DEEPSEEK_API_KEY\\\")\\n+        if not settings.allow_remote_content:\\n+            raise ConfigError(\\n+                \\\"COGMESH_PROVIDER=deepseek sends file contents to DeepSeek's servers; \\\"\\n+                \\\"set COGMESH_ALLOW_REMOTE_CONTENT=true to allow it\\\"\\n+            )\\n+        model = settings.model or \\\"deepseek-chat\\\"\\n+        return OpenAICompatClient(\\n+            \\\"deepseek\\\", \\\"https://api.deepseek.com\\\", model, key\\n+        )\\n     if settings.provider == \\\"catalog\\\":\\n         return _catalog_client(settings, roles, warn)\\n     raise ConfigError(f\\\"COGMESH_PROVIDER={settings.provider}: no client is implemented for it\\\")\\n\",\n  \"reasoning\": \"Support DeepSeek as a provider in `build_model_client` using the OpenAI-compatible API client (`OpenAICompatClient`), reading `DEEPSEEK_API_KEY` via `read_key` from the environment or `.env`, enforcing `allow_remote_content`, and defaulting the model to `deepseek-chat` if not specified.\",\n  \"summary\": \"Add DeepSeek provider support using OpenAICompatClient and DEEPSEEK_API_KEY\"\n}"
+  }
+ ]
+}

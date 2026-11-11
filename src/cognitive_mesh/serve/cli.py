@@ -25,7 +25,13 @@ from cognitive_mesh.serve.config import (
 from cognitive_mesh.serve.data_api import DataApi
 from cognitive_mesh.serve.graph_api import GraphApi
 from cognitive_mesh.serve.http import LocalServer, Reply, Request, new_token
-from cognitive_mesh.serve.replay import ReplayError, load_recording, seed_replay
+from cognitive_mesh.serve.replay import (
+    ReplayError,
+    ReplayModels,
+    load_recording,
+    run_recordings,
+    write_replay_catalog,
+)
 from cognitive_mesh.serve.ws_cache import WorkspaceGraphCache
 
 EXIT_OK = 0
@@ -62,7 +68,7 @@ def build_servers(config: ServeConfig, token: str | None = None) -> Servers:
     ports: dict[str, int] = {}
 
     def meta(_req: Request) -> Reply:
-        return 200, {"token": token, "ports": ports}
+        return 200, {"token": token, "ports": ports, "demo": config.demo is not None}
 
     project_graph = WorkspaceGraphCache(
         config.workspace, config.home / "graph-cache" / "workspace.json"
@@ -130,7 +136,14 @@ def add_parser(sub: Any) -> None:
         action="append",
         default=None,
         metavar="FILE",
-        help="show a recorded turn (see demo/); repeat for several; needs no model or key",
+        help="demo: play back recorded model replies (see demo/); needs no model, key or internet",
+    )
+    p.add_argument(
+        "--capture",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help="write the models' replies of every turn to DIR, to make a recording from",
     )
 
 
@@ -169,6 +182,21 @@ def run(args: argparse.Namespace) -> int:
     catalog, conductor = args.catalog, args.conductor
     if catalog is None and DEFAULT_CATALOG.is_file():
         catalog, conductor = DEFAULT_CATALOG, DEFAULT_CONDUCTOR
+    recordings = []
+    for path in args.replay or []:
+        try:
+            recordings.append(load_recording(path))
+        except ReplayError as exc:
+            print(f"--replay {path}: {exc}", file=sys.stderr)
+            return EXIT_CONFIG_ERROR
+    demo = ReplayModels(recordings) if recordings else None
+    if demo is not None:
+        try:
+            catalog = write_replay_catalog(args.catalog or DEFAULT_CATALOG, args.home)
+        except ReplayError as exc:
+            print(f"--replay: {exc}", file=sys.stderr)
+            return EXIT_CONFIG_ERROR
+        conductor = recordings[0].conductor
     config = ServeConfig(
         home=args.home,
         catalog=catalog,
@@ -178,6 +206,9 @@ def run(args: argparse.Namespace) -> int:
         data_port=args.data_port,
         allow_unisolated_checks=args.allow_unisolated_checks,
         embedder_factory=_make_embedder,
+        client_factory=demo,
+        demo=demo,
+        capture_dir=args.capture,
     )
     try:
         servers = build_servers(config)
@@ -187,14 +218,6 @@ def run(args: argparse.Namespace) -> int:
     except ChatStoreError as exc:
         print(f"chat file: {exc}", file=sys.stderr)
         return EXIT_SERVE_ERROR
-    for recording in args.replay or []:
-        try:
-            seed_replay(servers.chat, load_recording(recording))
-        except (ReplayError, ChatStoreError) as exc:
-            servers.close()
-            print(f"--replay: {exc}", file=sys.stderr)
-            return EXIT_CONFIG_ERROR
-        print(f"replay: {recording} is in the chat as a recorded example", flush=True)
     for server in (servers.graph, servers.data):
         threading.Thread(target=server.serve_forever, daemon=True).start()
     print(f"chat   {servers.app.url()}", flush=True)
@@ -211,6 +234,14 @@ def run(args: argparse.Namespace) -> int:
         print(f"models: {config.catalog} (conductor: {config.conductor})", flush=True)
         for line in _model_problems(config):
             print(f"note: {line}", file=sys.stderr, flush=True)
+    if recordings:
+        print(
+            f"demo: replaying {len(recordings)} recorded chat(s) with recorded model replies",
+            flush=True,
+        )
+        threading.Thread(
+            target=run_recordings, args=(servers.api, recordings, args.home), daemon=True
+        ).start()
     if not args.no_browser:
         webbrowser.open(servers.app.url())
     try:

@@ -162,6 +162,22 @@ def test_hostile_values_never_reach_messages() -> None:
     assert "SECRET-MARKER" not in result.model_dump_json()
 
 
+def test_a_non_code_file_says_why_it_has_no_dependencies() -> None:
+    """The conductor once planned dependencies_of for a .toml and a .env file."""
+    for path in ("docs/serve-catalog.toml", ".env.example"):
+        result = DependencyAnalyst().run(_task("dependencies_of", {"node_id": path}), _context())
+        assert isinstance(result, AgentFailure)
+        assert result.kind is FailureKind.INVALID_INPUT
+        assert "only source-code files" in result.message
+        assert path not in result.message  # an input value is still never echoed
+
+
+def test_the_conductor_is_told_which_files_are_modules() -> None:
+    from cognitive_mesh.orchestrator.conduct import SYSTEM_PROMPT
+
+    assert "plan dependencies_of only for source-code files" in SYSTEM_PROMPT
+
+
 def test_task_ids_and_capability_names_are_restricted() -> None:
     for bad in [{"task_id": HOSTILE}, {"capability": HOSTILE}, {"task_id": ""}]:
         data = {"task_id": "t", "capability": "do", "inputs": {}} | bad

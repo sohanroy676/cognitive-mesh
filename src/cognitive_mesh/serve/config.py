@@ -10,7 +10,7 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from cognitive_mesh.change.checks import CheckResult, run_check
 from cognitive_mesh.evaluate.memory import ArmPaths
@@ -39,6 +39,10 @@ class ServeConfig:
     embedder_factory: Callable[[], Embedder] | None = None
     # Tests give fakes; the real command leaves them None.
     client_factory: ClientFactory | None = None
+    # `serve --replay`: the recorded models (a serve.replay.ReplayModels), and `serve --capture`:
+    # the folder that gets one file of model replies per turn.
+    demo: Any = None
+    capture_dir: Path | None = None
     check_runner: CheckRunner = field(default=run_check)
 
     @property

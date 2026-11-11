@@ -19,6 +19,8 @@ Continue Cognitive Mesh. v2.0.0 (local web app, `cognitive-mesh serve`) is pushe
 
 - DeepSeek recording (2026-11-11): `demo/deepseek-example.json`; to actually add DeepSeek, apply that diff (approve the change in a live run, or edit `docs/serve-catalog.toml` and `.env.example` by hand) and verify the model name/endpoint with a real key first.
 
+- Demo reworked 2026-11-12: see `demo/README.md` and `progress.md`. User wants: vague prompts (not spoon-fed), trace for every saved chat, working buttons, chats named "Previous chats". Open: a real PR run (needs the user's repo and token), the DeepSeek diff is partial, Gemini daily quota.
+
 ## Handoff (end of session 15, 2026-11-06)
 - Release: v2.0.1 (patch on top of v2.0.0: web app fixes, saved dependency graphs, README rewrite) on `feature/extended-roadmap-v1.7`; pushed and tagged `v2.0.1` on `2284846`; CI: branch run 42250932066 (passed), tag run 42251943107 (passed). Still no merge to main (user decision: wait until the whole extended roadmap is approved).
 - To run the web app: see the README section "Run the web app". Short form, from the repo root: put `GROQ_API_KEY`, `COGMESH_ALLOW_REMOTE_CONTENT=true`, `COGMESH_ALLOW_TRAINING_USE=true` in the ignored `.env`, start Ollama (`ollama pull llama3.2`), then `uv run cognitive-mesh serve --home E:\Projects\cogmesh-testing\home` and open the three printed links (8770 chat, 8771 graph, 8772 data).

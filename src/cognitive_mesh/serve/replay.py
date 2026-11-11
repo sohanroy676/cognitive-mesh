@@ -1,25 +1,47 @@
-"""A recorded chat turn that the app shows without any model, key or internet (demo).
+"""Record the model replies of a real chat turn, and play them back for a demo.
 
-`serve --replay FILE` puts the recording into the chat file as a finished turn. Its approval
-buttons stay off (no approval is opened), and a `replay` event labels it as a recording, so it
-can never be mistaken for a live result.
+`serve --capture DIR` writes, for every turn, the replies the models gave (and the errors they
+raised). `serve --replay FILE` starts the app with no model, key or internet: the models are
+replaced by those recorded replies, everything else is the real application. The plan is made, the
+files are read, the diff is applied in a git worktree, the contract check runs, a decision and a
+trace are stored and the approval buttons work, exactly as in a live run. Only the text a model
+would have written comes from the file.
+
+A replayed request must be one of the recorded requests (the replies would not fit another one).
 """
 
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess  # noqa: S404 - runs git with fixed arguments
+import sys
+import threading
+import time
+import tomllib
+from collections import deque
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from cognitive_mesh.serve.chat_store import ChatStore
+from cognitive_mesh.providers import ModelRequest, ModelResponse, ProviderError, ProviderErrorKind
 
-MAX_RECORDING_BYTES: Final = 2 * 1024 * 1024
-MAX_EVENTS: Final = 200
-NOTICE: Final = (
-    "This turn was run once with real models and is shown from a saved file. Nothing here "
-    "calls a model now, and the approval buttons are off."
+if TYPE_CHECKING:
+    from cognitive_mesh.providers import ModelClient
+    from cognitive_mesh.serve.app_api import AppApi
+
+MAX_RECORDING_BYTES: Final = 4 * 1024 * 1024
+MAX_REPLIES: Final = 200
+TURN_WAIT_S: Final = 300.0
+
+# The first words of each agent's system prompt tell which agent is asking.
+_ROLES: Final = (
+    ("You are the conductor", "conductor"),
+    ("You propose one small change", "coder"),
+    ("You explain one source file", "explainer"),
+    ("You answer one question", "answerer"),
+    ("You read files of other projects", "reader"),
 )
 
 
@@ -27,58 +49,266 @@ class ReplayError(Exception):
     """The recording cannot be used; the message is fixed text."""
 
 
-class RecordedEvent(BaseModel):
+def classify(request: ModelRequest) -> tuple[str, str]:
+    """(agent role, key) of a model request. The key is the file path for the explainer."""
+    for start, role in _ROLES:
+        if request.system.startswith(start):
+            key = ""
+            if role == "explainer":
+                try:
+                    key = str(json.loads(request.prompt).get("path", ""))
+                except (ValueError, AttributeError):
+                    key = ""
+            return role, key
+    return "other", ""
+
+
+# -- the recording ------------------------------------------------------------------------------
+
+
+class ProjectSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    kind: str = Field(min_length=1, max_length=40)
-    data: dict[str, Any]
+    name: str = Field(min_length=1, max_length=100)
+    sample: str | None = Field(default=None, max_length=100)  # a folder next to the recording
+    checkout: bool = False  # this checkout of Cognitive Mesh itself
+    check: list[str] | None = Field(default=None, max_length=20)  # the declared check command
+
+
+class Reply(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: str = Field(min_length=1, max_length=40)
+    key: str = Field(default="", max_length=500)
+    entry: str = Field(default="", max_length=100)
+    provider: str | None = Field(default=None, max_length=100)
+    model: str | None = Field(default=None, max_length=200)
+    text: str | None = Field(default=None, max_length=200_000)
+    error: str | None = Field(default=None, max_length=40)
 
 
 class Recording(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str = Field(min_length=1, max_length=200)
-    project: str = Field(min_length=1, max_length=200)
+    project: ProjectSpec
     request: str = Field(min_length=1, max_length=4000)
     mode: str = Field(pattern="^(ask|change)$")
-    memory: bool = True
-    events: list[RecordedEvent] = Field(max_length=MAX_EVENTS)
+    conductor: str = Field(default="groq", max_length=100)
+    replies: list[Reply] = Field(max_length=MAX_REPLIES)
+    source: Path | None = Field(default=None, exclude=True)
 
 
 def load_recording(path: Path) -> Recording:
     try:
         if path.stat().st_size > MAX_RECORDING_BYTES:
-            raise ReplayError("the recording is larger than 2 MB")
-        return Recording.model_validate(json.loads(path.read_text(encoding="utf-8")))
+            raise ReplayError("the recording is larger than 4 MB")
+        recording = Recording.model_validate(json.loads(path.read_text(encoding="utf-8")))
     except OSError:
         raise ReplayError("the recording cannot be read") from None
     except (ValueError, ValidationError):
         raise ReplayError("the recording is not a valid recording file") from None
+    return recording.model_copy(update={"source": path})
 
 
-def seed_replay(chat: ChatStore, recording: Recording) -> int:
-    """Store the recording as one session with one finished turn. Returns the turn id.
-    Running it again with the same recording adds nothing."""
-    for session in chat.sessions():
-        if session["project"] != recording.project:
+# -- playing it back ----------------------------------------------------------------------------
+
+
+class ReplayClient:
+    """A model client that answers from the recorded replies of the selected recording."""
+
+    def __init__(self, models: ReplayModels, provider: str, model: str) -> None:
+        self._models = models
+        self.provider = provider
+        self.model = model
+
+    def complete(self, request: ModelRequest) -> ModelResponse:
+        role, key = classify(request)
+        reply = self._models.take(role, key)
+        if reply is None:
+            raise ProviderError(ProviderErrorKind.UNAVAILABLE, "no recorded reply left")
+        if reply.error is not None:
+            try:
+                kind = ProviderErrorKind(reply.error)
+            except ValueError:
+                kind = ProviderErrorKind.OTHER
+            raise ProviderError(kind, "recorded error")
+        return ModelResponse(
+            provider=reply.provider or self.provider,
+            model=reply.model or self.model,
+            text=reply.text or "",
+        )
+
+
+class ReplayModels:
+    """The model side of a demo: one client per catalog entry, all answering from the recording
+    chosen by `select`. Used as `ServeConfig.client_factory`."""
+
+    def __init__(self, recordings: list[Recording]) -> None:
+        self.recordings = recordings
+        self._by_request = {r.request.strip(): r for r in recordings}
+        self._labels: dict[str, tuple[str, str]] = {}
+        for rec in recordings:
+            for reply in rec.replies:
+                if reply.entry and reply.provider and reply.model:
+                    self._labels.setdefault(reply.entry, (reply.provider, reply.model))
+        self._queues: dict[tuple[str, str], deque[Reply]] = {}
+        self._lock = threading.Lock()
+
+    def __call__(self, entry_id: str) -> ModelClient:
+        provider, model = self._labels.get(entry_id, ("replay", entry_id))
+        return ReplayClient(self, provider, model)
+
+    def check(self, text: str) -> str | None:
+        """Why a request cannot be answered in demo mode, or None."""
+        if text.strip() in self._by_request:
+            return None
+        return (
+            "demo mode answers only the recorded requests, because the models' replies are "
+            "played back from a file; use one of the previous chats or start without --replay"
+        )
+
+    def select(self, text: str) -> None:
+        recording = self._by_request.get(text.strip())
+        queues: dict[tuple[str, str], deque[Reply]] = {}
+        for reply in recording.replies if recording else []:
+            queues.setdefault((reply.role, reply.key), deque()).append(reply)
+        with self._lock:
+            self._queues = queues
+
+    def take(self, role: str, key: str) -> Reply | None:
+        with self._lock:
+            queue = self._queues.get((role, key))
+            return queue.popleft() if queue else None
+
+
+def write_replay_catalog(source: Path, home: Path) -> Path:
+    """The model catalog of a demo: the entries of `source` with the same ids and roles, but all
+    local, so that none needs a key or a remote-content opt-in (nothing is ever sent anywhere)."""
+    try:
+        entries = tomllib.loads(source.read_text(encoding="utf-8"))["models"]
+    except (OSError, ValueError, KeyError):
+        raise ReplayError("the model catalog to copy the entries from cannot be read") from None
+    lines = ["# written by `serve --replay`: the entries of the real catalog, all local\n"]
+    for entry_id, entry in entries.items():
+        roles = ", ".join(json.dumps(r) for r in entry["roles"])
+        lines.append(
+            f"\n[models.{entry_id}]\n"
+            'wire = "ollama"\nbase_url = "http://localhost:11434"\n'
+            f"model = {json.dumps(entry['model'])}\n"
+            f"context_tokens = {int(entry['context_tokens'])}\n"
+            f'tier = "free"\ndata_use = "no_training"\nroles = [{roles}]\n'
+        )
+    home.mkdir(parents=True, exist_ok=True)
+    target = home / "replay-catalog.toml"
+    target.write_text("".join(lines), encoding="utf-8")
+    return target
+
+
+# -- recording -----------------------------------------------------------------------------------
+
+
+class CaptureClient:
+    """Passes every call through and notes the reply (or the error) for `serve --capture`."""
+
+    def __init__(self, inner: ModelClient, sink: list[dict[str, Any]], entry: str) -> None:
+        self._inner = inner
+        self._sink = sink
+        self._entry = entry
+        self.provider = inner.provider
+        self.model = inner.model
+
+    def complete(self, request: ModelRequest) -> ModelResponse:
+        role, key = classify(request)
+        note: dict[str, Any] = {"role": role, "key": key, "entry": self._entry}
+        try:
+            response = self._inner.complete(request)
+        except ProviderError as exc:
+            self._sink.append({**note, "error": exc.kind.value})
+            raise
+        self._sink.append(
+            {**note, "provider": response.provider, "model": response.model, "text": response.text}
+        )
+        return response
+
+
+# -- starting the recorded chats -----------------------------------------------------------------
+
+
+def git(folder: Path, *args: str) -> str:
+    done = subprocess.run(  # noqa: S603 - fixed arguments, no shell
+        [  # noqa: S607
+            "git",
+            "-c",
+            "user.name=Cognitive Mesh demo",
+            "-c",
+            "user.email=demo@example.invalid",
+            *args,
+        ],
+        cwd=folder,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return done.stdout.strip()
+
+
+def make_git_sample(source: Path, dest: Path, origin: str | None = None) -> None:
+    """Copy a sample project to `dest` and make it a git repository with one commit on `main`."""
+    if dest.exists():
+        raise ReplayError(f"{dest} already exists")
+    shutil.copytree(source, dest)
+    git(dest, "init", "-q", "-b", "main")
+    git(dest, "add", "-A")
+    git(dest, "commit", "-q", "-m", "Initial commit")
+    if origin is not None:
+        git(dest, "remote", "add", "origin", origin)
+
+
+def _project_folder(recording: Recording, home: Path) -> Path:
+    spec = recording.project
+    if spec.sample:
+        base = recording.source.parent if recording.source else Path.cwd()
+        dest = home / "demo-projects" / spec.name
+        if not dest.exists():
+            make_git_sample(base / spec.sample, dest)
+        return dest
+    if spec.checkout:
+        here = Path(__file__).resolve()
+        for parent in here.parents:
+            if (parent / ".git").exists() and (parent / "pyproject.toml").is_file():
+                return parent
+        raise ReplayError("this Cognitive Mesh checkout is not a git repository")
+    raise ReplayError("the recording names no project folder")
+
+
+def _finished(api: AppApi, recording: Recording) -> bool:
+    for session in api.chat.sessions():
+        if session["project"] != recording.project.name:
             continue
-        for turn_id in chat.session_turns(session["id"]):
-            turn = chat.turn(turn_id)
-            events = chat.events(turn_id)
+        for turn_id in api.chat.session_turns(session["id"]):
+            turn = api.chat.turn(turn_id)
             if (
                 turn is not None
                 and turn["text"] == recording.request
-                and events
-                and events[0]["kind"] == "replay"
+                and turn["status"] in ("done", "rejected")
             ):
-                return turn_id
-    session_id = chat.new_session(recording.project)
-    turn_id = chat.begin_turn(
-        session_id, recording.project, recording.request, recording.memory, recording.mode
-    )
-    chat.add_event(turn_id, "replay", {"message": NOTICE, "title": recording.title})
-    for event in recording.events:
-        chat.add_event(turn_id, event.kind, event.data)
-    chat.add_event(turn_id, "done", {"kind": "replay"})
-    chat.end_worker(turn_id)
-    return turn_id
+                return True
+    return False
+
+
+def run_recordings(api: AppApi, recordings: list[Recording], home: Path) -> None:
+    """Make each recorded chat a real, finished-or-waiting turn, one after the other."""
+    for recording in recordings:
+        try:
+            if _finished(api, recording):
+                continue
+            folder = _project_folder(recording, home)
+            api.ensure_project(recording.project.name, folder, recording.project.check)
+            print(f"replay: {recording.title}", file=sys.stderr, flush=True)
+            api.start_chat(recording.project.name, recording.request, recording.mode)
+            deadline = time.monotonic() + TURN_WAIT_S
+            while api.chat.running_turn() is not None and time.monotonic() < deadline:
+                time.sleep(0.2)
+        except Exception as exc:  # a broken recording must not stop the others or the server
+            print(f"replay: {recording.title}: {type(exc).__name__}: {exc}", file=sys.stderr)

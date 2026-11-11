@@ -9,6 +9,7 @@ Format follows Keep a Changelog. Generated from Conventional Commits by git-clif
 - **serve:** Answer questions, show agent results, project picker, Gemini
 - **serve:** Readable agent cards, coder model rotation, Gemini first
 - **demo:** Recorded Discount example, replay mode, GitHub preflight
+- **demo:** DeepSeek recording, conversation list, repeatable --replay
 
 ### Documentation
 - Record v2.0.1 CI runs

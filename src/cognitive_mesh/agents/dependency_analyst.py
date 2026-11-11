@@ -10,6 +10,10 @@ from cognitive_mesh.graph.rederive import Holding, Rederivation, rederive
 from cognitive_mesh.impact import ImpactError, list_dependents, parse_target
 from cognitive_mesh.impact.render import site_text
 
+UNKNOWN_NODE = (
+    "unknown node id: only source-code files (Python, JavaScript, TypeScript) are modules; "
+    "configuration, documentation and .env files have no dependency node"
+)
 SAME_ANALYZER_NOTE = (
     "re-derived from the current graph by the same analyzer that made the claim: a repeatable "
     "check of one code version, not independent proof"
@@ -32,7 +36,7 @@ def resolve_node_id(graph: DependencyGraph, raw: str) -> str:
         except GraphError:
             continue
         return candidate
-    raise AgentFault(FailureKind.INVALID_INPUT, "unknown node id") from None
+    raise AgentFault(FailureKind.INVALID_INPUT, UNKNOWN_NODE) from None
 
 
 class CompareDependenciesInput(_Strict):
@@ -234,7 +238,7 @@ class DependencyAnalyst(Agent):
                     for e in graph.direct_dependencies(node_id)
                 ]
         except GraphError:
-            raise AgentFault(FailureKind.INVALID_INPUT, "unknown node id") from None
+            raise AgentFault(FailureKind.INVALID_INPUT, UNKNOWN_NODE) from None
         items = [
             DependencyItem(
                 node_id=node_id,

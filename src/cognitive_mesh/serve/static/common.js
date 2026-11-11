@@ -90,6 +90,7 @@ async function topBar(current, extra) {
         link("chat", "app", "Chat"), link("graph", "graph", "Dependency graph"),
         link("data", "data", "Data")),
       h("span", { class: "spacer" }),
+      m.demo ? h("span", { class: "tag", title: "The models' replies are played back from a recording; everything else is real" }, "demo mode") : null,
       extra || null));
 }
 

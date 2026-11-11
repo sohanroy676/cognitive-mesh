@@ -43,8 +43,10 @@ SYSTEM_PROMPT = (
     '(letters, digits, _ or -), "capability", optional "inputs" (an object of literal values), '
     'optional "depends_on" (a list of earlier step_ids) and optional "input_refs" '
     '(an object mapping an input name to {"step_id": ..., "field": ...}, taken from that step\'s '
-    f"output; the step must also be in depends_on). A file's node id is 'module:' plus its path, "
-    f"for example 'module:src/app/main.py'. If the request has 'previous_rejection', your last "
+    f"output; the step must also be in depends_on). A source-code file's node id is 'module:' plus "
+    f"its path, for example 'module:src/app/main.py'; configuration and documentation files "
+    f"have no node, so use dependencies_of only on source-code files. If the request has "
+    f"'previous_rejection', your last "
     "plan was rejected for that reason; reply with a corrected plan. "
     f"At most {MAX_STEPS} steps. Shape example (names and paths are placeholders): "
     f"{EXAMPLE_REPLY}"

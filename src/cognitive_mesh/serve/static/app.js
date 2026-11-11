@@ -133,7 +133,7 @@ function sidebar() {
 
 // Every conversation (including recorded examples), newest first; one click opens it.
 function sessionsPanel() {
-  const box = h("div", { class: "stack", role: "group", "aria-label": "Conversations" }, h("h3", null, "Conversations"));
+  const box = h("div", { class: "stack", role: "group", "aria-label": "Previous chats" }, h("h3", null, "Previous chats"));
   if (!view.sessionList.length) {
     box.append(h("p", { class: "muted" }, "None yet."));
     return box;
@@ -420,7 +420,6 @@ function agentsSection(turn) {
 function timelineLine(ev) {
   const d = ev.data;
   switch (ev.kind) {
-    case "replay": return li("Recorded example (no model was called now)");
     case "started": return li("Started on project " + d.project);
     case "plan": return li("Conductor made a plan with " + d.steps.length + " step(s)");
     case "analysis": return li("The planned steps ran: " + d.status, d.status === "succeeded" ? "ok" : "bad");
@@ -443,8 +442,6 @@ function timelineLine(ev) {
 function turnCard(turn) {
   const open = new Set(turn.approvals.map((a) => a.id));
   const body = h("div", { class: "body" });
-  const replay = turn.events.find((e) => e.kind === "replay");
-  if (replay) body.append(h("div", { class: "notice", role: "note" }, h("strong", null, "Recorded example. "), replay.data.message));
   const answer = turn.events.find((e) => e.kind === "answer");
   const answerFail = turn.events.find((e) => e.kind === "answer_failed");
   if (answer) body.append(answerTop(answer.data));
@@ -462,9 +459,9 @@ function turnCard(turn) {
   if (agents) body.append(agents);
   const closed = requests.filter((e) => !open.has(e.data.approval_id));
   for (const e of closed) {
-    body.append(h("details", { open: replay ? true : null },
-      h("summary", null, (e.data.action === "pr" ? "Pull request request" : "Review of the change") + " for commit " + String(e.data.commit).slice(0, 12) + (replay ? " (recorded)" : " (closed)")),
-      approvalBlock(turn, e.data, false, !!replay)));
+    body.append(h("details", null,
+      h("summary", null, (e.data.action === "pr" ? "Pull request request" : "Review of the change") + " for commit " + String(e.data.commit).slice(0, 12) + " (closed)"),
+      approvalBlock(turn, e.data, false)));
   }
   if (turn.events.length) {
     const events = h("ul", { class: "events" }, turn.events.map(timelineLine));
@@ -493,7 +490,7 @@ function prLink(url) {
   return h("p", null, "Pull request: ", safe ? h("a", { href: url, rel: "noopener noreferrer", target: "_blank" }, url) : h("span", { class: "mono" }, url));
 }
 
-function approvalBlock(turn, d, isOpen, recorded) {
+function approvalBlock(turn, d, isOpen) {
   const box = h("div", { class: "stack panel" });
   box.append(h("h3", null, d.action === "pr" ? "Open a pull request?" : "Review this change"),
     kv([["Branch", d.branch], ["Commit", String(d.commit).slice(0, 12)], ["Check", d.check],
@@ -510,7 +507,7 @@ function approvalBlock(turn, d, isOpen, recorded) {
     box.append(h("p", { class: "notice" }, "No check validated this change. An approval is your label, not a test."));
   }
   if (!isOpen) {
-    box.append(h("p", { class: "muted" }, recorded ? "Recorded example: the buttons are off. In a live run you can approve, revise or reject here." : "This request is closed."));
+    box.append(h("p", { class: "muted" }, "This request is closed."));
     return box;
   }
   const note = h("textarea", { "aria-label": "Note or what to revise", placeholder: "Note (needed to revise)" });

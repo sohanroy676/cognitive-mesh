@@ -67,6 +67,7 @@ from cognitive_mesh.providers.routing import RoutedClient
 from cognitive_mesh.serve.chat_store import ChatStore, ChatStoreError, clean_text
 from cognitive_mesh.serve.config import EmbedderHolder, ServeConfig
 from cognitive_mesh.serve.http import ApiError, Handler, Reply, Request, need, need_int
+from cognitive_mesh.serve.replay import CaptureClient
 from cognitive_mesh.serve.ws_cache import WorkspaceGraphCache
 from cognitive_mesh.traces import (
     TraceRecorder,
@@ -177,6 +178,7 @@ class AppApi:
         self.project_graph = project_graph
         self.embedder = EmbedderHolder(config.embedder_factory)
         self._threads: list[threading.Thread] = []
+        self._captured: list[dict[str, Any]] = []
 
     def routes_get(self) -> dict[str, Handler]:
         return {
@@ -456,6 +458,10 @@ class AppApi:
             raise ApiError(
                 409, "no model is configured: start the server with --catalog and --conductor"
             )
+        if self.config.demo is not None:
+            problem = self.config.demo.check(body.text)
+            if problem is not None:
+                raise ApiError(409, problem)
         return 200, {"turn": self._start_turn(body.session, body.text, body.memory, body.mode)}
 
     def _session_project(self, session_id: int) -> str:
@@ -469,6 +475,9 @@ class AppApi:
         running = self.chat.running_turn()
         if running is not None:
             raise ApiError(409, f"turn {running} is still running; one task runs at a time")
+        if self.config.demo is not None:
+            self.config.demo.select(text)
+            memory = False  # a demo needs no embedding model
         turn_id = self.chat.begin_turn(session_id, project, text, memory, mode)
         thread = threading.Thread(
             target=self._worker, args=(turn_id, project, text, memory, mode), daemon=True
@@ -477,7 +486,27 @@ class AppApi:
         thread.start()
         return turn_id
 
+    def ensure_project(self, name: str, folder: Path, check: list[str] | None = None) -> None:
+        """Store a local folder as a project unless a project of that name exists (demo setup)."""
+        with WorkspaceStore.create(self.config.workspace) as store:
+            if name not in {p.name for p in store.projects()}:
+                identity = derive_identity(str(folder))
+                store.add_project(
+                    name,
+                    ProjectKind.LOCAL,
+                    str(folder),
+                    app_id=identity.app_id if identity else None,
+                    app_id_how=identity.how.value if identity else None,
+                )
+            if check:
+                store.set_check(name, check, by=PERSON)
+
+    def start_chat(self, project: str, text: str, mode: str) -> int:
+        """A new conversation about `project` with one turn started; returns the turn id."""
+        return self._start_turn(self.chat.new_session(project), text, True, mode)
+
     def _worker(self, turn_id: int, project: str, text: str, memory: bool, mode: str) -> None:
+        self._captured = []
         try:
             self._run_turn(turn_id, project, text, memory, mode)
         except _Stop as stop:
@@ -489,7 +518,28 @@ class AppApi:
         except Exception as exc:  # a worker must always close its turn
             self.chat.add_event(turn_id, "failed", {"message": f"stopped: {type(exc).__name__}"})
         finally:
+            self._save_capture(turn_id, project, text, mode)
             self.chat.end_worker(turn_id)
+
+    def _save_capture(self, turn_id: int, project: str, text: str, mode: str) -> None:
+        """With `serve --capture DIR`, keep the models' replies of this turn for a later replay."""
+        folder = self.config.capture_dir
+        if folder is None or not self._captured:
+            return
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            note = {
+                "request": text,
+                "mode": mode,
+                "project": project,
+                "conductor": self.config.conductor,
+                "replies": self._captured,
+            }
+            (folder / f"turn-{turn_id}.json").write_text(
+                json.dumps(note, indent=1, ensure_ascii=True) + "\n", encoding="utf-8"
+            )
+        except OSError:
+            self.chat.add_event(turn_id, "note", {"message": "the model replies were not saved"})
 
     # -- the turn --------------------------------------------------------------------------
 
@@ -603,10 +653,16 @@ class AppApi:
 
     def _client(self, entry_id: str, catalog: Any) -> Any:
         if self.config.client_factory is not None:
-            return self.config.client_factory(entry_id)
-        return build_entry_client(entry_id, catalog.models[entry_id])
+            client = self.config.client_factory(entry_id)
+        else:
+            client = build_entry_client(entry_id, catalog.models[entry_id])
+        if self.config.capture_dir is not None:
+            return CaptureClient(client, self._captured, entry_id)
+        return client
 
     def _refresh(self, turn_id: int, text: str) -> None:
+        if self.config.demo is not None:
+            return  # a demo builds no memory (it needs the embedding model)
         try:
             with TraceStore.create(self.config.trace) as store:
                 refresh_memory(store, self.config.paths, self.embedder.get())
@@ -1081,14 +1137,17 @@ class RotatingClient:
         self.model = clients[0].model
 
     def complete(self, request: ModelRequest) -> ModelResponse:
-        start = self._next % len(self._clients)
-        self._next += 1
+        count = len(self._clients)
         last: ProviderError | None = None
-        for i in range(len(self._clients)):
+        for i in range(count):
+            index = (self._next + i) % count
             try:
-                return self._clients[(start + i) % len(self._clients)].complete(request)  # type: ignore[no-any-return]
+                reply: ModelResponse = self._clients[index].complete(request)
             except ProviderError as exc:
                 last = exc
+                continue
+            self._next = (index + 1) % count  # the next draft is asked of the next model
+            return reply
         assert last is not None  # noqa: S101 - at least one client
         raise last
 

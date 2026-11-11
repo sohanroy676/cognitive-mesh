@@ -33,7 +33,7 @@ def test_a_failing_client_is_replaced_by_the_next() -> None:
     a, b = Fake("a", fail=True), Fake("b")
     client = RotatingClient([a, b])
     assert [client.complete(REQUEST).model for _ in range(3)] == ["b", "b", "b"]
-    assert a.calls == 2  # tried on the first and third call, skipped as the start of the second
+    assert a.calls == 3  # asked first every time, since it never answered
 
 
 def test_the_last_error_is_raised_when_all_fail() -> None:
