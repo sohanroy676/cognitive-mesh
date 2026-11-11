@@ -3,7 +3,8 @@
 | File | What it is |
 |---|---|
 | `discount-recording.json` | The models' replies for the request *"Customers should be able to apply a discount code to their cart."* on the small sample project `shop-api`. |
-| `deepseek-recording.json` | The replies for *"Add DeepSeek as another model our multi-agent orchestration can use. The key will come from the environment, like the other providers."* on Cognitive Mesh itself. |
+| `deepseek-recording.json` | The replies for *"Add DeepSeek as another model our multi-agent orchestration can use. The key will come from the environment, like the other providers."* on Cognitive Mesh itself. The first draft is a partial change. |
+| `deepseek-revision-recording.json` | The replies after the person pressed **Revise** on that draft with a note. The second draft is the working change: a `deepseek` catalog entry and a `DEEPSEEK_API_KEY=` line in `.env.example`. |
 | `shop-api/` | The sample project (a cart and a pricing function, plus its check `check_shop.py`). |
 | `make_shop_api.py` | Turns `shop-api/` into a git repository anywhere you choose (optionally with a GitHub `origin`). |
 | `check_github.py` | Checks that everything a real push and pull request needs is in place. |
@@ -25,7 +26,7 @@ Start the app in demo mode:
 
 ```bash
 uv run cognitive-mesh serve --home demo-home \
-  --replay demo/discount-recording.json --replay demo/deepseek-recording.json
+  --replay demo/discount-recording.json --replay demo/deepseek-recording.json   --replay demo/deepseek-revision-recording.json --allow-unisolated-checks
 ```
 
 Open the **chat** link it prints. After about a minute (the second chat reads the whole repository)
@@ -40,7 +41,16 @@ the sidebar lists both under **Previous chats**. Each is a real turn:
 What is replayed, and what is not: the *text the models wrote* comes from the recording file; everything
 else is the real application running on this computer. The header shows a small **demo mode** tag. Because
 the replies are fixed, only the two recorded requests are accepted (pressing **Send** with the same text
-runs the chat again from the start), and **Revise** cannot ask a model for a new draft.
+runs the chat again from the start). **Revise** works on the DeepSeek chat only: the note box is
+pre-filled with the note that was written when the revision was recorded, and pressing it replays the
+recorded second draft. On the discount chat Revise says there is no recorded revision, because it needs a
+model.
+
+**The showcase.** Open the DeepSeek chat. The first draft adds a `deepseek` branch to `providers/factory.py`
+(not a working change: `COGMESH_PROVIDER` takes only `groq`, `ollama` or `catalog`). Press **Revise**, keep or
+edit the note, and press it. The second draft adds DeepSeek to `docs/serve-catalog.toml` and `.env.example`,
+the check passes, and **Approve** commits it to its own branch and then offers **Push branch and open pull
+request**.
 
 Stop with Ctrl+C. Delete the `demo-home` folder to start from scratch (approvals do not survive a
 restart; the chats are rebuilt each time).
@@ -110,17 +120,15 @@ pull request** can work:
    and GitHub does not have it yet. Push it first, yourself or with my help after you approve:
    `git push -u origin demo-Web-app`. (Or check out `main` and use that as the base.)
 3. **A passing check.** The page refuses the pull request unless a check passed for the approved commit.
-   The DeepSeek recording declares `python -m compileall -q src` (a syntax check) for the project, so start
+   The DeepSeek recordings declare `python -m compileall -q src` (a syntax check) for the project, so start
    the server with `--allow-unisolated-checks`. The check runs on your computer, not isolated.
 4. Run `uv run python demo/check_github.py . --online`, then start the demo, open the DeepSeek chat,
    **Approve**, and press the pull request button. The branch `cogmesh/change-...` is pushed and a
    pull request is opened from it into `demo-Web-app`. Nothing is merged.
 
-**Read this before you show it.** The recorded DeepSeek diff is a partial change (see "About the DeepSeek
-recording" below): it would put an unreachable branch into `providers/factory.py`. If the pull request is
-meant to show a *working* DeepSeek feature, run the request live with your keys instead, and use **Revise**
-with a note such as *"COGMESH_PROVIDER only accepts groq, ollama or catalog; add DeepSeek as a catalog
-entry instead"*, then approve the better draft. Revise needs a real model, so it does not work in demo mode.
+**Which draft to approve.** Use the second draft (after **Revise**); the first one is the partial change
+described under "About the DeepSeek recording". Both are only commits on their own branches until you
+press the pull-request button.
 
 ## 4. Make a new recording
 
@@ -128,19 +136,21 @@ entry instead"*, then approve the better draft. Revise needs a real model, so it
 uv run cognitive-mesh serve --home rec-home --capture captures        # live models, replies are saved
 # ... send the request in the chat; the replies of each turn go to captures/turn-N.json
 uv run python demo/make_recording.py captures/turn-N.json --title "..." --project shop-api \
-  --sample shop-api --check python check_shop.py --out demo/new-recording.json
+  --sample shop-api --check "python check_shop.py" --out demo/new-recording.json
 ```
 
 For a change to Cognitive Mesh itself use `--checkout` instead of `--sample`. A recording's diffs apply
 to the files as they were when it was recorded, so record again if those files change.
 
-## About the DeepSeek recording
+## About the DeepSeek recordings
 
-The agents read the provider code, and the coder proposed a `deepseek` branch in
-`providers/factory.py`. It is **not a complete change**: `COGMESH_PROVIDER` accepts only `groq`,
-`ollama` or `catalog`, so that branch could never be reached. The simpler route is a catalog entry in
-`docs/serve-catalog.toml` plus a key line in `.env.example`, which needs no code. Model output is
-unverified, and no check ran on that project; an approval is your label, not a test.
+First draft: the agents read the provider code, and the coder proposed a `deepseek` branch in
+`providers/factory.py`. It is **not a complete change**: `COGMESH_PROVIDER` accepts only `groq`, `ollama` or
+`catalog`, so that branch could never be reached. The note on **Revise** says so, and the second draft
+(Groq, after Gemini timed out three times) is a catalog entry that loads and validates. Its values are
+the model's guesses, so check them before relying on them: it lists DeepSeek as `tier = "free"` (it is a
+paid service), gives all roles including `conductor`, and sets `context_tokens = 131072`. Model output is
+unverified, and the only check is a syntax check; an approval is your label, not a test.
 
 ## Not verified yet
 

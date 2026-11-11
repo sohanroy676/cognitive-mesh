@@ -1,7 +1,7 @@
 """Turn the files `serve --capture DIR` wrote into a recording for `serve --replay`.
 
     uv run python demo/make_recording.py DIR/turn-7.json --title "Add discount codes" \
-        --project shop-api --sample shop-api --check python check_shop.py --out demo/discount.json
+        --project shop-api --sample shop-api --check "python check_shop.py" --out demo/discount.json
 
 Use `--checkout` instead of `--sample` when the project is this Cognitive Mesh checkout itself.
 Read the result before you share it: it holds what the models answered.
@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -23,7 +24,12 @@ def main() -> int:
     parser.add_argument("--project", required=True, help="the project's name in the chat")
     parser.add_argument("--sample", default=None, help="a folder next to the recording")
     parser.add_argument("--checkout", action="store_true", help="the project is this checkout")
-    parser.add_argument("--check", nargs="+", default=None, help="the project's check command")
+    parser.add_argument("--check", default=None, help="the check command as one string")
+    parser.add_argument(
+        "--revise-note",
+        default=None,
+        help="the capture is of a revision: the note, with the request ending '(revise: NOTE)'",
+    )
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     if bool(args.sample) == args.checkout:
@@ -39,10 +45,11 @@ def main() -> int:
             "name": args.project,
             "sample": args.sample,
             "checkout": args.checkout,
-            "check": args.check,
+            "check": shlex.split(args.check) if args.check else None,
         },
         "request": note["request"],
         "mode": note["mode"],
+        "revise_note": args.revise_note,
         "conductor": note["conductor"],
         "replies": note["replies"],
     }

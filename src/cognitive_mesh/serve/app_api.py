@@ -259,6 +259,8 @@ class AppApi:
             },
             "running_turn": self.chat.running_turn(),
             "checks": "run (not isolated)" if self.config.allow_unisolated_checks else "not run",
+            "demo": self.config.demo is not None,
+            "demo_notes": self.config.demo.notes() if self.config.demo is not None else {},
             "actions": list(ACTIONS),
         }
 
@@ -1094,6 +1096,13 @@ class AppApi:
         body = _parse(_Decide, req.body)
         if not body.note.strip():
             raise ApiError(400, "say what should change")
+        if self.config.demo is not None:  # refuse before the approval is spent
+            asked = self.chat.approval_turn(body.approval_id)
+            shown = self.chat.turn(asked) if asked is not None else None
+            if shown is not None:
+                problem = self.config.demo.check(f"{shown['text']} (revise: {body.note})"[:4000])
+                if problem is not None:
+                    raise ApiError(409, problem)
         turn_id = self._claim(body, "approve", "revise")
         turn = self.chat.turn(turn_id)
         assert turn is not None  # noqa: S101 - _claim found it

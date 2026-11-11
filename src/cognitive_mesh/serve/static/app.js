@@ -510,11 +510,14 @@ function approvalBlock(turn, d, isOpen) {
     box.append(h("p", { class: "muted" }, "This request is closed."));
     return box;
   }
+  const hint = ((view.state && view.state.demo_notes) || {})[turn.text] || "";
   const note = h("textarea", { "aria-label": "Note or what to revise", placeholder: "Note (needed to revise)" });
+  note.value = hint;  // in a demo, the note that was written when the revision was recorded
   const msg = h("p", { class: "muted", role: "status" });
   const body = (extra) => Object.assign({ approval_id: d.approval_id, change_id: d.change_id, diff_sha256: d.diff_sha256, note: note.value }, extra);
   const act = (path) => async (e) => {
     e.target.disabled = true;
+    msg.textContent = "Working… this can take a few seconds.";
     try {
       const r = await post(path, body());
       if (path === "/api/change/revise") { await openSession(view.session); }

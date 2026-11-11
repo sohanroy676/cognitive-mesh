@@ -1,0 +1,104 @@
+{
+ "title": "Add DeepSeek as a model (revised)",
+ "project": {
+  "name": "cognitive-mesh",
+  "sample": null,
+  "checkout": true,
+  "check": [
+   "python",
+   "-m",
+   "compileall",
+   "-q",
+   "src"
+  ]
+ },
+ "request": "Add DeepSeek as another model our multi-agent orchestration can use. The key will come from the environment, like the other providers. (revise: COGMESH_PROVIDER only accepts groq, ollama or catalog, so a new branch in factory.py would never run. Add DeepSeek as a model entry in the catalog (docs/serve-catalog.toml) with its key name in .env.example instead of changing the provider code.)",
+ "mode": "change",
+ "revise_note": "COGMESH_PROVIDER only accepts groq, ollama or catalog, so a new branch in factory.py would never run. Add DeepSeek as a model entry in the catalog (docs/serve-catalog.toml) with its key name in .env.example instead of changing the provider code.",
+ "conductor": "groq",
+ "replies": [
+  {
+   "role": "conductor",
+   "key": "",
+   "entry": "groq",
+   "latency_ms": 3875,
+   "provider": "groq",
+   "model": "openai/gpt-oss-120b",
+   "text": "{\n  \"steps\": [\n    {\n      \"step_id\": \"explain_catalog\",\n      \"capability\": \"explain_file\",\n      \"inputs\": {\n        \"path\": \"docs/serve-catalog.toml\"\n      }\n    },\n    {\n      \"step_id\": \"explain_env\",\n      \"capability\": \"explain_file\",\n      \"inputs\": {\n        \"path\": \".env.example\"\n      }\n    },\n    {\n      \"step_id\": \"explain_factory\",\n      \"capability\": \"explain_file\",\n      \"inputs\": {\n        \"path\": \"src/cognitive_mesh/providers/factory.py\"\n      }\n    },\n    {\n      \"step_id\": \"deps_catalog\",\n      \"capability\": \"dependencies_of\",\n      \"inputs\": {\n        \"node_id\": \"module:src/cognitive_mesh/providers/catalog.py\",\n        \"transitive\": false\n      },\n      \"depends_on\": [\n        \"explain_factory\"\n      ]\n    },\n    {\n      \"step_id\": \"deps_factory\",\n      \"capability\": \"dependencies_of\",\n      \"inputs\": {\n        \"node_id\": \"module:src/cognitive_mesh/providers/factory.py\",\n        \"transitive\": false\n      },\n      \"depends_on\": [\n        \"explain_factory\"\n      ]\n    }\n  ],\n  \"assignments\": {\n    \"explain_catalog\": {\n      \"model\": \"gemini\",\n      \"reason\": \"gemini has sufficient evidence (20 recorded calls with known outcomes) for the explain_file capability.\"\n    },\n    \"explain_env\": {\n      \"model\": \"gemini\",\n      \"reason\": \"gemini has sufficient evidence (20 recorded calls with known outcomes) for the explain_file capability.\"\n    },\n    \"explain_factory\": {\n      \"model\": \"gemini\",\n      \"reason\": \"gemini has sufficient evidence (20 recorded calls with known outcomes) for the explain_file capability.\"\n    }\n  },\n  \"reasoning\": \"The plan gathers read\u2011only information about the catalog TOML, the .env example, and the provider factory code, then inspects their dependency graphs. All steps use only explain_file or dependencies_of, satisfying the request to avoid any editing actions.\"\n}",
+   "prompt_tokens": 6195,
+   "completion_tokens": 860
+  },
+  {
+   "role": "explainer",
+   "key": "docs/serve-catalog.toml",
+   "entry": "gemini",
+   "latency_ms": 30140,
+   "error": "timeout"
+  },
+  {
+   "role": "explainer",
+   "key": "docs/serve-catalog.toml",
+   "entry": "groq",
+   "latency_ms": 813,
+   "provider": "groq",
+   "model": "openai/gpt-oss-120b",
+   "text": "{\"summary\":\"The file is a TOML configuration for the Cognitive Mesh serve command, defining a model catalog with three model entries: gemini, groq, and local-llama. Each model specifies connection details such as wire protocol, base URL, model identifier, API key environment variable (redacted), token context limits, tier, data use policy, and supported roles. The Gemini model uses an OpenAI\u2011compatible endpoint for Google Generative Language, the Groq model uses its own OpenAI\u2011compatible endpoint, and the local\u2011llama model uses an Ollama endpoint on localhost. Comments explain usage notes and environment variables for remote content and training permissions.\",\"symbols\":[\"models.gemini\",\"models.groq\",\"models.local-llama\"]}",
+   "prompt_tokens": 936,
+   "completion_tokens": 230
+  },
+  {
+   "role": "explainer",
+   "key": ".env.example",
+   "entry": "gemini",
+   "latency_ms": 30109,
+   "error": "timeout"
+  },
+  {
+   "role": "explainer",
+   "key": ".env.example",
+   "entry": "groq",
+   "latency_ms": 1672,
+   "provider": "groq",
+   "model": "openai/gpt-oss-120b",
+   "text": "{\"summary\":\"This .env.example file provides a template of environment variables for configuring the COGMESH application. It documents required settings such as the provider (COGMESH_PROVIDER), optional API keys for Groq (GROQ_API_KEY) and Gemini (GEMINI_API_KEY), model selection and reasoning effort for Groq (COGMESH_GROQ_MODEL, COGMESH_GROQ_REASONING_EFFORT), remote content permission (COGMESH_ALLOW_REMOTE_CONTENT), Ollama connection details (COGMESH_OLLAMA_BASE_URL, COGMESH_OLLAMA_MODEL), request timeout (COGMESH_MODEL_TIMEOUT_S), logging level (COGMESH_LOG_LEVEL), optional model catalog configuration (COGMESH_MODEL_CATALOG, COGMESH_MODEL), training use consent (COGMESH_ALLOW_TRAINING_USE), and a GitHub token for automated PR changes (GITHUB_TOKEN). The file includes explanatory comments and advises never to commit real secret keys.\",\"symbols\":[\"COGMESH_PROVIDER\",\"GROQ_API_KEY\",\"GEMINI_API_KEY\",\"COGMESH_GROQ_MODEL\",\"COGMESH_GROQ_REASONING_EFFORT\",\"COGMESH_ALLOW_REMOTE_CONTENT\",\"COGMESH_OLLAMA_BASE_URL\",\"COGMESH_OLLAMA_MODEL\",\"COGMESH_MODEL_TIMEOUT_S\",\"COGMESH_LOG_LEVEL\",\"COGMESH_MODEL_CATALOG\",\"COGMESH_MODEL\",\"COGMESH_ALLOW_TRAINING_USE\",\"GITHUB_TOKEN\"]}",
+   "prompt_tokens": 931,
+   "completion_tokens": 585
+  },
+  {
+   "role": "explainer",
+   "key": "src/cognitive_mesh/providers/factory.py",
+   "entry": "gemini",
+   "latency_ms": 30140,
+   "error": "timeout"
+  },
+  {
+   "role": "explainer",
+   "key": "src/cognitive_mesh/providers/factory.py",
+   "entry": "groq",
+   "latency_ms": 953,
+   "provider": "groq",
+   "model": "openai/gpt-oss-120b",
+   "text": "{\"summary\":\"This module provides utilities to construct a concrete ModelClient implementation based on the current Settings. It supports direct Ollama and Groq providers, as well as a catalog\u2011driven provider where model entries are described in a catalog file. Helper functions perform validation of required environment keys, enforce opt\u2011in flags for remote content and training\u2011use, generate user\u2011visible warnings, and translate a CatalogEntry into the appropriate client (OllamaClient or OpenAI\u2011compatible client). The main entry point is build_model_client, which selects the correct provider and returns a ready\u2011to\u2011use ModelClient without performing any network calls.\", \"symbols\":[\"_stderr_warning\",\"catalog_entry_id\",\"read_key\",\"_catalog_client\",\"_require_opt_ins\",\"remote_warning\",\"entry_problem\",\"build_entry_client\",\"build_model_client\"]}",
+   "prompt_tokens": 2044,
+   "completion_tokens": 288
+  },
+  {
+   "role": "coder",
+   "key": "",
+   "entry": "gemini",
+   "latency_ms": 30110,
+   "error": "timeout"
+  },
+  {
+   "role": "coder",
+   "key": "",
+   "entry": "groq",
+   "latency_ms": 6859,
+   "provider": "groq",
+   "model": "openai/gpt-oss-120b",
+   "text": "{\n  \"diff\": \"--- a/docs/serve-catalog.toml\\n+++ b/docs/serve-catalog.toml\\n@@ -34,5 +34,14 @@\\n model = \\\"llama3.2\\\"\\n context_tokens = 131072\\n tier = \\\"free\\\"\\n data_use = \\\"no_training\\\"\\n roles = [\\\"code_explainer\\\", \\\"reader\\\"]\\n+\\n+[models.deepseek]\\n+wire = \\\"openai_compatible\\\"\\n+base_url = \\\"https://api.deepseek.com/v1\\\"\\n+model = \\\"deepseek-chat\\\"\\n+api_key_env = \\\"DEEPSEEK_API_KEY\\\"\\n+context_tokens = 131072\\n+tier = \\\"free\\\"\\n+data_use = \\\"may_train\\\"\\n+roles = [\\\"conductor\\\", \\\"planner\\\", \\\"coder\\\", \\\"code_explainer\\\", \\\"dependency_analyst\\\", \\\"reader\\\"]\\n--- a/.env.example\\n+++ b/.env.example\\n@@ -7,4 +7,6 @@\\n GROQ_API_KEY=\\n # Used by the \\\"gemini\\\" entry of docs/serve-catalog.toml (web app).\\n GEMINI_API_KEY=\\n+# DeepSeek API key (used by the \\\"deepseek\\\" entry of docs/serve-catalog.toml).\\n+DEEPSEEK_API_KEY=\\n # Groq model (a preview model; may be retired) and its reasoning effort:\\n # none, default, low, medium, high, or empty to omit the field.\",\n  \"summary\": \"Add DeepSeek model entry to the catalog and include its API key placeholder in .env.example.\",\n  \"reasoning\": \"The request asks to expose DeepSeek as a model without changing provider code. Adding a new [models.deepseek] section in docs/serve-catalog.toml makes it selectable via the catalog, mirroring existing entries. Adding DEEPSEEK_API_KEY to .env.example provides the required environment variable for the catalog entry. No other files are modified, staying within the file and line limits.\"\n}",
+   "prompt_tokens": 4109,
+   "completion_tokens": 3046
+  }
+ ]
+}

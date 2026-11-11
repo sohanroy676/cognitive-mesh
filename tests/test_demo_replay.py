@@ -88,6 +88,26 @@ def test_replies_play_back_in_order_per_agent_and_file_and_errors_are_replayed()
     assert client.complete(ask).text == "A1"
 
 
+def test_a_recorded_revision_answers_the_revise_button_with_any_note() -> None:
+    first = recording(text="the request")
+    revision = Recording(
+        title="r",
+        project=ProjectSpec(name="p", sample="s"),
+        request="the request (revise: use the catalog)",
+        mode="change",
+        revise_note="use the catalog",
+        replies=[Reply(role="coder", key="", entry="e", provider="pv", model="m", text="REV")],
+    )
+    models = ReplayModels([first, revision])
+    assert models.notes() == {"the request": "use the catalog"}  # the page pre-fills this
+    for note in ("use the catalog", "my own words"):
+        text = f"the request (revise: {note})"
+        assert models.check(text) is None
+        models.select(text)
+        assert models("e").complete(request("You propose one small change")).text == "REV"
+    assert "no recorded revision" in (models.check("another (revise: x)") or "")
+
+
 def test_only_recorded_requests_are_accepted() -> None:
     models = ReplayModels([recording(text="the recorded request")])
     assert models.check("  the recorded request ") is None
@@ -209,7 +229,10 @@ def test_a_recorded_turn_replays_as_a_real_one_with_working_buttons(tmp_path: Pa
         refused = post(s, "/api/chat/send", {"session": sessions[0]["id"], "text": "another one"})
         assert refused.status == 409 and "recorded requests" in refused.json["error"]
 
-        ok = post(s, "/api/change/approve", body_for(approval, note="read it"))
+        no_model = post(s, "/api/change/revise", body_for(approval, note="try again"))
+        assert no_model.status == 409 and "no recorded revision" in no_model.json["error"]
+
+        ok = post(s, "/api/change/approve", body_for(approval, note="read it"))  # still unspent
         assert ok.status == 200, ok.raw  # the button works, as in a live run
         assert call(s.app, "GET", "/api/meta", token=TOKEN).json["demo"] is True
         assert request_of(s, turn, "pr")

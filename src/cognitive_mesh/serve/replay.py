@@ -100,6 +100,9 @@ class Recording(BaseModel):
     mode: str = Field(pattern="^(ask|change)$")
     conductor: str = Field(default="groq", max_length=100)
     replies: list[Reply] = Field(max_length=MAX_REPLIES)
+    # Set on the recording of a revision: the person's note. Its `request` is then the original
+    # request plus " (revise: NOTE)", which is the text the Revise button sends.
+    revise_note: str | None = Field(default=None, max_length=1000)
     source: Path | None = Field(default=None, exclude=True)
 
 
@@ -155,6 +158,12 @@ class ReplayModels:
     def __init__(self, recordings: list[Recording]) -> None:
         self.recordings = recordings
         self._by_request = {r.request.strip(): r for r in recordings}
+        self._revisions: dict[str, Recording] = {}  # original request -> its recorded revision
+        for rec in recordings:
+            if rec.revise_note:
+                tail = f" (revise: {rec.revise_note})"
+                if rec.request.endswith(tail):
+                    self._revisions[rec.request.removesuffix(tail).strip()] = rec
         self._labels: dict[str, tuple[str, str]] = {}
         for rec in recordings:
             for reply in rec.replies:
@@ -167,17 +176,34 @@ class ReplayModels:
         provider, model = self._labels.get(entry_id, ("replay", entry_id))
         return ReplayClient(self, provider, model)
 
+    def notes(self) -> dict[str, str]:
+        """For each request that has a recorded revision, the note that was written for it."""
+        return {base: rec.revise_note or "" for base, rec in self._revisions.items()}
+
+    def _resolve(self, text: str) -> Recording | None:
+        found = self._by_request.get(text.strip())
+        if found is not None:
+            return found
+        base, marker, _ = text.strip().partition(" (revise: ")
+        if marker and text.strip().endswith(")"):
+            return self._revisions.get(base.strip())
+        return None
+
     def check(self, text: str) -> str | None:
         """Why a request cannot be answered in demo mode, or None."""
-        if text.strip() in self._by_request:
+        if self._resolve(text) is not None:
             return None
+        if " (revise: " in text:
+            return (
+                "demo mode has no recorded revision for this chat; the Revise button needs a model"
+            )
         return (
             "demo mode answers only the recorded requests, because the models' replies are "
             "played back from a file; use one of the previous chats or start without --replay"
         )
 
     def select(self, text: str) -> None:
-        recording = self._by_request.get(text.strip())
+        recording = self._resolve(text)
         queues: dict[tuple[str, str], deque[Reply]] = {}
         for reply in recording.replies if recording else []:
             queues.setdefault((reply.role, reply.key), deque()).append(reply)
@@ -318,6 +344,8 @@ def _finished(api: AppApi, recording: Recording) -> bool:
 def run_recordings(api: AppApi, recordings: list[Recording], home: Path) -> None:
     """Make each recorded chat a real, finished-or-waiting turn, one after the other."""
     for recording in recordings:
+        if recording.revise_note:
+            continue  # started by the Revise button, with the person's note
         try:
             if _finished(api, recording):
                 continue

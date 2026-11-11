@@ -267,6 +267,14 @@ class ChatStore:
             )
             return True, "", turn_id
 
+    def approval_turn(self, approval_id: str) -> int | None:
+        """The turn an approval request belongs to (read only; it does not use the request)."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT turn_id FROM approvals WHERE id = ?", (approval_id,)
+            ).fetchone()
+        return int(row[0]) if row else None
+
     def open_approvals(self, turn_id: int) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._conn.execute(
